@@ -259,8 +259,9 @@ td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width
   <div class="card">
     <div class="row between" style="align-items:center">
       <div><div class="small muted">Сейчас установлена</div><b id="upVer" class="mono" style="font-size:18px">—</b></div>
-      <div class="row"><input type="file" id="upFile" accept=".zip" class="hide"><button class="primary" id="upBtn">⬆ Установить обновление (timing-hub.zip)</button></div>
+      <div class="row"><button class="primary" id="ghCheck">🔄 Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">⬆ Из файла (timing-hub.zip)</button></div>
     </div>
+    <div id="ghBox" class="small" style="margin-top:8px"></div>
     <div id="upState" class="small" style="margin-top:8px"></div>
     <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
     <p class="small muted" style="margin-bottom:0">Перед установкой сервер сам сохраняет прежнюю версию. Если новая не запустится — автоматически вернётся прежняя. Отметки и соревнования не затрагиваются.</p>
@@ -1346,9 +1347,40 @@ async function loadUpdate(){
   else if (st.state) html = `${names[st.state]||st.state}: ${esc(st.message||"")} <span class="muted">(${esc(st.at||"")})</span>`;
   $("upState").innerHTML = html; $("upLog").textContent = u.log || "";
   $("upBtn").disabled = !u.helper || u.pending || st.state === "running";
+  $("ghCheck").disabled = !u.helper || u.pending || st.state === "running";
   clearTimeout(upTimer);
   if (u.pending || st.state === "running") upTimer = setTimeout(loadUpdate, 3000);
 }
+// Обновление с GitHub: сервер сам скачивает официальную версию и ставит её так же, как архив из файла
+$("ghCheck").onclick = async () => {
+  const box = $("ghBox");
+  box.innerHTML = "⏳ Проверяю на GitHub…";
+  let r;
+  try{
+    const res = await fetch("/api/system/update/github/check");
+    r = await res.json();
+    if (!res.ok) throw new Error(r.error || res.status);
+  }catch(err){ box.innerHTML = `❌ ${esc(err.message)}`; return; }
+  const list = (r.changes || []).map(c => `<li>${esc(c.message)} <span class="muted mono">· ${esc(c.sha)} · ${esc((c.date||"").slice(0,10))}</span></li>`).join("");
+  if (!r.newer) {
+    box.innerHTML = `✅ Установлена последняя версия <b>v${esc(r.current)}</b>.` + (list ? `<details style="margin-top:4px"><summary class="muted">Последние изменения</summary><ul>${list}</ul></details>` : "");
+    return;
+  }
+  box.innerHTML = `Доступна версия <b>v${esc(r.latest)}</b> (сейчас v${esc(r.current)}). Последние изменения:<ul style="margin:4px 0">${list}</ul>` +
+    `<button class="primary" id="ghInstall">⬇ Установить v${esc(r.latest)}</button>`;
+  $("ghInstall").onclick = async () => {
+    if (!confirm(`Установить v${r.latest} с GitHub?\n\nСервер перезапустится (около минуты). Прежняя версия сохранится, при сбое вернётся сама.`)) return;
+    $("ghInstall").disabled = true; $("ghInstall").textContent = "⏳ Скачиваю…";
+    try{
+      const res = await fetch("/api/system/update/github", {method:"POST", body: JSON.stringify({sha: r.sha}), headers:{"X-Requested-With":"timing-hub","Content-Type":"application/json"}});
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || res.status);
+      toast(`Принято: v${j.from} → v${j.to}. Устанавливаю…`);
+      box.innerHTML = "";
+    }catch(err){ toast("Ошибка: " + err.message); $("ghInstall").disabled = false; $("ghInstall").textContent = `⬇ Установить v${r.latest}`; }
+    setTimeout(loadUpdate, 1000);
+  };
+};
 $("upBtn").onclick = () => $("upFile").click();
 $("upFile").onchange = async () => {
   const f = $("upFile").files[0]; $("upFile").value = ""; if (!f) return;

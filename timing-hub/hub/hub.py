@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 log = logging.getLogger("timing-hub")
 
 
@@ -3276,6 +3276,76 @@ class Hub:
         self.store.audit(actor, None, "Обновление сервера загружено", f"{VERSION} → {newv}, sha256 {sha[:16]}…")
         return 200, {"ok": True, "from": VERSION, "to": newv, "sha256": sha}
 
+    # ---- обновление с GitHub: сервер сам скачивает официальную версию и отдаёт её
+    # в ту же цепочку, что и загрузку архива (receive_update → timing-update с автооткатом).
+    GH_DEFAULT = {"repo": "AnVr25/Claude", "branch": "claude/greeting-d2g8ji", "dir": "timing-hub"}
+
+    def _gh_cfg(self) -> dict:
+        c = dict(self.GH_DEFAULT)
+        c.update({k: v for k, v in (self.cfg.get("update") or {}).items() if k in c and v})
+        return c
+
+    @staticmethod
+    def _gh_get(url: str, limit: int = 2 * 1024 * 1024, accept: str = "application/vnd.github+json") -> bytes:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": "timing-hub-updater", "Accept": accept})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError("ответ GitHub слишком большой")
+        return data
+
+    def _gh_head(self) -> dict:
+        from urllib.parse import quote
+        c = self._gh_cfg()
+        j = json.loads(self._gh_get(f"https://api.github.com/repos/{c['repo']}/commits/{quote(c['branch'], safe='')}"))
+        return {"sha": j["sha"], "date": (j.get("commit") or {}).get("committer", {}).get("date", "")}
+
+    def github_check(self) -> tuple:
+        """Выполняется в отдельном потоке: только сеть, без базы."""
+        from urllib.parse import quote
+        c = self._gh_cfg()
+        try:
+            head = self._gh_head()
+            src = self._gh_get(f"https://raw.githubusercontent.com/{c['repo']}/{head['sha']}/{c['dir']}/hub/hub.py",
+                               limit=5 * 1024 * 1024, accept="*/*").decode("utf-8", "replace")
+            hist = json.loads(self._gh_get(
+                f"https://api.github.com/repos/{c['repo']}/commits?sha={quote(c['branch'], safe='')}&path={quote(c['dir'])}&per_page=10"))
+        except Exception as e:  # сеть, GitHub, разбор ответа
+            return 502, {"error": f"не удалось проверить обновления на GitHub: {e}"}
+        m = re.search(r'VERSION = "([^"]+)"', src)
+        latest = m.group(1) if m else "?"
+        changes = [{"sha": x["sha"][:7], "date": (x.get("commit") or {}).get("committer", {}).get("date", ""),
+                    "message": ((x.get("commit") or {}).get("message") or "").split("\n")[0]} for x in hist]
+        return 200, {"current": VERSION, "latest": latest, "sha": head["sha"], "date": head["date"],
+                     "newer": latest != VERSION, "changes": changes}
+
+    def github_fetch(self, sha: str) -> tuple:
+        """Выполняется в отдельном потоке: скачивает вершину ветки и собирает такой же timing-hub.zip,
+        какой загружают вручную. Возвращает (код, ответ, zip-байты или None)."""
+        import zipfile
+        c = self._gh_cfg()
+        try:
+            head = self._gh_head()
+            if not re.fullmatch(r"[0-9a-f]{40}", sha or "") or sha != head["sha"]:
+                return 409, {"error": "на GitHub уже другая версия — нажмите «Проверить» ещё раз"}, None
+            raw = self._gh_get(f"https://codeload.github.com/{c['repo']}/zip/{sha}", limit=60 * 1024 * 1024, accept="*/*")
+            src = zipfile.ZipFile(io.BytesIO(raw))
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+                for info in src.infolist():
+                    parts = info.filename.split("/")
+                    # Claude-<sha>/timing-hub/... → timing-hub/...
+                    if len(parts) < 3 or parts[1] != c["dir"] or info.is_dir():
+                        continue
+                    zi = zipfile.ZipInfo("timing-hub/" + "/".join(parts[2:]), date_time=info.date_time)
+                    zi.external_attr = info.external_attr
+                    zi.compress_type = zipfile.ZIP_DEFLATED
+                    dst.writestr(zi, src.read(info))
+        except Exception as e:
+            return 502, {"error": f"не удалось скачать обновление с GitHub: {e}"}, None
+        return 200, {"sha": sha}, out.getvalue()
+
     @staticmethod
     def _clax_module():
         import importlib
@@ -4029,6 +4099,24 @@ class Hub:
                     return
                 peer = writer.get_extra_info("peername")
                 actor = f"{self._auth_user(headers)}@{peer[0] if peer else '?'}"
+                # Обновление с GitHub: сеть — в отдельном потоке, чтобы не задерживать приём отметок
+                if path == "/api/system/update/github/check" and method == "GET":
+                    code, res = await asyncio.to_thread(self.github_check)
+                    await self._send(writer, code, "application/json; charset=utf-8", json.dumps(res, ensure_ascii=False))
+                    return
+                if path == "/api/system/update/github" and method == "POST":
+                    try:
+                        gd = json.loads(body.decode("utf-8") or "{}")
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        gd = {}
+                    sha = str(gd.get("sha") or "") if isinstance(gd, dict) else ""
+                    code, res, blob = await asyncio.to_thread(self.github_fetch, sha)
+                    if blob is not None:
+                        code, res = self.receive_update(blob, actor)
+                        if code == 200:
+                            self.store.audit(actor, None, "Обновление с GitHub", f"коммит {sha[:7]}")
+                    await self._send(writer, code, "application/json; charset=utf-8", json.dumps(res, ensure_ascii=False))
+                    return
                 if path == "/api/readers/scan" and method == "POST":
                     try:
                         sd = json.loads(body.decode("utf-8") or "{}")
