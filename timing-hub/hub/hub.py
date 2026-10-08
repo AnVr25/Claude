@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.1"
+VERSION = "2.2"
 log = logging.getLogger("timing-hub")
 
 
@@ -1710,6 +1710,38 @@ class Hub:
     def public_base(self) -> str:
         return (self.cfg.get("public", {}).get("url") or "").rstrip("/")
 
+    # Площадки федерации: адрес и ссылка на карту для календаря fla65.ru и страницы события
+    VENUES = (
+        {"key": "manezh", "name": "Легкоатлетический манеж", "address": "Южно-Сахалинск, ул. Горького, 39",
+         "match": ("манеж",), "q": "Легкоатлетический манеж, Южно-Сахалинск, улица Горького, 39"},
+        {"key": "spartak", "name": "Стадион «Спартак»", "address": "Южно-Сахалинск, ул. Горького, 7",
+         "match": ("спартак",), "q": "Стадион Спартак, Южно-Сахалинск, улица Горького, 7"},
+        {"key": "triumf", "name": "ЛБК «Триумф»", "address": "Южно-Сахалинск, ул. Горького, 25А",
+         "match": ("триумф",), "map": "https://yandex.ru/maps/org/biatlonny_kompleks_triumf/227359721489/"},
+    )
+
+    def venue_for(self, ev: dict) -> Optional[dict]:
+        """Где проходит старт: указанное место или (если не указано) правило федерации для Южно-Сахалинска:
+        кросс — ЛБК «Триумф»; апрель–октябрь — стадион «Спартак»; остальное и «в помещении» — манеж.
+        Массовые забеги по улицам и старты в других городах не угадываем."""
+        from urllib.parse import quote
+        ymap = lambda q: "https://yandex.ru/maps/?text=" + quote(q)
+        place = (ev.get("place") or "").strip()
+        city = (ev.get("city") or "").strip()
+        pick = next((v for v in self.VENUES if any(m in place.lower() for m in v["match"])), None)
+        if not pick and not place and (not city or city.startswith("Южно-Сахалинск")):
+            name = (ev.get("name") or "").lower()
+            mass = ev.get("level") == "mass" or (ev.get("kind") or "") == "mass"
+            month = int((ev.get("date") or "0000-01")[5:7] or 1)
+            key = ("triumf" if "кросс" in name else None if mass
+                   else "spartak" if 4 <= month <= 10 and "помещени" not in name else "manezh")
+            pick = next((v for v in self.VENUES if v["key"] == key), None)
+        if pick:
+            return {"name": pick["name"], "address": pick["address"], "map": pick.get("map") or ymap(pick["q"])}
+        if place:
+            return {"name": place, "address": city, "map": ymap(", ".join(x for x in (place, city) if x))}
+        return None
+
     def event_card(self, ev: dict) -> dict:
         """Элемент календаря для сайта (см. docs/public-api.md)."""
         v = self._event_view(ev)
@@ -1724,7 +1756,8 @@ class Hub:
                     files.append({"title": f["name"], "url": f"{page}/files/{f['id']}", "size": f["size"], "ext": ext})
         status = v.get("status") or "planned"
         return {"slug": slug if page else None, "name": ev["name"], "date": ev.get("date"), "date_end": ev.get("date_end"),
-                "place": ev.get("place") or "", "city": ev.get("city") or "", "level": ev.get("level") or "region",
+                "place": ev.get("place") or "", "city": ev.get("city") or "", "venue": self.venue_for(ev),
+                "level": ev.get("level") or "region",
                 "adaptive": v["adaptive"], "note": ev.get("note") or "", "ours": v["ours"], "kind": v["kind"],
                 "status": status, "page": page,
                 "reg": {"open": True, "deadline": ev.get("reg_deadline"), "url": page} if page and open_ else None,

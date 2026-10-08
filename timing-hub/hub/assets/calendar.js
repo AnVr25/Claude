@@ -34,6 +34,13 @@
     u = safe(u);
     return u ? `<a class="${cls}" href="${esc(u)}"${same ? '' : NEWTAB}>${inner}${same ? '' : SRNEW}</a>` : '';
   };
+  const PIN = '<svg class="ic pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.6 7-12.2A7 7 0 0 0 5 9.8C5 15.4 12 22 12 22z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/></svg>';
+  // площадка: название · адрес, ссылка открывает карту
+  const venue = e => {
+    const v = e.venue, u = v && safe(v.map);
+    if (u) return `<a class="vn" href="${esc(u)}"${NEWTAB} title="Открыть на карте">${PIN}<b>${esc(v.name)}</b>${v.address ? `<span>${esc(v.address)}</span>` : ''}${SRNEW}</a>`;
+    return [e.place, e.city].filter(Boolean).map(esc).join(' · ');
+  };
   const day = s => { const p = String(s || '').split('-').map(Number); return p.length === 3 && p[0] ? new Date(p[0], p[1] - 1, p[2]) : null; };
   const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c; };
   const size = b => !b ? '' : b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' КБ' : (b / 1048576).toFixed(1).replace('.', ',') + ' МБ';
@@ -112,6 +119,12 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
 .st.run{display:inline-flex;align-items:center;gap:7px;background:var(--red);color:#fff;font-weight:700;padding:2px 9px 2px 8px}
 .t{font-weight:600;font-size:22px;line-height:1.2;text-transform:uppercase;color:var(--navy);margin:0 0 4px}
 .pl{margin:0;font-size:15px;color:var(--mut)}
+.vn{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 8px;color:var(--mut);text-decoration:none;border-bottom:1px dashed transparent}
+.vn b{font-weight:700;color:var(--navy)}
+.vn span{color:var(--mut)}
+.vn .pin{width:16px;height:16px;color:var(--red);flex:none}
+.vn:hover b,.vn:focus-visible b{color:var(--red)}
+.vn:hover,.vn:focus-visible{border-bottom-color:var(--red)}
 .x{margin:6px 0 0;font-size:16px}
 .acts{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
 .btn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:7px 14px;background:#fff;border:2px solid var(--line);font-weight:500;font-size:14px;line-height:1.2;letter-spacing:1px;text-transform:uppercase;color:var(--navy);transition:background .15s,border-color .15s}
@@ -264,7 +277,7 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
   Cal.prototype.nextBox = function () {
     const run = this.ev.find(e => e._st === 'run'), e = run || this.ev.find(x => x._st === 'next');
     if (!e) return '';
-    const w = when(e), city = e.city || e.place;
+    const w = when(e), city = (e.venue && e.venue.name) || e.place || e.city;
     let act = '';
     if (run && e.results) act = link(e.results, 'Результаты онлайн' + ARR, '');
     else if (run && e.page) act = link(e.page, 'Страница события' + ARR, '', true);
@@ -275,7 +288,7 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
   Cal.prototype.card = function (e) {
     const w = when(e), st = e._st, ours = e.ours !== false;
     const stt = st === 'run' ? `<span class="st run">${DOT}Идёт сейчас</span>` : `<span class="st">${st === 'past' ? 'Прошло' : 'Впереди'}</span>`;
-    const pl = [e.place, e.city].filter(Boolean).map(esc).join(' · ');
+    const pl = venue(e);
     const acts = [], side = [];
     if (e.reg && e.reg.open) {
       const dl = deadline(e.reg.deadline);

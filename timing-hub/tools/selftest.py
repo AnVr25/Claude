@@ -572,6 +572,15 @@ def main() -> int:
               and cd.get("results", "").endswith(f"/r/{sslug}/protocol"), str(cd)[:300])
         code, txt = http("POST", f"/api/events/{es['id']}", json.dumps({"photo_url": "javascript:alert(1)"}).encode(), J)
         check("ссылка не https — отклонена", code == 400, str(code))
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Первенство по кроссу", "date": "2026-09-20", "pub_site": True}).encode(), J)
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Кубок области", "date": "2026-06-12", "pub_site": True}).encode(), J)
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Первенство области", "date": "2026-12-04", "pub_site": True}).encode(), J)
+        code, txt, _ = pub("GET", "/r/api/calendar")
+        vmap = {c["name"]: c.get("venue") or {} for c in json.loads(txt)["events"]}
+        check("площадка по сезону: кросс — «Триумф», лето — «Спартак», зима — манеж, со ссылкой на карту",
+              vmap["Первенство по кроссу"].get("name") == "ЛБК «Триумф»" and vmap["Кубок области"].get("name") == "Стадион «Спартак»"
+              and vmap["Первенство области"].get("address") == "Южно-Сахалинск, ул. Горького, 39"
+              and vmap["Кубок области"].get("map", "").startswith("https://yandex.ru/maps/"), str(vmap)[:400])
         code, txt, hd = pub("GET", "/r/assets/calendar.js")
         check("виджет календаря для fla65.ru отдаётся с CORS", code == 200 and hd.get("Access-Control-Allow-Origin") == "*", str(code))
         code, txt, hd = pub("GET", "/r/assets/sakhstart-dark.svg")

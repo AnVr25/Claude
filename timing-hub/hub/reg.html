@@ -219,6 +219,8 @@ h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
 .sig b{font-family:var(--head);font-weight:600;letter-spacing:.4px}
 .hide{display:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+.vn{color:inherit;text-decoration:underline;text-decoration-color:#E71E25;text-underline-offset:3px}
+.vn:hover{color:#fff;text-decoration-thickness:2px}
 </style>
 </head>
 <body>
@@ -287,14 +289,16 @@ function calendarList(cal,skip){
 // страница события (сервер прислал card): шапка со статусом → протоколы и материалы → регистрация
 function headerCard(){
   const d=INFO,c=CARD;
-  const when=dRange(c.date||d.date,c.date_end), where=[c.place||d.place,c.city].filter(Boolean).join(", ");
+  const when=dRange(c.date||d.date,c.date_end), V=c.venue, vu=V&&/^https?:\/\//.test(V.map||"")?V.map:"";
+  const where=vu?`<a class="vn" href="${esc(vu)}" target="_blank" rel="noopener" title="Открыть на карте">${esc(V.name)}${V.address?", "+esc(V.address):""} ↗</a>`
+    :esc([c.place||d.place,c.city].filter(Boolean).join(", "));
   const st=c.status==="running"?`<div class="st run">${c.results_live?"Идёт старт — результаты онлайн":"Идёт старт"}</div>`
     :c.status==="finished"?`<div class="st fin">Соревнование завершено</div>`
     :d.open?`<div class="st reg">Регистрация открыта${d.deadline?" до "+esc(dtComma(d.deadline)):""}</div>`:"";
   return band(`
     ${d.organizer?`<div class="org">${esc(d.organizer)}</div>`:""}
     <h1>${esc(d.name||c.name)}</h1>
-    <div class="meta">${when?`<span>Дата: <b>${esc(when)}</b></span>`:""}${where?`<span>Место: <b>${esc(where)}</b></span>`:""}${d.start_clock?`<span>Начало: <b>${esc(d.start_clock)}</b></span>`:""}</div>
+    <div class="meta">${when?`<span>Дата: <b>${esc(when)}</b></span>`:""}${where?`<span>Место: <b>${where}</b></span>`:""}${d.start_clock?`<span>Начало: <b>${esc(d.start_clock)}</b></span>`:""}</div>
     ${c.note?`<div class="lead">${esc(c.note)}</div>`:""}${st}`);
 }
 const IC={

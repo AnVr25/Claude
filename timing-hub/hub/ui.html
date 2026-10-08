@@ -440,7 +440,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <div><label for="fTiming">Хронометраж</label><select id="fTiming"></select></div>
       <div><label for="fDate">Дата начала</label><input id="fDate" type="date"></div>
       <div><label for="fDateEnd">Дата окончания <span class="muted">(если несколько дней)</span></label><input id="fDateEnd" type="date"></div>
-      <div><label for="fPlace">Место (объект)</label><input id="fPlace" placeholder="Легкоатлетический манеж"></div>
+      <div><label for="fPlace">Место (объект)</label><input id="fPlace" list="venueList" placeholder="пусто — по сезону: манеж / «Спартак» / «Триумф»"><datalist id="venueList"><option>Легкоатлетический манеж<option>Стадион «Спартак»<option>ЛБК «Триумф»</datalist></div>
       <div><label for="fCity">Город</label><input id="fCity" placeholder="Южно-Сахалинск"></div>
       <div class="chips-only"><label for="fFinish">Точка финиша (код ридера)</label><select id="fFinish"></select></div>
       <div class="chips-only"><label for="fMin">Не считать финишем раньше, сек</label><input id="fMin" type="number" min="0" step="1" value="0"></div>
