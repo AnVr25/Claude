@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { open, hashPassword, verifyPassword } = require('./db');
 const GTO = require('./public/norms');
 const { buildTemplate, readFirstSheet } = require('./xlsx');
+const { makeUpdater } = require('./update');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SESSION_DAYS = 30;
@@ -34,6 +35,7 @@ function createApp({
   db = open(),
   secureCookie = process.env.GTO_SECURE_COOKIE === '1',
   trustProxy = process.env.GTO_TRUST_PROXY === '1',
+  updater = makeUpdater(),
 } = {}) {
   const loginAttempts = new Map(); // «ip|логин» -> {count, until}
 
@@ -450,6 +452,25 @@ function createApp({
       db.prepare('DELETE FROM results WHERE student_id = ? AND test_id = ?').run(Number(m[1]), m[2]);
       audit(user, 'result.delete', { student_id: Number(m[1]), test_id: m[2] });
       return send(res, 200, { ok: true });
+    }
+
+    // --- обновление приложения (admin) ---
+    if (p === '/api/update/status' && method === 'GET') {
+      requireRole(user, 'admin');
+      return send(res, 200, updater.status());
+    }
+    if (p === '/api/update/check' && method === 'GET') {
+      requireRole(user, 'admin');
+      try { return send(res, 200, await updater.check()); } catch (e) { throw new HttpError(502, `Не удалось проверить обновления: ${e.message}`); }
+    }
+    if (p === '/api/update/install' && method === 'POST') {
+      requireRole(user, 'admin');
+      const b = await readBody(req);
+      try {
+        const r = await updater.install(str(b.sha, 40));
+        audit(user, 'app.update', { sha: r.sha });
+        return send(res, 202, r);
+      } catch (e) { throw new HttpError(409, e.message); }
     }
 
     // --- пользователи (admin) ---

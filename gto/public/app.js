@@ -634,6 +634,87 @@ async function openUsers(notice = '') {
   });
 }
 
+// Обновление приложения (только администратор)
+const shortSha = (sha) => (sha ? sha.slice(0, 7) : '—');
+const fmtIso = (d) => {
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const JOB_TEXT = { queued: 'В очереди', running: 'Идёт обновление', ok: 'Готово', error: 'Ошибка' };
+
+async function openUpdate() {
+  let st;
+  try { st = await api('GET', '/api/update/status'); } catch (err) { toast(err.message); return; }
+  const cur = st.current || {};
+  const p = openModal(`
+    <h2>Обновление</h2>
+    <p class="sub">Установленная версия: <strong>${esc(shortSha(cur.sha))}</strong>${cur.installed_at ? ` от ${esc(fmtIso(cur.installed_at))}` : ''}</p>
+    ${st.enabled ? '' : '<p class="form-error">Обновление кнопкой ещё не настроено на сервере. Один раз запустите на сервере команду установки (install.sh) — после этого кнопка заработает.</p>'}
+    <div id="upd-job"></div>
+    <div id="upd-body" class="hint">Нажмите «Проверить», чтобы узнать, есть ли новая версия.</div>
+    <p class="form-error" id="upd-error"></p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" data-close-modal>Закрыть</button>
+      <button class="btn btn-secondary" id="upd-check">Проверить</button>
+      <button class="btn btn-primary" id="upd-install" hidden>Установить</button>
+    </div>`, { wide: true, onClose: () => clearInterval(openUpdate.timer) });
+
+  let latestSha = '';
+  const showJob = (job) => {
+    const box = $('#upd-job');
+    if (!box) return;
+    if (!job) { box.innerHTML = ''; return; }
+    const cls = job.state === 'ok' ? 'lvl-3' : job.state === 'error' ? 'lvl-0' : 'lvl-2';
+    box.innerHTML = `<p class="preview-level"><span class="chip ${cls}">${esc(JOB_TEXT[job.state] || job.state)}</span> ${esc(job.message || '')}` +
+      `${job.at ? ` <span class="hint">· ${esc(fmtIso(job.at))}</span>` : ''}</p>`;
+  };
+  showJob(st.job);
+
+  const poll = () => {
+    clearInterval(openUpdate.timer);
+    openUpdate.timer = setInterval(async () => {
+      let s;
+      try { s = await api('GET', '/api/update/status'); } catch { return; } // во время перезапуска сервер недолго недоступен
+      showJob(s.job);
+      if (s.job && (s.job.state === 'ok' || s.job.state === 'error') && !s.pending) {
+        clearInterval(openUpdate.timer);
+        if (s.job.state === 'ok') { toast('Обновлено — страница перезагрузится', true); setTimeout(() => location.reload(), 1500); }
+      }
+    }, 2000);
+  };
+  if (st.pending || (st.job && (st.job.state === 'running' || st.job.state === 'queued'))) poll();
+
+  p.querySelector('#upd-check').addEventListener('click', async () => {
+    $('#upd-error').textContent = '';
+    $('#upd-body').textContent = 'Проверяю…';
+    try {
+      const r = await api('GET', '/api/update/check');
+      latestSha = r.latest.sha;
+      if (r.upToDate) {
+        $('#upd-body').innerHTML = `<p>Установлена последняя версия (<strong>${esc(shortSha(r.latest.sha))}</strong>).</p>`;
+        $('#upd-install').hidden = true;
+        return;
+      }
+      $('#upd-body').innerHTML = `<p>Доступна версия <strong>${esc(shortSha(r.latest.sha))}</strong> от ${esc(fmtIso(r.latest.date))}. Что изменилось:</p>
+        <ul class="changes">${r.changes.map((c) => `<li>${esc(c.message)} <span class="hint">· ${esc(shortSha(c.sha))}</span></li>`).join('')}</ul>
+        <p class="hint">Сервер скачает версию, прогонит автотесты и только потом установит. Если что-то пойдёт не так — вернёт прежнюю. Сайт будет недоступен несколько секунд.</p>`;
+      $('#upd-install').hidden = !st.enabled;
+    } catch (err) { $('#upd-body').textContent = ''; $('#upd-error').textContent = err.message; }
+  });
+
+  p.querySelector('#upd-install').addEventListener('click', async () => {
+    if (!confirm('Установить новую версию?')) return;
+    $('#upd-error').textContent = '';
+    try {
+      await api('POST', '/api/update/install', { sha: latestSha });
+      $('#upd-install').hidden = true;
+      $('#upd-check').disabled = true;
+      showJob({ state: 'queued', message: 'Заявка принята' });
+      poll();
+    } catch (err) { $('#upd-error').textContent = err.message; }
+  });
+}
+
 // ---------- вход / выход ----------
 function showLogin() {
   state.user = null;
@@ -652,6 +733,7 @@ async function showApp(user) {
   rc.textContent = ROLE_NAMES[user.role];
   rc.className = 'role-chip ' + user.role;
   $('#btn-users').hidden = user.role !== 'admin';
+  $('#btn-update').hidden = user.role !== 'admin';
   $('#login-view').hidden = true;
   $('#app-view').hidden = false;
   await loadData();
@@ -684,6 +766,7 @@ function bind() {
   });
   $('#btn-password').addEventListener('click', openPassword);
   $('#btn-users').addEventListener('click', () => openUsers());
+  $('#btn-update').addEventListener('click', openUpdate);
   $('#btn-add').addEventListener('click', () => editStudent(null));
   $('#btn-import').addEventListener('click', openImport);
 

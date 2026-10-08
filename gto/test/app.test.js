@@ -312,3 +312,59 @@ test('подбор пароля к одной учётке не блокируе
   assert.equal((await tryLogin('admin', 'password123')).status, 429);
   assert.equal((await tryLogin('ed', 'password123')).status, 200);
 });
+
+test('API обновления: только админ, ставится только вершина ветки, заявка кладётся в папку', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { makeUpdater } = require('../update');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gto-upd-'));
+  const appDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gto-app-'));
+  t.after(() => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(appDir, { recursive: true, force: true }); });
+  const OLD = 'a'.repeat(40);
+  const HEAD = 'b'.repeat(40);
+  fs.writeFileSync(path.join(appDir, 'VERSION.json'), JSON.stringify({ sha: OLD, installed_at: '2026-10-01T10:00:00Z' }));
+  const commit = (sha, msg) => ({ sha, commit: { message: msg + '\n\nподробности', committer: { date: '2026-10-09T01:00:00Z' } } });
+  const fakeFetch = async (url) => ({
+    ok: true,
+    json: async () => (url.includes('/compare/')
+      ? { commits: [commit('c'.repeat(40), 'Первое изменение'), commit(HEAD, 'Второе изменение')] }
+      : commit(HEAD, 'Второе изменение')),
+  });
+  const updater = makeUpdater({ dir, appDir, fetchImpl: fakeFetch });
+
+  const db = open(':memory:');
+  for (const [l, r] of [['admin', 'admin'], ['ed', 'editor']]) db.prepare('INSERT INTO users (login, name, role, pass_hash) VALUES (?, ?, ?, ?)').run(l, l, r, hashPassword('password123'));
+  const server = http.createServer(createApp({ db, updater }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const admin = await login(base, 'admin');
+  const ed = await login(base, 'ed');
+
+  assert.equal((await ed('GET', '/api/update/check')).status, 403, 'редактор не обновляет');
+  assert.equal((await ed('POST', '/api/update/install', { sha: HEAD })).status, 403);
+
+  const st = await (await admin('GET', '/api/update/status')).json();
+  assert.equal(st.enabled, true);
+  assert.equal(st.current.sha, OLD);
+
+  const chk = await (await admin('GET', '/api/update/check')).json();
+  assert.equal(chk.upToDate, false);
+  assert.equal(chk.latest.sha, HEAD);
+  assert.deepEqual(chk.changes.map((c) => c.message), ['Второе изменение', 'Первое изменение'], 'новые сверху, только первая строка');
+
+  let res = await admin('POST', '/api/update/install', { sha: 'c'.repeat(40) });
+  assert.equal(res.status, 409, 'не вершина ветки — отказ');
+  assert.ok(!fs.existsSync(path.join(dir, 'request')));
+
+  res = await admin('POST', '/api/update/install', { sha: HEAD });
+  assert.equal(res.status, 202);
+  assert.equal(fs.readFileSync(path.join(dir, 'request'), 'utf8').trim(), HEAD);
+  assert.equal((await admin('POST', '/api/update/install', { sha: HEAD })).status, 409, 'повторная заявка, пока идёт обновление');
+
+  // без папки заявок (сервер не настроен) — кнопка честно говорит об этом
+  const off = makeUpdater({ dir: '', appDir, fetchImpl: fakeFetch });
+  assert.equal(off.status().enabled, false);
+  await assert.rejects(off.install(HEAD), /не настроено/);
+});

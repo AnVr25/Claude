@@ -62,11 +62,28 @@ echo "Node.js $("$NODE_BIN" -v)"
 # ---------- пользователь и файлы ----------
 say "Приложение → $BASE/app"
 id gto >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nologin gto
+# gto-deploy — владелец кода: от его имени работает обновление из интерфейса (без прав root)
+id gto-deploy >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin gto-deploy
 mkdir -p "$BASE/app" "$DATA" "$BACKUPS"
 # копируем только код; база живёт в $DATA и при обновлении не затирается
 tar -C "$APP_SRC" --exclude=./data --exclude=./node_modules --exclude='*.sqlite*' -cf - . | tar -C "$BASE/app" -xf -
-# если заведён пользователь для удалённых обновлений — код принадлежит ему
-if id gto-deploy >/dev/null 2>&1; then chown -R gto-deploy:gto-deploy "$BASE/app"; else chown -R root:root "$BASE/app"; fi
+# версия кода — для экрана «Обновление»
+src_sha=$(git -C "$APP_SRC" rev-parse HEAD 2>/dev/null || true)
+src_branch=$(git -C "$APP_SRC" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+[[ -n "$src_sha" ]] && printf '{"sha":"%s","installed_at":"%s"}\n' "$src_sha" "$(date -Is)" > "$BASE/app/VERSION.json"
+chown -R gto-deploy:gto-deploy "$BASE/app"
+
+# ---------- обновление из интерфейса ----------
+UPD=/var/lib/gto-update
+mkdir -p "$UPD" "$BASE/updates" /usr/local/lib/gto
+chown gto-deploy:gto "$UPD" && chmod 2770 "$UPD"          # приложение (gto) кладёт заявку, gto-deploy исполняет
+chown gto-deploy:gto-deploy "$BASE/updates"
+install -m 755 -o root -g root "$APP_SRC/deploy/gto-update.sh" /usr/local/lib/gto/gto-update.sh
+cat > /etc/sudoers.d/gto-deploy <<'SUDO'
+gto-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart gto, /usr/bin/systemctl status gto, /usr/bin/journalctl -u gto *, /usr/bin/journalctl -u nginx *
+SUDO
+chmod 440 /etc/sudoers.d/gto-deploy
+visudo -cf /etc/sudoers.d/gto-deploy >/dev/null || die "ошибка в /etc/sudoers.d/gto-deploy"
 chown gto:gto "$DATA"
 chmod 750 "$DATA"
 chmod 700 "$BACKUPS"
@@ -190,6 +207,9 @@ HOST=127.0.0.1
 GTO_DB=$DATA/gto.sqlite
 GTO_SECURE_COOKIE=$SECURE
 GTO_TRUST_PROXY=$HAVE_NGINX
+GTO_UPDATE_DIR=/var/lib/gto-update
+GTO_UPDATE_REPO=AnVr25/Claude
+GTO_UPDATE_BRANCH=${src_branch:-claude/greeting-d2g8ji}
 ENV
 cat > /etc/systemd/system/gto.service <<UNIT
 [Unit]
@@ -209,12 +229,37 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=$DATA
+ReadWritePaths=$DATA -/var/lib/gto-update
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+cat > /etc/systemd/system/gto-update.service <<UNIT
+[Unit]
+Description=GTO: установка обновления по заявке из интерфейса
+
+[Service]
+Type=oneshot
+User=gto-deploy
+Group=gto-deploy
+EnvironmentFile=$ENV_FILE
+Environment=GTO_APP_DIR=$BASE/app GTO_UPDATE_WORK=$BASE/updates GTO_NODE=$NODE_BIN
+ExecStart=/usr/local/lib/gto/gto-update.sh
+TimeoutStartSec=900
+UNIT
+cat > /etc/systemd/system/gto-update.path <<UNIT
+[Unit]
+Description=GTO: ожидание заявки на обновление
+
+[Path]
+PathExists=/var/lib/gto-update/request
+Unit=gto-update.service
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
+systemctl enable --now gto-update.path >/dev/null 2>&1
 systemctl enable gto >/dev/null 2>&1
 systemctl restart gto
 sleep 2

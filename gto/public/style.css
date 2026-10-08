@@ -214,6 +214,8 @@ body.can-edit .grid td.res.empty:not(.na):hover::after { content: '+'; color: va
 .users-table .inactive { opacity: .5; }
 .users-table .u-act { white-space: nowrap; text-align: right; }
 .mt { margin-top: 10px; }
+.changes { margin: 6px 0 10px; padding-left: 20px; font-size: 14px; }
+.changes li { margin: 3px 0; }
 .secret { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--gold-bg); padding: 2px 6px; user-select: all; }
 .add-user { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 8px; align-items: end; padding-top: 12px; border-top: 1px solid var(--line); }
 .import-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
