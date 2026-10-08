@@ -3,40 +3,86 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0B1D37">
 <title>Экран диктора</title>
+<link rel="stylesheet" href="/assets/brand.css">
 <style>
-:root{--bg:#0d0f11;--ink:#f2f3f4;--muted:#8b939a;--accent:#e8603f;--line:#23282d;--panel:#16191c;--mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
+/* Экран диктора: всегда тёмный, читается с расстояния. Номера — оранжевым, фамилии — Oswald. */
+:root{color-scheme:dark;--a-ink:#fff;--a-soft:var(--night-muted);--a-pad:3vw}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.wrap{display:grid;grid-template-rows:auto auto 1fr auto;height:100%;padding:2.5vh 3vw;gap:2vh}
-.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-.name{font-size:clamp(18px,2.6vw,34px);font-weight:700}
-.clock{font:700 clamp(28px,4.5vw,60px) var(--mono);color:var(--muted)}
-.hero{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:2vh 3vw;display:grid;grid-template-columns:auto 1fr auto;gap:3vw;align-items:center}
+html,body{margin:0;height:100%;background:var(--night);color:var(--a-ink);font-family:var(--body)}
+button{font:inherit}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--start);outline-offset:2px}
+.wrap{display:grid;grid-template-rows:auto auto 1fr auto;height:100%;gap:2.2vh}
+
+/* шапка */
+.top{display:flex;align-items:center;gap:clamp(14px,1.8vw,28px);padding:1.6vh var(--a-pad);border-bottom:3px solid var(--track);min-width:0}
+.top .brand{display:block;height:clamp(34px,3.7vw,60px);width:auto;flex:0 0 auto}
+.top .sep{width:1px;align-self:stretch;margin:.4vh 0;background:var(--night-line);flex:0 0 auto}
+.name{flex:1;min-width:0;font:600 clamp(20px,2.5vw,40px)/1.15 var(--head);letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clock{font:600 clamp(32px,4.4vw,72px)/1 var(--head);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.sec{padding:0 var(--a-pad);min-height:0}
+.label{font:500 clamp(13px,1.25vw,20px)/1.2 var(--head);color:var(--a-soft);text-transform:uppercase;letter-spacing:.14em;margin-bottom:1.2vh}
+
+/* только что финишировал */
+.hero{position:relative;background:var(--night-2);border:2px solid var(--night-line);border-left:6px solid var(--track);border-radius:var(--r);padding:2.2vh 2.4vw;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:2.4vw;align-items:center;min-height:clamp(120px,22vh,260px)}
+.hero .place{font:600 clamp(40px,6vw,110px)/1 var(--head);color:var(--a-soft);font-variant-numeric:tabular-nums}
+.hero .bib{font:700 clamp(64px,10.5vw,190px)/.95 var(--head);color:var(--start);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.hero .who{min-width:0}
+.hero .nm{font:600 clamp(28px,4.2vw,76px)/1.12 var(--head);letter-spacing:.2px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hero .meta{color:var(--a-soft);font-size:clamp(15px,1.7vw,28px);margin-top:.6vh}
+.hero .time{font:600 clamp(36px,5.4vw,100px)/1 var(--head);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .hero.new{animation:pulse 2.5s ease-out}
-@keyframes pulse{from{border-color:var(--accent);box-shadow:0 0 0 8px rgba(232,96,63,.35)}to{}}
-.hero .place{font:800 clamp(40px,7vw,110px)/1 var(--mono);color:var(--accent)}
-.hero .bib{font:800 clamp(70px,13vw,200px)/1 var(--mono)}
-.hero .meta{color:var(--muted);font-size:clamp(14px,1.8vw,26px)}
-.hero .time{font:700 clamp(36px,6vw,96px) var(--mono);text-align:right}
-.label{font-size:clamp(12px,1.3vw,18px);color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
-.list{overflow:hidden}
-.r{display:grid;grid-template-columns:3em 5em 1fr auto;gap:1.5vw;align-items:baseline;padding:.7vh 0;border-bottom:1px solid var(--line);font-size:clamp(20px,2.8vw,40px)}
-.r .p{color:var(--muted);font-family:var(--mono)} .r .b{font-weight:800;font-family:var(--mono)} .r .w{color:var(--muted);font-size:.6em} .r .t{font-family:var(--mono)}
-.foot{display:flex;justify-content:space-between;color:var(--muted);font-size:14px}
-button{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
-.empty{color:var(--muted);font-size:clamp(20px,3vw,40px);text-align:center;padding:4vh}
+@keyframes pulse{from{border-color:var(--track);background:#3A1F35;box-shadow:0 0 0 8px rgba(231,30,37,.35)}to{}}
+
+/* перед ним */
+.list{overflow:hidden;display:flex;flex-direction:column}
+#list{overflow:hidden}
+.r{display:grid;grid-template-columns:2em 2.8em minmax(0,1fr) auto;gap:1.6vw;align-items:baseline;padding:.9vh .2vw;border-bottom:1px solid var(--night-line);font:500 clamp(20px,2.5vw,42px)/1.2 var(--head)}
+.r .p{color:var(--a-soft);font-variant-numeric:tabular-nums}
+.r .b{color:var(--start);font-weight:600;font-variant-numeric:tabular-nums}
+.r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r .nm b{font-weight:inherit;margin-right:.8em}
+.r .w{color:var(--a-soft);font:400 .55em var(--body)}
+.r .t{font-variant-numeric:tabular-nums;text-align:right}
+
+/* подвал */
+.foot{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:1.2vh var(--a-pad) 1.8vh;border-top:1px solid var(--night-line);color:var(--a-soft);font-size:clamp(13px,1.05vw,17px)}
+.foot-l{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.foot .logos{gap:18px}
+.foot .lg-sakh{height:clamp(28px,3.4vh,44px)}
+.foot .lg-flaso{height:clamp(24px,3vh,38px)}
+button{background:var(--night-2);color:var(--a-ink);border:1px solid var(--night-line);border-radius:var(--r);padding:7px 14px;cursor:pointer}
+button:hover{border-color:var(--a-soft)}
+.empty{color:var(--a-soft);font:500 clamp(22px,2.8vw,44px)/1.2 var(--head);letter-spacing:.3px;text-align:center;padding:3vh}
+@media (prefers-reduced-motion:reduce){
+  .hero.new{animation-duration:1.2s}
+  @keyframes pulse{from{border-color:var(--track);background:#3A1F35}to{}}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><div class="name" id="name">Экран диктора</div><div class="clock" id="clock">—</div></div>
-  <div>
-    <div class="label" style="margin-bottom:1vh">Только что финишировал</div>
+  <div class="top">
+    <img class="brand" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+    <span class="sep"></span>
+    <div class="name" id="name">Экран диктора</div>
+    <div class="clock" id="clock">—</div>
+  </div>
+  <div class="sec">
+    <div class="label">Только что финишировал</div>
     <div class="hero" id="hero"><div class="empty" style="grid-column:1/-1">ждём первого финишёра…</div></div>
   </div>
-  <div class="list"><div class="label" style="margin-bottom:1vh">Перед ним</div><div id="list"></div></div>
-  <div class="foot"><span id="stat"></span><span><button id="snd">🔔 звук: вкл</button> · F11 — во весь экран</span></div>
+  <div class="sec list"><div class="label">Перед ним</div><div id="list"></div></div>
+  <div class="foot">
+    <div class="foot-l"><span id="stat"></span><span><button id="snd">🔔 звук: вкл</button> · F11 — во весь экран</span></div>
+    <div class="logos">
+      <img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалинская область">
+      <img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО">
+    </div>
+  </div>
 </div>
 <script>
 "use strict";
@@ -61,11 +107,11 @@ async function load(){
     $("stat").textContent=`финишировали ${r.finished.length} · на трассе ${r.on_course.length}`;
     if(!fin.length)return;
     const h=fin[0], key=h.bib+"|"+h.finish_epoch_ms;
-    const wave=h.wave?`<div class="meta">${esc(h.wave)}</div>`:"";
-    $("hero").innerHTML=`<div class="place">${h.place}</div><div><div class="bib">${esc(h.bib||"?")}</div>${wave}</div><div class="time">${esc(h.time)}</div>`;
+    const meta=[h.team,h.wave].filter(Boolean).map(esc).join(" · ");
+    $("hero").innerHTML=`<div class="place">${h.place}</div><div class="bib">${esc(h.bib||"?")}</div><div class="who"><div class="nm">${esc(h.name||"")}</div>${meta?`<div class="meta">${meta}</div>`:""}</div><div class="time">${esc(h.time)}</div>`;
     if(lastKey&&key!==lastKey){$("hero").classList.remove("new");void $("hero").offsetWidth;$("hero").classList.add("new");beep();}
     lastKey=key;
-    $("list").innerHTML=fin.slice(1,9).map(x=>`<div class="r"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"?")}</span><span class="w">${esc(x.wave||"")}</span><span class="t">${esc(x.time)}</span></div>`).join("");
+    $("list").innerHTML=fin.slice(1,9).map(x=>`<div class="r"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"?")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc(x.wave||"")}</span></span><span class="t">${esc(x.time)}</span></div>`).join("");
   }catch(e){$("stat").textContent="нет связи с сервером…";}
 }
 function tick(){$("clock").textContent=startMs?fmt(Date.now()+offset-startMs):"старт не дан";}

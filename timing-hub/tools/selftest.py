@@ -378,6 +378,11 @@ def main() -> int:
         for page in ("/judge", "/announcer?event=1"):
             code, txt = http("GET", page)
             check(f"страница {page} открывается", code == 200 and "<html" in txt, str(code))
+        code, txt = http("GET", "/assets/brand.css")
+        check("фирменный стиль /assets/brand.css отдаётся", code == 200 and "@font-face" in txt, str(code))
+        for bad in ("/assets/hub.py", "/assets/..%2Fhub.py", "/assets/.hidden.css", "/assets/nope.png"):
+            code, _ = http("GET", bad)
+            check(f"/assets не отдаёт лишнего: {bad}", code == 404, str(code))
 
         # 9d. файлы, снимок результатов, архив
         req = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e2}/files", data="Протокол;1\n".encode("utf-8"),
@@ -474,6 +479,11 @@ def main() -> int:
         for bad in ("/api/events", "/judge", "/", f"/api/events/{e4}/regs", "/r/../api/events", "/files/1"):
             code, _, _ = pub("GET", bad)
             check(f"публичный порт не отдаёт {bad}", code == 404, str(code))
+        code, txt, hd = pub("GET", "/r/assets/sakhstart-dark.svg")
+        check("логотип для формы регистрации отдаётся через /r/assets", code == 200 and "<svg" in txt and "image/svg" in hd.get("Content-Type", ""), str(code))
+        for bad in ("/r/assets/hub.py", "/r/assets/..%2F..%2Fhub.py"):
+            code, _, _ = pub("GET", bad)
+            check(f"публичный /r/assets не отдаёт {bad}", code == 404, str(code))
         tomorrow = (dt.datetime.now() + dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
         http("POST", f"/api/events/{e4}", json.dumps({"reg_deadline": tomorrow}).encode(), J)
         code, txt, _ = pub("GET", f"/r/{slug}/info")

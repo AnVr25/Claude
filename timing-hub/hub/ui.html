@@ -3,557 +3,754 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Сервер хронометража</title>
+<title>SakhStart · Хронометраж</title>
+<link rel="icon" href="/assets/flaso-mark.png">
+<link rel="stylesheet" href="/assets/brand.css">
 <style>
-:root{
-  --bg:#f3f4f1; --panel:#ffffff; --ink:#16181a; --muted:#646b72; --line:#e2e4e0;
-  --accent:#c8462b; --accent-ink:#fff; --ok:#1f8a4c; --warn:#b54708; --bad:#b42318; --soft:#f7f1ee;
-  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
-}
-@media (prefers-color-scheme:dark){
-  :root{--bg:#121416; --panel:#1b1e21; --ink:#eceeef; --muted:#9aa2a9; --line:#2b3035;
-        --accent:#e8603f; --soft:#2a1f1b; --ok:#3fbf73; --warn:#f0a03a; --bad:#ff6b5b;}
-}
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-.brand{font-weight:700;display:flex;align-items:center;gap:8px}
-.brand i{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block}
-nav{display:flex;gap:2px;flex-wrap:wrap}
-nav a{padding:6px 8px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px}
-nav a.on{background:var(--soft);color:var(--accent)}
-nav{align-items:center}
-.ng{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);opacity:.7;margin:0 0 0 10px;font-weight:700}
-.ng:first-of-type{margin-left:8px}
-.hwgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
-.kv span:nth-child(odd){color:var(--muted)}
-.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
-.bar i{display:block;height:100%;background:var(--ok)}
-.bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
-.svc{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
-.svc:last-child{border-bottom:0}
-.folders{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
-.folder{border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;background:var(--panel);display:flex;gap:10px;align-items:center}
-.folder:hover{border-color:var(--muted)}
-.folder.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
-.folder .ic{font-size:24px;line-height:1}
-.folder b{display:block;font-size:14px}
-.folder small{color:var(--muted)}
-.hwsum{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-.hwsum a{color:inherit;text-decoration:none}
-.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.hdr-right a{color:var(--muted);font-weight:600;text-decoration:none;font-size:14px}
-.hdr-right a:hover{color:var(--accent)}
-.clock{font:600 15px var(--mono);color:var(--muted)}
-main{max-width:1200px;margin:0 auto;padding:18px 16px 60px}
-h2{font-size:18px;margin:0 0 12px}
-h3{font-size:13px;margin:20px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.stat b{display:block;font:700 28px var(--mono)}
-.stat span{color:var(--muted);font-size:13px}
-table{width:100%;border-collapse:collapse;background:var(--panel)}
-th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums}
-th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;position:sticky;top:0;background:var(--panel)}
-.tbl{border:1px solid var(--line);border-radius:12px;overflow:auto}
-.scroll{max-height:520px}
-.mono{font-family:var(--mono)} .muted{color:var(--muted)} .small{font-size:13px}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--muted)}
-.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
-.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
-.badge.running{background:var(--accent);color:var(--accent-ink)} .badge.finished{background:var(--ok);color:#fff}
-.hand{color:var(--warn);font-weight:700;cursor:help}
-button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:9px;cursor:pointer;text-decoration:none;display:inline-block;white-space:nowrap}
-button:hover,.btn:hover{border-color:var(--muted)}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-button.danger{color:var(--bad)} button.sm{padding:4px 9px;font-size:13px}
-button:disabled{opacity:.45;cursor:default}
-input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
-textarea{font-family:var(--mono);min-height:170px}
-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+body{margin:0;background:var(--ice);color:var(--ink);font:15px/1.45 var(--body)}
+h1,h2,h3{font-family:var(--head);font-weight:600;margin:0;letter-spacing:.2px}
+a{color:inherit}
+.hide{display:none!important}
+.small{font-size:13.5px}.muted{color:var(--muted)}.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num,td{font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .between{justify-content:space-between}
-.form{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-.events{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
-.ev{cursor:pointer} .ev.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
-.ev h4{margin:0 0 6px;font-size:16px}
-.bigclock{font:700 clamp(54px,10vw,120px)/1 var(--mono);letter-spacing:-2px;text-align:center;padding:14px 0 6px}
-.bigclock.idle{color:var(--muted);font-size:clamp(28px,5vw,44px);letter-spacing:0}
-.wclock{font:700 30px var(--mono)}
-.feed tr.fin td{background:var(--soft)}
-.feed tr.new td{animation:flash 1.2s ease-out}
-@keyframes flash{from{background:var(--accent);color:var(--accent-ink)}to{}}
-.alerts{display:grid;gap:6px;margin-top:12px}
-.alert{padding:9px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-size:14px}
-.alert.bad{border-color:var(--bad);color:var(--bad)} .alert.warn{border-color:var(--warn);color:var(--warn)}
-.alert.info{color:var(--muted)}
-.drop{border:2px dashed var(--line);border-radius:10px;padding:12px;text-align:center;color:var(--muted);font-size:14px;margin-bottom:10px}
-.drop.over{border-color:var(--accent);color:var(--accent)}
-.checkbig{text-align:center;padding:20px 10px}
-.checkbig .num{font:800 clamp(64px,14vw,150px)/1 var(--mono)}
-.checkbig .num.unknown{color:var(--bad);font-size:clamp(36px,7vw,72px)}
+.spacer{flex:1}
+.empty{padding:22px;text-align:center;color:var(--muted)}
+
+/* ── шапка ── */
+.bar{display:flex;align-items:center;gap:16px;background:var(--night);color:#fff;padding:0 18px;min-height:64px;border-bottom:3px solid var(--track);position:sticky;top:0;z-index:30}
+.evswitch{position:relative}
+.evbtn{display:grid;grid-template-columns:auto auto;align-items:center;gap:0 10px;text-align:left;background:var(--night-2);border:1px solid var(--night-line);color:#fff;border-radius:var(--r);padding:6px 12px;cursor:pointer;font:inherit;max-width:360px}
+.evbtn:hover{border-color:#4a6491}
+.evbtn .n{font:600 16px var(--head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evbtn .m{font-size:12px;color:var(--night-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evbtn svg{grid-column:2;grid-row:1/3;color:var(--night-muted)}
+.health{margin-left:auto;display:flex;gap:6px}
+.h{font-size:13px;padding:4px 10px 4px 22px;border-radius:99px;background:var(--night-2);position:relative;color:#d5deeb;text-decoration:none;white-space:nowrap}
+.h::before{content:"";position:absolute;left:9px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:#8aa0bf}
+.h.ok::before{background:#3ED48A}.h.warn::before{background:var(--start)}.h.bad::before{background:var(--track)}
+.h.bad{color:#fff;background:#E71E2540}
+.clock{font:500 18px var(--head);letter-spacing:.5px;color:#d5deeb;min-width:78px;text-align:right}
+.gear{color:var(--night-muted);display:flex;padding:7px;border-radius:var(--r);position:relative}
+.gear:hover,.gear.on{color:#fff;background:var(--night-2)}
+.gear .dot{position:absolute;right:4px;top:4px;margin:0}
+
+/* выпадающие меню */
+.menu{display:none;position:absolute;left:0;top:calc(100% + 6px);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 14px 34px #0b1d3733;min-width:300px;max-width:min(420px,92vw);padding:6px;z-index:40}
+.menu.right{left:auto;right:0}
+.menu.open{display:block}
+.menu a,.menu button.mi{display:block;width:100%;text-align:left;background:none;border:0;font:inherit;color:inherit;padding:8px 10px;border-radius:4px;text-decoration:none;cursor:pointer}
+.menu a:hover,.menu button.mi:hover{background:var(--ice)}
+.menu a b,.menu button.mi b{display:block;font:600 15px var(--head)}
+.menu a small,.menu button.mi small{display:block;color:var(--muted);font-size:12.5px}
+.menu .sel{background:var(--ice);box-shadow:inset 3px 0 0 var(--track)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.menu .live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--track);margin-right:6px;vertical-align:middle;animation:pulse 1.6s infinite}
+
+/* ── дорожка этапов ── */
+.lane{position:relative;display:flex;align-items:stretch;background:var(--panel);border-bottom:1px solid var(--line);padding:0 18px;position:sticky;top:67px;z-index:20}
+.lane::before,.lane::after{content:"";position:absolute;left:0;right:0;height:1px;background:var(--track);opacity:.28;pointer-events:none}
+.lane::before{top:22px}.lane::after{top:30px}
+.st{position:relative;flex:1;min-width:0;max-width:230px;display:grid;grid-template-columns:auto 1fr;column-gap:10px;padding:10px 12px 10px 0;text-decoration:none;color:var(--muted)}
+.st .pin{grid-row:1/3;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 15px var(--head);background:var(--panel);border:2px solid var(--line);color:var(--muted);position:relative;z-index:1}
+.st b{font:600 15px var(--head);color:var(--ink);white-space:nowrap}
+.st small{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st.done .pin{border-color:var(--ok);color:var(--ok);font-size:0}.st.done .pin::after{content:"✓";font-size:15px}
+.st.warn small{color:var(--start);font-weight:700}
+.st.live .pin{background:var(--track);border-color:var(--track);color:#fff;box-shadow:0 0 0 4px #E71E2530}
+.st.live small{color:var(--track);font-weight:700}
+.st.on::after{content:"";position:absolute;left:0;right:12px;bottom:-1px;height:3px;background:var(--night)}
+.st:hover b{color:var(--track)}
+.screens{margin-left:auto;align-self:center;position:relative;padding-left:10px}
+
+/* ── страницы ── */
+main{max-width:1280px;margin:0 auto;padding:24px 18px 70px}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px 20px;margin-bottom:18px;flex-wrap:wrap}
+h1{font-size:32px;line-height:1.1}
+.lead{margin:6px 0 0;color:var(--muted);max-width:70ch}
+h2{font-size:20px;margin:28px 0 10px}
+h3{font-size:16px;margin:0 0 10px}
+.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+
+/* кнопки, поля */
+button,.btn{font:700 14.5px var(--body);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 15px;border-radius:var(--r);cursor:pointer;text-decoration:none;display:inline-block;white-space:nowrap;line-height:1.3}
+button:hover,.btn:hover{border-color:var(--muted)}
+button.primary,.btn.primary{background:var(--track);border-color:var(--track);color:#fff}
+button.primary:hover,.btn.primary:hover{background:#c8151b;border-color:#c8151b}
+button.ok{border-color:var(--ok);color:var(--ok)}
+button.danger{color:var(--track)}
+button.quiet{border-color:transparent;background:transparent;color:var(--muted)}
+button.sm,.btn.sm{padding:4px 10px;font-size:13px}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--night)}
+textarea{font-family:var(--mono);font-size:13.5px;min-height:170px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:700}
+.form{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.check{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-weight:400;font-size:14.5px;margin:10px 0 0}
+.check input{width:auto;margin-top:3px;accent-color:var(--track)}
+.switch{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:700;font-size:15px;margin:0;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:1px}
+.switch i{width:42px;height:24px;border-radius:99px;background:var(--line);position:relative;transition:.2s;flex:0 0 auto}
+.switch i::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 2px #0003}
+.switch input:checked+i{background:var(--ok)}.switch input:checked+i::after{left:21px}
+.switch input:focus-visible+i{outline:3px solid #E71E2566;outline-offset:2px}
+details>summary{cursor:pointer}
+
+/* таблицы */
+table{width:100%;border-collapse:collapse}
+th{font:500 13px var(--head);letter-spacing:.3px;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:2px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:1}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+.tbl{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:auto}
+.scroll{max-height:520px}
+td b{font-weight:700}
+.bib{font:600 17px var(--head)}
+
+/* мелочи из прежней версии */
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--muted)}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--track)}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;background:var(--line);color:var(--muted)}
+.badge.running{background:var(--track);color:#fff}.badge.finished{background:var(--ok);color:#fff}
+.hand{color:var(--start);font-weight:700;cursor:help}
+.alerts{display:grid;gap:6px;margin:0 0 12px}
+.alert{padding:9px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);font-size:14px;border-left-width:4px}
+.alert.bad{border-left-color:var(--track);color:var(--track)}.alert.warn{border-left-color:var(--start)}.alert.info{color:var(--muted)}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:14px;text-align:center;color:var(--muted);font-size:14px;margin-bottom:10px;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--track);color:var(--track)}
+.toast{position:fixed;right:16px;bottom:16px;background:var(--night);color:#fff;padding:11px 16px;border-radius:var(--r);border-left:4px solid var(--track);opacity:0;transition:.25s;pointer-events:none;max-width:90vw;z-index:60;box-shadow:0 10px 30px #0004}
+.toast.show{opacity:1}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:14px}
+.kv>span:nth-child(odd){color:var(--muted)}
+.bar2{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
+.bar2 i{display:block;height:100%;background:var(--ok)}.bar2 i.warn{background:var(--start)}.bar2 i.bad{background:var(--track)}
+.svc{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.svc:last-child{border-bottom:0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.stat b{display:block;font:600 30px/1.1 var(--head)}
+.stat span{color:var(--muted);font-size:13.5px}
+td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width:70px}
+td input.bibedit{width:80px;padding:4px 6px}
+.dupe{color:var(--start);font-size:12.5px;font-weight:700}
+.st-pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.st-pill.pending{background:#F05A2222;color:var(--start)}.st-pill.approved{background:var(--ok);color:#fff}.st-pill.rejected{background:var(--line);color:var(--muted)}
+tr.rej td{opacity:.55}
+
+@keyframes pulse{50%{opacity:.3}}
+@keyframes flash{from{background:#E71E2533}}
+
+/* ── главная ── */
+.group{font-size:18px;margin:26px 0 10px}
+.evrow{display:grid;grid-template-columns:64px minmax(0,1fr) auto auto;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--r);padding:12px 16px;margin-bottom:8px;cursor:pointer}
+.evrow:hover{border-color:var(--muted);border-left-color:var(--night)}
+.evrow.today,.evrow.running{border-left-color:var(--track)}
+.evrow.sel{box-shadow:0 0 0 2px #0B1D3722}
+.date{text-align:center;line-height:1}
+.date b{display:block;font:600 30px var(--head)}
+.date span{font-size:13px;color:var(--muted)}
+.evrow .t{font:600 20px var(--head)}
+.evrow .m{color:var(--muted);font-size:14px}
+.state{font-size:13.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.state.live{color:var(--track)}
+.state.live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--track);margin-right:7px;animation:pulse 1.6s infinite}
+.state.open{color:var(--ok)}.state.done{color:var(--ok)}
+.evacts{display:flex;gap:4px}
+.archead{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.archead select,.archead input{width:auto}
+.year{font:600 20px var(--head);margin:18px 0 6px;display:flex;align-items:baseline;gap:10px}
+.year span{font:400 13px var(--body);color:var(--muted)}
+.month{font:500 14px var(--head);color:var(--muted);margin:10px 0 6px;text-transform:capitalize}
+.arow{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:14px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.arow:last-child{border-bottom:0}
+.arow .t{font:600 17px var(--head)}
+.files a{display:inline-block;margin:3px 10px 0 0;font-size:13px;color:var(--track);text-decoration:none;font-weight:700}
+.files a:hover{text-decoration:underline}
+
+/* ── подготовка ── */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.side{display:grid;gap:12px;position:sticky;top:150px}
+.sect{margin-top:22px}
+.sect>h2{margin-top:0}
+
+/* ── регистрация ── */
+.tabs{display:flex;gap:2px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{font:600 15px var(--head);background:transparent;border:0;border-bottom:3px solid transparent;border-radius:0;padding:6px 10px;color:var(--muted)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--track)}
+.tabs i{font:700 12px var(--body);font-style:normal;background:var(--line);border-radius:99px;padding:1px 7px;margin-left:5px;color:var(--ink)}
+.tabs button.on i{background:var(--track);color:#fff}
+.tabs .search{margin-left:auto;max-width:280px}
+.counts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.counts span{padding:3px 10px;border-radius:99px;background:#F05A2218;color:var(--start);font-size:13px;font-weight:700}
+.regform{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-top:10px}
+.rowacts{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.qr{background:#fff;padding:8px;border-radius:var(--r);border:1px solid var(--line);display:flex;justify-content:center;min-height:120px;align-items:center}
+.qr img,.qr canvas{width:180px;height:180px}
+.url{font-size:13.5px}
+.heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
+.heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:2px solid var(--line)}
+.heat .hh b{font:600 17px var(--head)}
+.heat td{padding:6px 8px;font-size:13.5px}
+.heat td input.lane{width:46px;padding:3px 5px;text-align:center}
+.heat td select{width:auto;padding:3px 5px;font-size:12.5px}
+
+/* ── чипы ── */
+.progress{min-width:240px;font-size:14px;color:var(--muted)}
+.progress b{font:600 24px var(--head);color:var(--ink)}
+.pbar{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.checkbig{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:var(--r);text-align:center;padding:26px 16px}
+.checkbig.ok{border-top-color:var(--ok)}.checkbig.bad{border-top-color:var(--track)}
+.checkbig .num{font:700 clamp(84px,15vw,170px)/1 var(--head)}
+.checkbig .num.unknown{color:var(--track);font-size:clamp(36px,7vw,72px)}
 .checkbig .sub{color:var(--muted);margin-top:8px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips span{font:600 13px var(--mono);padding:3px 8px;border-radius:7px;background:var(--line)}
-.toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;z-index:20}
-.toast.show{opacity:1}
-.empty{padding:24px;text-align:center;color:var(--muted)}
-.hide{display:none!important}
-td input.bibedit{width:80px;padding:4px 6px}
-.year{font:800 22px var(--mono);margin:22px 0 8px;display:flex;align-items:baseline;gap:10px}
-.year span{font:600 13px system-ui;color:var(--muted)}
-.month{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px}
-.arow{display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
-.arow:last-child{border-bottom:0}
-.arow .t{font-weight:600}
-.files a{display:inline-block;margin:2px 8px 2px 0;font-size:13px;color:var(--accent);text-decoration:none}
-.arow{background:var(--panel)}
+.chips span{font:600 15px var(--head);padding:3px 11px;border-radius:4px;background:var(--panel);border:1px solid var(--line)}
+#chkUnk span{border-color:var(--track);color:var(--track)}
+
+/* ── экран гонки ── */
+body[data-view=timing]{background:var(--night)}
+body[data-view=timing] main{max-width:none;padding:0}
+.race{color:#fff;min-height:calc(100vh - 128px);padding:18px 22px 40px;position:relative;overflow:hidden;
+  background:radial-gradient(circle at 112% 46%,transparent 0 300px,#E71E25 300px 318px,transparent 318px 340px,#E71E25 340px 358px,transparent 358px 380px,#E71E25 380px 398px,transparent 398px),var(--night)}
+.race-top{display:flex;justify-content:space-between;gap:12px;align-items:center;position:relative;z-index:2}
+.race-top h1{font-size:26px;color:#fff}
+.race-top .meta{color:var(--night-muted);font-size:13.5px}
+.race .alerts{position:relative;margin-top:12px}
+.race .alert{background:var(--night-2);border-color:var(--night-line);color:#fff}
+.race .alert.bad{border-left-color:var(--track)}.race .alert.warn{border-left-color:var(--start)}.race .alert.info{color:var(--night-muted)}
+.race-main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);gap:24px;margin-top:18px;position:relative}
+.state-pill{display:inline-flex;align-items:center;gap:8px;border-radius:99px;padding:4px 12px;font-weight:700;font-size:14px;background:var(--night-2);color:var(--night-muted);border:1px solid var(--night-line)}
+.state-pill.live{background:#E71E2522;color:#ff8a8e;border-color:#E71E2566}
+.state-pill.live i{width:8px;height:8px;border-radius:50%;background:var(--track);animation:pulse 1.6s infinite}
+.state-pill.done{color:#7fe0ad;border-color:#3fbf7355}
+.bigclock{font:600 clamp(76px,12.5vw,176px)/1 var(--head);letter-spacing:-1px;margin:10px 0 6px;font-variant-numeric:tabular-nums}
+.bigclock.idle{color:var(--night-muted);font-size:clamp(40px,6vw,72px);letter-spacing:0}
+.counts4{display:flex;gap:30px;flex-wrap:wrap}
+.counts4 b{display:block;font:600 40px/1 var(--head)}
+.counts4 span{color:var(--night-muted);font-size:14px}
+.race-actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;align-items:center}
+.race button{background:transparent;color:#fff;border-color:#4a6491}
+.race button:hover{border-color:#fff}
+.race button.primary{background:var(--track);border-color:var(--track)}
+.race button.big{font:600 22px var(--head);padding:12px 30px;letter-spacing:.3px}
+.race input,.race select{background:var(--night-2);color:#fff;border-color:var(--night-line)}
+.race input::placeholder{color:#7d90ad}
+.more{position:relative}
+.more>summary{list-style:none;color:var(--night-muted);font-weight:700;padding:7px 14px;border:1px solid var(--night-line);border-radius:var(--r)}
+.more>summary::-webkit-details-marker{display:none}
+.more[open]>summary{color:#fff;border-color:#fff}
+.more .dmenu{position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);color:var(--ink);border-radius:var(--r);padding:12px;width:320px;box-shadow:0 14px 34px #0007;z-index:5;display:grid;gap:10px}
+.more .dmenu button{background:var(--panel);color:var(--ink);border-color:var(--line);width:100%;text-align:left}
+.more .dmenu button.danger{color:var(--track);border-color:#E71E2555}
+.more .dmenu input{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.more .dmenu .hint{font-size:12.5px;color:var(--muted);margin:0}
+.manual{background:var(--night-2);border:1px solid var(--night-line);border-radius:var(--r);padding:16px 18px;align-self:start;position:relative}
+.manual h3{font-size:20px;color:#fff}
+.hint{color:var(--night-muted);font-size:13.5px;margin:4px 0 12px}
+.manrow{display:flex;gap:8px;flex-wrap:wrap}
+.manrow #mBib{width:110px;font:600 26px var(--head);text-align:center;background:#fff;color:var(--night);padding:4px 8px}
+.manrow #mDev{width:auto;min-width:120px}
+.manrow #mTime{width:150px}
+.mtbl{margin-top:12px;max-height:220px;overflow:auto}
+.mtbl table td{border-color:var(--night-line);padding:6px 8px;font-size:13.5px;color:#d5deeb}
+.mtbl input.bibedit{background:var(--night);color:#fff;border-color:var(--night-line)}
+.mtbl .empty{color:var(--night-muted);padding:8px}
+.light{background:var(--panel);color:var(--ink);border-radius:var(--r);overflow:hidden;margin-top:22px;position:relative}
+.light .lh{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.light .lh h3{margin:0;font-size:18px}
+.light button{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.light button.primary{background:var(--track);color:#fff;border-color:var(--track)}
+.light button.danger{color:var(--track)}
+.light input{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.wclock{font:600 26px var(--head)}
+tr.fin td{background:#17905A10}
+tr.wrun td{background:#E71E250c}
+.feed tr.new td{animation:flash 1.4s ease-out}
+.feed tr.fin td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
+
+/* ── результаты ── */
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.filters select,.filters input{width:auto}
+td.pl{font:600 19px var(--head)}
+td.pl.p1{color:var(--gold)}td.pl.p2{color:var(--silver)}td.pl.p3{color:var(--bronze)}
+td.res{font:600 18px var(--head)}
+
+/* ── документы ── */
+.doclinks{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-bottom:18px}
+.doclinks a{display:block;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--night);border-radius:var(--r);padding:12px 14px;text-decoration:none}
+.doclinks a:hover{border-left-color:var(--track)}
+.doclinks b{display:block;font:600 16px var(--head)}
+.doclinks small{color:var(--muted)}
+.folders{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.folder{border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;cursor:pointer;background:var(--panel);display:flex;gap:10px;align-items:center}
+.folder:hover{border-color:var(--muted)}
+.folder.on{border-color:var(--night);box-shadow:inset 0 -3px 0 var(--track)}
+.folder .ic{font-size:22px;line-height:1}
+.folder b{display:block;font:600 15px var(--head)}
+.folder small{color:var(--muted)}
 .flist{display:grid;gap:6px}
-.regtop{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:16px;align-items:start}
-@media (max-width:760px){.regtop{grid-template-columns:1fr}}
-.qr{background:#fff;padding:10px;border-radius:10px;border:1px solid var(--line);display:flex;justify-content:center}
-.qr img,.qr canvas{width:170px;height:170px}
-.switch{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600;margin:0}
-.switch input{width:auto}
-.counts{display:flex;gap:8px;flex-wrap:wrap}
-.counts span{padding:4px 10px;border-radius:99px;background:var(--line);font-size:13px;font-weight:600}
-.counts .p{background:var(--soft);color:var(--accent)}
-.st{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
-.st.pending{background:var(--soft);color:var(--accent)} .st.approved{background:var(--ok);color:#fff} .st.rejected{background:var(--line);color:var(--muted)}
-tr.rej td{opacity:.55}
-td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width:70px}
-.dupe{color:var(--warn);font-size:12px;font-weight:700}
-.heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
-@media (max-width:520px){.heats{grid-template-columns:1fr}}
-.heat{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--bg)}
-.heat .hh b{font-size:15px}
-.heat table{background:transparent} .heat td{padding:5px 8px;font-size:13px}
-.heat td input.lane{width:46px;padding:3px 5px;text-align:center}
-.heat td select{width:auto;padding:3px 5px;font-size:12px}
-.regform{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-top:10px}
-.frow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
-@media (max-width:640px){.arow{grid-template-columns:1fr}}
-@media (max-width:700px){header{padding:10px 16px}.hdr-right{margin-left:0;width:100%}}
+.frow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);flex-wrap:wrap}
+.frow a{font-weight:700;text-decoration:none}.frow a:hover{color:var(--track)}
+
+/* ── система ── */
+.subnav{display:flex;gap:2px;margin:0 0 16px}
+.subnav a{font:600 16px var(--head);text-decoration:none;color:var(--muted);padding:6px 12px;border-bottom:3px solid transparent}
+.subnav a.on{color:var(--ink);border-bottom-color:var(--track)}
+.hwgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.datalinks{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;font-weight:700;margin-top:10px}
+.datalinks a{color:var(--ink);text-underline-offset:3px}
+
+@media (max-width:1100px){
+  .health .h:not(.bad){display:none}
+  .st{max-width:none}
+  .st small{display:none}
+}
+@media (max-width:900px){
+  .logos .lg-sakh,.logos .lg-flaso,.logos .lg-sep{display:none}
+  .bar{gap:10px;flex-wrap:wrap;padding:8px 12px}
+  .evbtn{max-width:56vw}
+  .lane{overflow-x:auto;top:auto;position:relative;padding:0 10px}
+  .st{flex:0 0 auto}
+  .st b{font-size:14px}
+  .split,.race-main{grid-template-columns:1fr}
+  .side{position:static}
+  .heats{grid-template-columns:1fr}
+  .evrow{grid-template-columns:52px minmax(0,1fr)}.evrow .state,.evrow .evacts{grid-column:2}
+  .arow{grid-template-columns:1fr}
+  h1{font-size:26px}
+  .race{background:var(--night)}
+  .counts4{gap:18px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body>
-<header>
-  <div class="brand"><i></i>Сервер хронометража</div>
-  <nav>
-    <a href="#overview" data-tab="overview">Обзор</a>
-    <span class="ng">Соревнование</span>
-    <a href="#events" data-tab="events">Соревнования</a>
-    <a href="#reg" data-tab="reg">Регистрация <span class="badge running hide" id="regBadge"></span></a>
-    <a href="#check" data-tab="check">Проверка</a>
-    <a href="#timing" data-tab="timing">Хронометраж</a>
-    <a href="#results" data-tab="results">Результаты</a>
-    <span class="ng">Документы</span>
-    <a href="#files" data-tab="files">Файлы</a>
-    <a href="#archive" data-tab="archive">Архив</a>
-    <span class="ng">Система</span>
-    <a href="#hw" data-tab="hw">Оборудование <span class="dot hide" id="hwDot" style="margin:0 0 0 4px"></span></a>
-    <a href="#log" data-tab="log">Журнал</a>
-  </nav>
-  <div class="hdr-right">
-    <span class="ng" style="margin:0">Экраны</span>
-    <a id="lnkJudge" target="_blank">Судья ↗</a>
-    <a id="lnkAnn" target="_blank">Диктор ↗</a>
-    <a id="lnkBoard" target="_blank">Табло ↗</a>
-    <a id="lnkProto" target="_blank">Протокол ↗</a>
-    <span class="clock" id="hdrClock">--:--:--</span>
+<body data-view="home">
+
+<header class="bar">
+  <a class="logos" href="#home" title="Все соревнования">
+    <img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалин — маяк России">
+    <img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО">
+    <span class="lg-sep"></span>
+    <img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+  </a>
+  <div class="evswitch">
+    <button class="evbtn" id="evBtn" aria-haspopup="true" aria-expanded="false">
+      <span class="n" id="evBtnName">Выберите соревнование</span>
+      <span class="m" id="evBtnMeta">все соревнования и архив</span>
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+    <div class="menu" id="evMenu"></div>
   </div>
+  <div class="health">
+    <a class="h" id="hReaders" href="#hw" title="Ридеры на связи">Ридеры —</a>
+    <a class="h" id="hWiclax" href="#hw" title="Подключение Wiclax">Wiclax</a>
+    <a class="h" id="hVpn" href="#hw" title="Устройства в VPN">VPN —</a>
+  </div>
+  <span class="clock" id="hdrClock">--:--:--</span>
+  <a class="gear" id="gear" href="#hw" title="Система: оборудование, обновление, журнал">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.4 13a7.5 7.5 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L14 3.3h-4l-.4 2.6a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L5.6 11a7.5 7.5 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.8 1.7 1l.4 2.6h4l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+    <span class="dot hide" id="hwDot"></span>
+  </a>
 </header>
+
+<nav class="lane" id="lane" aria-label="Этапы соревнования">
+  <a href="#prep" data-step="prep" class="st" id="stPrep"><span class="pin">1</span><b>Подготовка</b><small></small></a>
+  <a href="#reg" data-step="reg" class="st" id="stReg"><span class="pin">2</span><b>Регистрация</b><small></small></a>
+  <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">3</span><b>Чипы</b><small></small></a>
+  <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">4</span><b>Старт и финиш</b><small></small></a>
+  <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">5</span><b>Результаты</b><small></small></a>
+  <a href="#files" data-step="files" class="st" id="stFiles"><span class="pin">6</span><b>Документы</b><small></small></a>
+  <div class="screens">
+    <button id="scrBtn" aria-haspopup="true">Экраны ▾</button>
+    <div class="menu right" id="scrMenu">
+      <a id="lnkJudge" target="_blank"><b>Судья на финише ↗</b><small>телефон: старт, финиш, ввод номеров</small></a>
+      <a id="lnkAnn" target="_blank"><b>Диктор ↗</b><small>кто подбегает к финишу</small></a>
+      <a id="lnkBoard" target="_blank"><b>Табло ↗</b><small>для экрана у финиша</small></a>
+      <a id="lnkProto" target="_blank"><b>Протокол ↗</b><small>результаты для печати и сайта</small></a>
+    </div>
+  </div>
+</nav>
+
 <main>
 
-<!-- ОБЗОР -->
-<section id="tab-overview" class="hide">
-  <div class="grid">
-    <div class="card stat"><b id="stEvent" style="font-size:18px">—</b><span>текущее соревнование</span><div class="small muted" id="stEventMeta" style="margin-top:4px"></div></div>
-    <div class="card stat"><b id="stRegs">—</b><span>заявок на рассмотрении</span></div>
-    <div class="card stat"><b id="stReads">0</b><span>отметок в архиве</span></div>
+<!-- ГЛАВНАЯ: соревнования и архив -->
+<section id="tab-home" class="hide">
+  <div class="pagehead">
+    <div><h1>Соревнования</h1><p class="lead">Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.</p></div>
+    <button class="primary" id="btnNew">Новое соревнование</button>
   </div>
-  <h3>Оборудование <a href="#hw" class="small" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--accent);text-decoration:none">подробнее →</a></h3>
-  <div class="hwsum">
-    <a href="#hw" class="card stat"><b id="stReaders">0 / 0</b><span>ридеров на связи</span></a>
-    <a href="#hw" class="card stat"><b id="stWiclax" style="font-size:22px">—</b><span>Wiclax</span></a>
-    <a href="#hw" class="card stat"><b id="stVpn">—</b><span>устройств в VPN</span></a>
-    <a href="#hw" class="card stat"><b id="stSvc" style="font-size:20px">—</b><span>службы сервера</span></a>
-    <a href="#hw" class="card stat"><b id="stDisk">—</b><span>свободно на диске</span></a>
+  <div id="evFormHome"></div>
+  <div id="evList"></div>
+  <h2 class="group">Архив</h2>
+  <div class="archead">
+    <select id="aYear"></select>
+    <input id="aSearch" placeholder="Название или место" style="max-width:280px">
   </div>
-  <h3>Последние отметки</h3>
-  <div class="tbl"><table>
-    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
-    <tbody id="lastBody"></tbody>
-  </table></div>
-  <p class="small"><a href="/export.csv">Все отметки (CSV)</a> · <a href="/export.csv?filtered=1">Только прохождения (CSV)</a> · <a href="/raw">Сырые строки</a> · <a href="/simple">Простая страница</a></p>
+  <div id="aList"></div>
 </section>
 
-<!-- ОБОРУДОВАНИЕ -->
-<section id="tab-hw" class="hide">
-  <div class="row between" style="margin-bottom:6px">
-    <div><h2 style="margin:0">Оборудование и подключения</h2><div class="small muted" id="hwUpd"></div></div>
-    <button id="hwRefresh">Обновить</button>
+<!-- 1. ПОДГОТОВКА -->
+<section id="tab-prep" class="hide">
+  <div class="pagehead">
+    <div><h1>Подготовка</h1><p class="lead">Параметры соревнования, забеги и стартовый список. Регистрацию участников ведите на следующем этапе.</p></div>
   </div>
-  <div class="hwgrid">
-    <div class="card"><h3 style="margin-top:0">Сервер</h3><div class="kv" id="hwServer"></div></div>
-    <div class="card"><h3 style="margin-top:0">Ресурсы</h3><div id="hwRes"></div></div>
-    <div class="card"><h3 style="margin-top:0">Службы</h3><div id="hwSvc"></div></div>
-  </div>
-  <div class="row between" style="margin-top:18px">
-    <h3 style="margin:0">Ридеры</h3>
-    <div class="row"><button class="sm" id="rdSimBtn" title="Виртуальный ридер: прогоняет участников соревнования через сервер в Wiclax">🧪 Симулятор</button><button class="sm" id="rdScanBtn">🔍 Найти ридеры</button><button class="sm" id="rdAddBtn">+ Добавить ридер</button><button class="sm" id="rdBulkBtn">Загрузить список</button></div>
-  </div>
-  <div id="rdScan" class="card hide" style="margin-top:10px">
-    <div class="row" style="align-items:flex-end">
-      <div><label>Сеть ящика</label><input id="scNet" placeholder="10.19.1" style="width:130px"></div>
-      <div><label>Порт ридеров</label><input id="scPort" type="number" value="10000" style="width:100px"></div>
-      <div><label>Ящик (подпись)</label><input id="scBox" placeholder="Финишный ящик" style="width:180px"></div>
-      <button class="primary sm" id="scGo">Найти</button><button class="sm" id="scClose">Закрыть</button>
-    </div>
-    <p class="small muted" style="margin:8px 0 0">Сервер проверит адреса от .1 до .254 в сети ящика (через VPN) и покажет, где отвечает ридер. Занимает несколько секунд. Ящик должен быть включён и на связи.</p>
-    <div id="scRes" style="margin-top:8px"></div>
-  </div>
-  <div id="rdForm" class="card hide" style="margin-top:10px">
+  <div id="evFormPrep"></div>
+  <div id="evForm" class="panel hide">
+    <h3 id="evFormTitle">Новое соревнование</h3>
     <div class="form">
-      <div><label>Название ридера *</label><input id="rdId" placeholder="IPICO1" maxlength="32"></div>
-      <div><label>IP-адрес *</label><input id="rdHost" placeholder="10.19.1.61"></div>
-      <div><label>Порт</label><input id="rdPort" type="number" value="10000" min="1" max="65535"></div>
-      <div><label>Где стоит (подпись)</label><input id="rdDev" placeholder="FINISH" list="rdDevList"><datalist id="rdDevList"></datalist></div>
-      <div><label>Ящик / место</label><input id="rdBox" placeholder="Финишный ящик 1"></div>
-      <div><label>Формат</label><select id="rdParser"><option value="ipico">IPICO</option><option value="auto">Другой (автоопределение)</option><option value="wiclax">Готовые строки Wiclax</option><option value="sim">Симулятор (тренировка без железа)</option></select></div>
+      <div><label for="fName">Название *</label><input id="fName" placeholder="Кросс Нации — 10 км"></div>
+      <div><label for="fDate">Дата</label><input id="fDate" type="date"></div>
+      <div><label for="fPlace">Место</label><input id="fPlace" placeholder="Южно-Сахалинск, парк Гагарина"></div>
+      <div><label for="fFinish">Точка финиша (код ридера)</label><select id="fFinish"></select></div>
+      <div><label for="fMin">Не считать финишем раньше, сек</label><input id="fMin" type="number" min="0" step="1" value="0"></div>
+      <div><label for="fSilence">Предупреждать, если точка молчит, мин</label><input id="fSilence" type="number" min="0" step="1" value="10"></div>
+      <div><label for="fStartClock">Начало соревнований (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
+      <div><label for="fOrg">Организатор (шапка протокола)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
+      <div><label for="fJudge">Главный судья</label><input id="fJudge" placeholder="Иванов И. И."></div>
+      <div><label for="fSecr">Главный секретарь</label><input id="fSecr" placeholder="Петрова А. А."></div>
     </div>
-    <input type="hidden" id="rdOrig">
-    <div class="row" style="margin-top:12px"><button class="primary" id="rdSaveOn">Сохранить и подключить</button><button id="rdSave">Только сохранить</button><button id="rdCancel">Отмена</button></div>
-    <p class="small muted" style="margin-bottom:0">Сервер сам подключается к ридеру через VPN и переподключается при обрывах. За каждым ридером закрепляется свой постоянный порт для Wiclax — его видно в таблице. Точку («Цель») и дублирующую линию задаёте в Wiclax.</p>
-  </div>
-  <div id="rdBulk" class="card hide" style="margin-top:10px">
-    <label style="margin-top:0">Список ридеров — по строке на ридер: <b>название; IP; порт; точка; ящик</b>. Можно скопировать прямо из Excel.</label>
-    <textarea id="rdBulkText" rows="6" class="mono" placeholder="IPICO1;10.19.1.61;10000;FINISH;Финишный ящик 1&#10;IPICO2;10.19.1.62;10000;FINISH;Финишный ящик 1&#10;ELITE1;10.19.2.61;10000;KM5;Ящик 2 — 5 км"></textarea>
-    <div class="row" style="margin-top:10px"><button class="primary" id="rdBulkSave">Загрузить</button><button id="rdBulkCancel">Отмена</button></div>
-  </div>
-  <div class="tbl" style="margin-top:10px"><table>
-    <thead><tr><th>Ридер</th><th>Адрес</th><th>В Wiclax («Общий», 10.66.0.1)</th><th>Где стоит</th><th>Связь</th><th>Отметок</th><th>Часы ридера</th><th></th></tr></thead>
-    <tbody id="readersBody"></tbody>
-  </table></div>
-  <p class="small muted">«Часы ридера» — насколько время в отметке отличается от времени сервера. Перед стартом проверяйте тестовым чипом: больше ±2 с — синхронизируйте часы ридера.</p>
-  <h3>Wiclax</h3>
-  <div class="tbl"><table><thead><tr><th>Компьютер</th><th>Порт</th><th>Подключён с</th><th>Отправлено отметок</th><th>Режим</th></tr></thead><tbody id="hwWiclax"></tbody></table></div>
-  <div class="card" style="margin-top:10px">
-    <div class="small"><b>Как подключать Wiclax.</b> Один ридер на финише — одно устройство «Общий»: 10.66.0.1, <b id="wxMain">порт 9854</b> (все отметки сразу).</div>
-    <div class="small" style="margin-top:4px">Несколько ридеров (отсечки, дублирующий финиш) — в Wiclax по устройству «Общий» <b>на каждый ридер</b>, порт ридера из таблицы выше. «Цель» и «Бэкап линию» выставляете в Wiclax. Шаблон устройств сохраняется один раз, перед гонкой меняете только «Цель».</div>
-  </div>
-  <details style="margin-top:8px"><summary class="small muted">Дополнительно: порты по точкам (старый способ)</summary>
-  <div class="card" style="margin-top:6px">
-    <div class="small muted">Порт 9855–9860 отдаёт отметки всех ридеров с указанной подписью «Где стоит».</div>
-    <div class="tbl" style="margin-top:8px"><table><thead><tr><th>Порт</th><th>Точки</th><th>Для чего</th><th>Состояние</th><th></th></tr></thead><tbody id="wxPorts"></tbody></table></div>
-    <div class="row" style="margin-top:8px;align-items:flex-end">
-      <div><label>Порт</label><input id="wxPort" type="number" min="9855" max="9860" placeholder="9855" style="width:110px"></div>
-      <div><label>Точки (через запятую)</label><input id="wxDevs" placeholder="KM5" list="rdDevList" style="width:180px"></div>
-      <div><label>Для чего</label><input id="wxName" placeholder="Отсечка 5 км" style="width:200px"></div>
-      <button class="sm" id="wxAdd">Добавить порт</button>
-    </div>
-  </div></details>
-  <h3>Обновление сервера</h3>
-  <div class="card">
-    <div class="row between" style="align-items:center">
-      <div><div class="small muted">Сейчас установлена</div><b id="upVer" class="mono" style="font-size:18px">—</b></div>
-      <div class="row"><button class="primary" id="ghCheck">🔄 Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">⬆ Из файла (timing-hub.zip)</button></div>
-    </div>
-    <div id="ghBox" class="small" style="margin-top:8px"></div>
-    <div id="upState" class="small" style="margin-top:8px"></div>
-    <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
-    <p class="small muted" style="margin-bottom:0">Перед установкой сервер сам сохраняет прежнюю версию. Если новая не запустится — автоматически вернётся прежняя. Отметки и соревнования не затрагиваются.</p>
-  </div>
-  <h3>VPN-доступы (OpenVPN)</h3>
-  <div class="tbl"><table><thead><tr><th>Устройство (профиль)</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда (внешний IP)</th><th>На связи с</th><th>Трафик</th></tr></thead><tbody id="hwVpn"></tbody></table></div>
-  <div id="hwWgBox" class="hide"><h3>VPN-доступы (WireGuard)</h3>
-  <div class="tbl"><table><thead><tr><th>Устройство</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда</th><th>Трафик</th></tr></thead><tbody id="hwWg"></tbody></table></div></div>
-  <h3>Кто открывал сервер за последний час</h3>
-  <div class="tbl"><table><thead><tr><th>Адрес</th><th>VPN-профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
-  <p class="small muted">Новые VPN-доступы и отзыв: <span class="mono">sudo timing-ovpn add ИМЯ</span> / <span class="mono">sudo timing-ovpn remove ИМЯ</span>. Называйте профили понятно: judge-petrova, wiclax-laptop, router-finish — тогда здесь сразу видно, кто на связи.</p>
-</section>
-
-<!-- ФАЙЛЫ -->
-<section id="tab-files" class="hide">
-  <div class="row between" style="margin-bottom:12px">
-    <div><h2 style="margin:0">Файлы соревнования</h2><div class="small muted">Папки по назначению. «Для судей» видно на телефоне судьи.</div></div>
-    <select id="fEvent" style="width:auto;min-width:260px"></select>
-  </div>
-  <div class="folders" id="fFolders"></div>
-  <div class="card" style="margin-top:12px">
-    <div class="row between" style="margin-bottom:8px"><b id="fTitle">Все файлы</b>
-      <div class="row"><button id="btnSnap" class="sm">Снимок результатов сейчас</button></div></div>
-    <div class="drop" id="fdrop">Перетащите сюда файлы (PDF, Excel, CSV, фото) — или нажмите, чтобы выбрать. Попадут в выбранную папку.</div>
-    <div class="flist" id="fList"></div>
-  </div>
-</section>
-
-<!-- СОРЕВНОВАНИЯ -->
-<section id="tab-events" class="hide">
-  <div class="row between" style="margin-bottom:12px">
-    <h2 style="margin:0">Соревнования</h2>
-    <button class="primary" id="btnNew">+ Новое соревнование</button>
-  </div>
-  <div id="evForm" class="card hide" style="margin-bottom:16px">
-    <h2 id="evFormTitle">Новое соревнование</h2>
-    <div class="form">
-      <div><label>Название *</label><input id="fName" placeholder="Кросс Нации — 10 км"></div>
-      <div><label>Дата</label><input id="fDate" type="date"></div>
-      <div><label>Место</label><input id="fPlace" placeholder="Южно-Сахалинск, парк Гагарина"></div>
-      <div><label>Точка финиша (код ридера)</label><select id="fFinish"></select></div>
-      <div><label>Не считать финишем раньше, сек</label><input id="fMin" type="number" min="0" step="1" value="0"></div>
-      <div><label>Предупреждать, если точка молчит, мин</label><input id="fSilence" type="number" min="0" step="1" value="10"></div>
-      <div><label>Начало соревнований (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
-      <div><label>Организатор (шапка протокола)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
-      <div><label>Главный судья, ФИО</label><input id="fJudge" placeholder="Иванов И. И."></div>
-      <div><label>Главный секретарь, ФИО</label><input id="fSecr" placeholder="Петрова А. А."></div>
-    </div>
-    <label>Заметки</label><input id="fNotes" placeholder="дистанции, круги, особенности">
-    <label style="color:var(--ink);margin-top:12px"><input id="fPush" type="checkbox" checked style="width:auto"> Отправлять старт в Wiclax</label>
-    <label style="color:var(--ink);margin-top:6px"><input id="fSeq" type="checkbox" style="width:auto"> Забеги идут по очереди: старт следующего забега автоматически завершает предыдущий <span class="muted">(стадион, судья с секундомером)</span></label>
+    <label for="fNotes">Заметки</label><input id="fNotes" placeholder="дистанции, круги, особенности">
+    <label class="check"><input id="fPush" type="checkbox" checked> Отправлять старт в Wiclax</label>
+    <label class="check"><input id="fSeq" type="checkbox"> Забеги идут по очереди: старт следующего забега сам завершает предыдущий <span class="muted">(стадион, судья с секундомером)</span></label>
     <div class="row" style="margin-top:14px">
       <button class="primary" id="btnSave">Сохранить</button>
       <button id="btnCancel">Отмена</button>
-      <span class="muted small">Финишную точку можно ввести вручную, если ридер ещё не подключался — например FINISH. Для забегов только с судьёй выберите «JUDGE».</span>
+      <span class="muted small">Точку финиша можно ввести вручную, если ридер ещё не подключался — например FINISH. Для забегов только с судьёй — «JUDGE».</span>
     </div>
   </div>
-  <div id="evList" class="events"></div>
 
-  <div id="evDetail" class="hide">
-    <h3>Забеги «<span class="dName"></span>»</h3>
-    <div class="card">
-      <p class="small muted" style="margin-top:0">Забег = группа с общим стартом. У каждого забега своя категория и дистанция — по ним строится протокол: место в забеге и общее место среди всех забегов той же категории и дистанции. Если старт один на всех — забеги не нужны.</p>
+  <div class="sect">
+    <h2>Забеги</h2>
+    <div class="panel">
+      <p class="small muted" style="margin-top:0">Забег — группа с общим стартом, у каждого своя категория и дистанция. По ним строится протокол: место в забеге и общее место в категории. Старт один на всех — забеги не нужны. На стадионе забеги удобнее сформировать из заявок на этапе «Регистрация».</p>
       <div class="tbl"><table>
         <thead><tr><th>Забег</th><th>Категория</th><th>Дистанция</th><th>Участников</th><th>Состояние</th><th></th></tr></thead>
         <tbody id="wavesList"></tbody>
       </table></div>
       <div class="row" style="margin-top:10px">
         <input id="wName" placeholder="название (пусто = «Забег N»)" style="max-width:220px">
-        <input id="wCat" list="catList" placeholder="категория" style="max-width:160px">
-        <input id="wDist" list="distList" placeholder="дистанция" style="max-width:120px">
+        <input id="wCat" list="catList" placeholder="категория" style="max-width:170px">
+        <input id="wDist" list="distList" placeholder="дистанция" style="max-width:130px">
         <button id="btnAddWave">Добавить забег</button>
       </div>
     </div>
     <datalist id="catList"><option>Мальчики до 12 лет<option>Девочки до 12 лет<option>Мальчики до 14 лет<option>Девочки до 14 лет<option>Юноши до 16 лет<option>Девушки до 16 лет<option>Юноши до 18 лет<option>Девушки до 18 лет<option>Юниоры до 20 лет<option>Юниорки до 20 лет<option>Мужчины до 23 лет<option>Женщины до 23 лет<option>Мужчины<option>Женщины<option>Ветераны</datalist>
     <datalist id="distList"><option>60 м<option>100 м<option>200 м<option>400 м<option>800 м<option>1000 м<option>1500 м<option>3000 м<option>5 км<option>10 км<option>21,1 км<option>42,2 км</datalist>
+  </div>
 
-    <h3>Участники</h3>
-    <div class="card">
-      <div class="drop" id="drop">Перетащите сюда файл CSV или Excel со стартовым списком — или вставьте строки ниже</div>
-      <p class="small muted" style="margin-top:0">Порядок колонок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке — можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны только для протокола; храните их с согласия участников.</p>
+  <div class="sect">
+    <h2>Стартовый список</h2>
+    <div class="panel">
+      <div class="drop" id="drop">Перетащите сюда CSV или Excel со стартовым списком — или нажмите, чтобы выбрать файл. Можно и вставить строки ниже.</div>
+      <details class="small muted" style="margin-bottom:8px"><summary>Какие колонки нужны</summary>
+        <p>Порядок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке: можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны для протокола; храните их с согласия участников.</p></details>
       <textarea id="dEntries" placeholder="Номер;Чип;Забег;ФИО;Год;Команда;Категория&#10;101;E2801160600002084A5C1234;Забег 1;Иванов Иван;2008;СШОР им. Комнацкого;Юноши&#10;15;;Забег 2;Петрова Анна;2009;Холмск"></textarea>
       <div class="row" style="margin-top:10px">
         <button class="primary" id="btnEntries">Сохранить список</button>
         <span id="dEntriesInfo" class="small muted"></span>
-        <span style="flex:1"></span>
-        <button id="btnClax" title="Загрузить участников, дистанции и чипы из файла соревнования Wiclax">Импорт из Wiclax (.clax)</button>
-        <a class="btn" id="lnkClax" title="Готовый файл соревнования: дистанции, старты, участники, чипы — открыть в Wiclax">⬇ Файл для Wiclax (.clax)</a>
-        <a class="btn" id="lnkWiclax" title="Стартовый список для импорта в Wiclax">Экспорт для Wiclax (CSV)</a>
+        <span class="spacer"></span>
+        <button id="btnClax" title="Загрузить участников, дистанции и чипы из файла соревнования Wiclax">Загрузить из Wiclax (.clax)</button>
+        <a class="btn" id="lnkClax" title="Готовый файл соревнования: дистанции, старты, участники, чипы">Файл для Wiclax (.clax)</a>
+        <a class="btn" id="lnkWiclax" title="Стартовый список для импорта в Wiclax">Список для Wiclax (CSV)</a>
       </div>
     </div>
-
-    <h3>Файлы</h3>
-    <div class="card row between"><span class="small muted" id="dFilesInfo">Положение, заявки, документы для судей, протоколы, снимки результатов — по папкам.</span><a class="btn" href="#files">Открыть файлы соревнования →</a></div>
   </div>
 </section>
 
-<!-- РЕГИСТРАЦИЯ -->
+<!-- 2. РЕГИСТРАЦИЯ -->
 <section id="tab-reg" class="hide">
-  <div class="row between" style="margin-bottom:12px">
-    <div><h2 style="margin:0">Регистрация участников</h2><div class="muted small">Публичная форма → заявки → подтверждение секретарём → забеги по лучшему результату → стартовый протокол.</div></div>
-    <select id="gSelect" style="width:auto;min-width:240px"></select>
+  <div class="pagehead">
+    <div><h1>Регистрация</h1><p class="lead">Участники подают заявки по ссылке. Проверьте и подтвердите их, затем сформируйте забеги — получится стартовый протокол.</p></div>
   </div>
-
-  <div class="card">
-    <div class="regtop">
-      <div>
-        <div class="row" style="gap:16px">
-          <label class="switch"><input type="checkbox" id="gOpen"> Приём заявок открыт</label>
-          <div class="row" style="gap:6px"><span class="small muted">до</span><input id="gDeadline" type="datetime-local" style="width:auto"></div>
-          <div class="row" style="gap:6px"><span class="small muted">дорожек</span><input id="gLanes" type="number" min="1" max="50" value="8" style="width:72px"></div>
-        </div>
-        <label>Ссылка для участников</label>
-        <div class="row" style="flex-wrap:nowrap"><input id="gUrl" readonly placeholder="появится после первого открытия приёма заявок"><button id="gCopy">Копировать</button><a class="btn" id="gPreview" target="_blank">Открыть ↗</a></div>
-        <div class="small muted" id="gUrlNote" style="margin-top:4px"></div>
-        <div class="form" style="margin-top:4px">
-          <div><label>Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:120px" placeholder="60 м&#10;100 м&#10;400 м&#10;1000 м"></textarea></div>
-          <div><label>Категории: название;пол;год с;год по <a href="#" id="gRulesDefault" style="color:var(--accent)">образец</a></label><textarea id="gRules" style="min-height:120px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea></div>
-        </div>
-        <label>Пояснение для участников (необязательно)</label><input id="gInfo" placeholder="Выдача номеров с 9:30 у секретариата. Шиповки — не длиннее 6 мм.">
-        <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Текст согласия на обработку персональных данных</summary>
-          <textarea id="gConsent" style="min-height:110px;font-family:inherit" placeholder=""></textarea>
-          <div class="small muted">Пусто — используется стандартный текст (виден выше серым). Согласуйте текст с юристом организации.</div></details>
-        <div class="row" style="margin-top:12px"><button class="primary" id="gSave">Сохранить настройки</button><span class="small muted" id="gSaved"></span></div>
-      </div>
-      <div><div class="qr" id="gQr"><span class="small muted" style="padding:60px 0">QR появится<br>со ссылкой</span></div>
-        <div class="small muted" style="text-align:center;margin-top:6px">QR для афиши и чатов</div>
-        <a class="btn" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR</a></div>
-    </div>
-  </div>
-
-  <h3>Заявки</h3>
-  <div class="card">
-    <div class="row between">
+  <div class="split">
+    <div>
+      <div class="tabs"><span id="gTabs" style="display:contents"></span><input class="search" id="gSearch" placeholder="Фамилия, команда, тренер" aria-label="Поиск заявок"></div>
+      <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
-      <div class="row">
-        <select id="gFilter" style="width:auto"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
-        <input id="gSearch" placeholder="поиск: фамилия, команда" style="width:200px">
-        <button id="gApproveAll">Подтвердить все</button>
+      <div class="tbl scroll" style="max-height:620px"><table>
+        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
+        <tbody id="gBody"></tbody>
+      </table></div>
+      <datalist id="gCats"></datalist>
+      <div class="rowacts">
+        <button class="primary" id="gApproveAll">Подтвердить все ожидающие</button>
+        <button id="gImport" title="Загрузить заполненный шаблон — заявки сразу подтверждены">Загрузить из Excel</button>
         <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
-        <a class="btn" id="gCsv">CSV</a>
-        <a class="btn" id="gTpl" title="Отдать тренеру: он заполнит и загрузит сам через форму или пришлёт вам">⬇ Шаблон Excel</a>
-        <button id="gImport" title="Загрузить заполненный шаблон — заявки сразу подтверждены">Импорт из Excel</button>
+        <span class="spacer"></span>
+        <a class="btn sm" id="gTpl" title="Отдать тренеру: он заполнит и загрузит сам через форму или пришлёт вам">Шаблон Excel</a>
+        <a class="btn sm" id="gCsv">Выгрузить CSV</a>
       </div>
+      <details class="panel" style="margin-top:12px"><summary><b>Внести заявку вручную</b> <span class="small muted">— без формы, сразу подтверждена</span></summary>
+        <div class="regform">
+          <input id="mLast" placeholder="Фамилия"><input id="mFirst" placeholder="Имя"><input id="mBirth" type="date" aria-label="Дата рождения">
+          <select id="mSex" aria-label="Пол"><option value="">пол</option><option>М</option><option>Ж</option></select>
+          <input id="mTeam" placeholder="Команда"><input id="mCoach" placeholder="Тренер"><select id="mDist" aria-label="Дистанция"></select>
+          <input id="mBest" placeholder="лучший, 12.8"><input id="mRep" placeholder="представитель (до 18 лет)">
+          <button class="primary" id="mAdd">Добавить</button>
+        </div></details>
     </div>
-    <details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">+ Внести заявку вручную (без формы, сразу подтверждена)</summary>
-      <div class="regform">
-        <input id="mLast" placeholder="Фамилия"><input id="mFirst" placeholder="Имя"><input id="mBirth" type="date">
-        <select id="mSex"><option value="">пол</option><option>М</option><option>Ж</option></select>
-        <input id="mTeam" placeholder="Команда"><input id="mCoach" placeholder="Тренер"><select id="mDist"></select>
-        <input id="mBest" placeholder="лучший, 12.8"><input id="mRep" placeholder="представитель (до 18 лет)">
-        <button class="primary" id="mAdd">Добавить</button>
-      </div></details>
+    <aside class="side">
+      <div class="panel">
+        <label class="switch"><input type="checkbox" id="gOpen"><i></i>Приём заявок открыт</label>
+        <label for="gDeadline">Принимать до</label><input id="gDeadline" type="datetime-local">
+        <label>Ссылка для участников</label>
+        <input id="gUrl" readonly placeholder="появится после первого открытия приёма" class="url">
+        <div class="row" style="margin-top:6px"><button class="sm" id="gCopy">Копировать</button><a class="btn sm" id="gPreview" target="_blank">Открыть форму ↗</a></div>
+        <div class="small muted" id="gUrlNote" style="margin-top:6px"></div>
+        <div class="qr" id="gQr" style="margin-top:10px"><span class="small muted">QR появится со ссылкой</span></div>
+        <a class="btn sm" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR для афиши</a>
+      </div>
+      <details class="panel" id="gSettings"><summary><b>Настройки формы</b> <span class="small muted">дистанции, категории, текст</span></summary>
+        <label for="gDist">Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:110px" placeholder="60 м&#10;100 м&#10;400 м&#10;1000 м"></textarea>
+        <label for="gRules">Категории: название;пол;год с;год по · <a href="#" id="gRulesDefault" style="color:var(--track)">образец</a></label><textarea id="gRules" style="min-height:110px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea>
+        <label for="gLanes">Дорожек на стадионе</label><input id="gLanes" type="number" min="1" max="50" value="8">
+        <label for="gInfo">Пояснение для участников</label><input id="gInfo" placeholder="Выдача номеров с 9:30 у секретариата.">
+        <details style="margin-top:10px"><summary class="small">Текст согласия на обработку персональных данных</summary>
+          <textarea id="gConsent" style="min-height:110px;font-family:inherit"></textarea>
+          <div class="small muted">Пусто — стандартный текст (виден серым). Согласуйте текст с юристом организации.</div></details>
+      </details>
+      <div class="row"><button class="primary" id="gSave">Сохранить настройки</button><span class="small muted" id="gSaved"></span></div>
+    </aside>
   </div>
-  <div class="tbl scroll" style="margin-top:10px;max-height:640px"><table>
-    <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
-    <tbody id="gBody"></tbody>
-  </table></div>
-  <datalist id="gCats"></datalist>
 
-  <h3>Забеги и стартовый список</h3>
-  <div class="card">
-    <div class="row">
-      <button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button>
-      <a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a>
-      <span class="small muted">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</span>
+  <div class="sect">
+    <div class="pagehead" style="margin-bottom:10px">
+      <div><h2 style="margin:0">Забеги и стартовый протокол</h2>
+        <p class="lead small">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</p></div>
+      <div class="row"><button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button><a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a></div>
     </div>
+    <div class="heats" id="gHeatsBox"></div>
+    <div id="gLoose"></div>
   </div>
-  <div class="heats" id="gHeatsBox" style="margin-top:12px"></div>
-  <div id="gLoose"></div>
 </section>
 
-<!-- ПРОВЕРКА -->
+<!-- 3. ЧИПЫ -->
 <section id="tab-check" class="hide">
-  <div class="row between">
-    <div><h2 style="margin:0">Проверка чипов перед стартом</h2><div class="muted small">Проносите чипы над ковриком — экран покажет номер. Удобно при выдаче стартовых пакетов.</div></div>
-    <div class="row">
-      <label style="margin:0;color:var(--ink)"><input type="checkbox" id="chkSound" checked style="width:auto"> звук</label>
-      <button class="primary" id="btnCheckStart">Начать проверку</button>
-      <button id="btnCheckStop">Остановить</button>
-    </div>
+  <div class="pagehead">
+    <div><h1>Проверка чипов</h1><p class="lead">Проносите чип над ковриком при выдаче номера — экран покажет, чей он. Неизвестные чипы подсвечиваются красным.</p></div>
+    <div class="progress"><b id="chkDone">0 / 0</b> проверено<div class="pbar"><i id="chkBar" style="width:0"></i></div></div>
   </div>
-  <div class="card" style="margin-top:14px">
-    <div class="checkbig" id="chkBig"><div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div></div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="primary" id="btnCheckStart">Начать проверку</button>
+    <button id="btnCheckStop">Остановить</button>
+    <label class="check" style="margin:0 0 0 8px"><input type="checkbox" id="chkSound" checked> звук</label>
   </div>
-  <div class="grid" style="margin-top:12px">
-    <div class="card stat"><b id="chkDone">0 / 0</b><span>проверено</span></div>
-    <div class="card stat"><b id="chkUnknown">0</b><span>чипов не из списка</span></div>
-  </div>
-  <h3>Ещё не проверены</h3><div class="chips" id="chkLeft"></div>
-  <h3>Чипы не из списка</h3><div class="chips" id="chkUnk"></div>
+  <div class="checkbig" id="chkBig"><div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div></div>
+  <h2>Ещё не проверены</h2><div class="chips" id="chkLeft"></div>
+  <h2>Чипы не из списка <span class="small muted" id="chkUnknown"></span></h2><div class="chips" id="chkUnk"></div>
 </section>
 
-<!-- ХРОНОМЕТРАЖ -->
+<!-- 4. СТАРТ И ФИНИШ -->
 <section id="tab-timing" class="hide">
-  <div class="row between">
-    <div><h2 style="margin:0" class="tName">Выберите соревнование</h2><div class="muted small" id="tMeta"></div></div>
-    <select id="tSelect" style="width:auto;min-width:240px"></select>
+ <div class="race">
+  <div class="race-top">
+    <div><h1 class="tName">Выберите соревнование</h1><div class="meta" id="tMeta"></div></div>
+    <details class="more" id="tMore">
+      <summary>Ещё</summary>
+      <div class="dmenu">
+        <div><p class="hint">Старт по времени — если старт дали раньше, чем нажали кнопку:</p>
+          <div class="row"><input id="tManual" placeholder="10:00:00.000" style="width:150px"><button id="btnManual" style="width:auto">Задать старт</button></div></div>
+        <button id="btnFinish">Завершить соревнование</button>
+        <button class="danger" id="btnReset">Сбросить старт…</button>
+        <p class="hint">Сброс стирает время старта — результаты пересчитаются после нового старта.</p>
+      </div>
+    </details>
   </div>
   <div class="alerts" id="tAlerts"></div>
-
-  <div class="card" style="margin-top:12px" id="singleStart">
-    <div id="tClock" class="bigclock idle">Старт не дан</div>
-    <div class="muted small" style="text-align:center" id="tStartInfo"></div>
-    <div class="row" style="justify-content:center;margin-top:12px">
-      <button class="primary" id="btnStart" style="font-size:20px;padding:12px 36px">СТАРТ</button>
-      <input id="tManual" placeholder="или время: 10:00:00.000" style="width:200px">
-      <button id="btnManual">Задать</button>
-      <button id="btnFinish">Завершить</button>
-      <button class="danger" id="btnReset">Сбросить старт</button>
+  <div class="race-main">
+    <div>
+      <div class="state-pill" id="tState"><i></i><span>Старт не дан</span></div>
+      <div id="tClock" class="bigclock idle">Старт не дан</div>
+      <div class="muted small" id="tStartInfo" style="color:var(--night-muted)"></div>
+      <div class="counts4" style="margin-top:14px">
+        <div><b id="tFin">0</b><span>финишировали</span></div>
+        <div><b id="tCourse">0</b><span>на дистанции</span></div>
+        <div><b id="tNot">0</b><span>не отмечены</span></div>
+        <div><b id="tPend">0</b><span>отметок без номера</span></div>
+      </div>
+      <div class="race-actions" id="singleStart">
+        <button class="primary big" id="btnStart">Старт</button>
+      </div>
+      <div class="race-actions hide" id="wavesActs">
+        <button class="primary" id="btnNextHeat">+ Следующий забег</button>
+        <span class="small" id="seqInfo" style="color:var(--night-muted)"></span>
+      </div>
+    </div>
+    <div class="manual">
+      <h3>Ручная отметка</h3>
+      <p class="hint">Чип не считался — введите номер и нажмите Enter. Пустое время — сейчас. В результатах отметка помечается ✋.</p>
+      <div class="manrow">
+        <input id="mBib" placeholder="№" inputmode="numeric" aria-label="Номер участника">
+        <select id="mDev" aria-label="Точка"></select>
+        <input id="mTime" placeholder="время (пусто = сейчас)">
+        <button class="primary" id="btnMark">Отметить</button>
+      </div>
+      <div class="mtbl"><table><tbody id="manualBody"></tbody></table></div>
     </div>
   </div>
-  <div class="card hide" style="margin-top:12px" id="wavesStart">
-    <div class="tbl"><table>
+  <div class="light hide" id="wavesStart">
+    <div class="lh"><h3>Забеги</h3><button class="sm" id="btnFinish2">Завершить соревнование</button></div>
+    <div style="overflow:auto"><table>
       <thead><tr><th>Забег</th><th>Участников</th><th>Время забега</th><th>Старт · финиш</th><th></th></tr></thead>
       <tbody id="wavesBody"></tbody>
     </table></div>
-    <div class="row" style="margin-top:10px">
-      <button class="primary" id="btnNextHeat">+ Следующий забег</button>
-      <span class="small muted" id="seqInfo"></span>
-      <span style="flex:1"></span>
-      <button id="btnFinish2">Завершить соревнование</button></div>
   </div>
-
-  <div class="grid" style="margin-top:12px">
-    <div class="card stat"><b id="tFin">0</b><span>финишировали</span></div>
-    <div class="card stat"><b id="tCourse">0</b><span>на трассе</span></div>
-    <div class="card stat"><b id="tNot">0</b><span>не отмечены</span></div>
-    <div class="card stat"><b id="tPend">0</b><span>отсечек без номера</span></div>
+  <div class="light">
+    <div class="lh"><h3>Отметки ридеров</h3><span class="small muted">новые сверху · зелёная полоса — финиш</span></div>
+    <div class="scroll" style="overflow:auto"><table class="feed">
+      <thead><tr><th>Время</th><th>С начала</th><th>Номер</th><th>Чип</th><th>Точка</th></tr></thead>
+      <tbody id="feedBody"></tbody>
+    </table></div>
   </div>
-
-  <h3>Ручная отметка</h3>
-  <div class="card">
-    <div class="row">
-      <input id="mBib" placeholder="номер" style="width:110px" inputmode="numeric">
-      <select id="mDev" style="width:auto;min-width:140px"></select>
-      <input id="mTime" placeholder="время (пусто = сейчас)" style="width:210px">
-      <button class="primary" id="btnMark">Добавить</button>
-      <span class="small muted">Если чип не считался. В результатах помечается <span class="hand">✋</span>.</span>
-    </div>
-  </div>
-  <div class="tbl scroll" style="margin-top:10px"><table>
-    <thead><tr><th>Время</th><th>Точка</th><th>Номер</th><th>Кто</th><th></th></tr></thead>
-    <tbody id="manualBody"></tbody>
-  </table></div>
-
-  <h3>Лента отметок ридеров</h3>
-  <div class="tbl scroll"><table class="feed">
-    <thead><tr><th>Время</th><th>С начала</th><th>Номер</th><th>Чип</th><th>Точка</th></tr></thead>
-    <tbody id="feedBody"></tbody>
-  </table></div>
+ </div>
 </section>
 
-<!-- РЕЗУЛЬТАТЫ -->
+<!-- 5. РЕЗУЛЬТАТЫ -->
 <section id="tab-results" class="hide">
-  <div class="row between" style="margin-bottom:8px">
-    <div><h2 style="margin:0" id="rName">Результаты</h2><div class="muted small" id="rMeta"></div></div>
-    <div class="row">
-      <select id="rWave" style="width:auto"></select>
-      <input id="rSearch" placeholder="поиск: номер или чип" style="width:190px">
-      <a class="btn" id="rCsv">Скачать CSV</a>
-      <a class="btn" id="rProto" target="_blank">Протокол для печати ↗</a>
-    </div>
+  <div class="pagehead">
+    <div><h1 id="rName">Результаты</h1><p class="lead" id="rMeta"></p></div>
+    <div class="row"><a class="btn" id="rCsv">Скачать CSV</a><a class="btn primary" id="rProto" target="_blank">Протокол для печати ↗</a></div>
   </div>
   <div class="alerts" id="rAlerts"></div>
-  <p class="small muted">Результаты по первому прохождению финиша после старта своего забега. «Место» — в забеге, «Общее» — среди всех забегов той же категории и дистанции. <span class="hand">✋</span> — ручная отметка (время округлено вверх до 0,1 с).</p>
+  <div class="filters">
+    <select id="rWave" aria-label="Забег"></select>
+    <input id="rSearch" placeholder="Номер или чип" style="max-width:220px">
+    <span class="small muted">Место — в забеге, «Общее» — среди всех забегов той же категории и дистанции. ✋ — ручная отметка (время округлено вверх до 0,1 с).</span>
+  </div>
   <div class="tbl"><table><thead id="rHead"></thead><tbody id="rBody"></tbody></table></div>
-  <h3>На трассе</h3>
+  <h2>На дистанции</h2>
   <div class="tbl"><table><thead id="cHead"></thead><tbody id="cBody"></tbody></table></div>
-  <h3>Не отмечены ни на одной точке</h3>
+  <h2>Не отмечены ни на одной точке</h2>
   <p id="nList" class="mono small"></p>
 </section>
 
-<!-- АРХИВ -->
-<section id="tab-archive" class="hide">
-  <div class="row between" style="margin-bottom:6px">
-    <h2 style="margin:0">Архив соревнований</h2>
-    <div class="row">
-      <select id="aYear" style="width:auto"></select>
-      <input id="aSearch" placeholder="поиск: название или место" style="width:240px">
-    </div>
+<!-- 6. ДОКУМЕНТЫ -->
+<section id="tab-files" class="hide">
+  <div class="pagehead">
+    <div><h1>Документы</h1><p class="lead">Протоколы формируются сами. Положение, заявки и файлы для судей храните по папкам — «Для судей» видно на телефоне судьи.</p></div>
   </div>
-  <p class="small muted">Сюда попадают завершённые соревнования, перенесённые в архив. Протоколы и снимки результатов хранятся вместе с ними.</p>
-  <div id="aList"></div>
+  <div class="doclinks">
+    <a id="dlProto" target="_blank"><b>Протокол результатов ↗</b><small>для печати и сайта</small></a>
+    <a id="dlStart" target="_blank"><b>Стартовый протокол ↗</b><small>забеги и дорожки</small></a>
+    <a id="dlCsv"><b>Результаты CSV</b><small>для Excel</small></a>
+    <a id="dlClax"><b>Файл для Wiclax</b><small>.clax: дистанции, участники, чипы</small></a>
+  </div>
+  <div class="folders" id="fFolders"></div>
+  <div class="panel" style="margin-top:12px">
+    <div class="row between" style="margin-bottom:8px"><h3 id="fTitle" style="margin:0">Все файлы</h3>
+      <button id="btnSnap" class="sm">Снимок результатов сейчас</button></div>
+    <div class="drop" id="fdrop">Перетащите сюда файлы (PDF, Excel, CSV, фото) — или нажмите, чтобы выбрать. Попадут в выбранную папку.</div>
+    <div class="flist" id="fList"></div>
+  </div>
 </section>
 
-<!-- ЖУРНАЛ -->
-<section id="tab-log" class="hide">
-  <div class="row between" style="margin-bottom:12px">
-    <h2 style="margin:0">Журнал действий</h2>
-    <label style="margin:0;color:var(--ink)"><input type="checkbox" id="logAll" style="width:auto"> все соревнования</label>
+<!-- СИСТЕМА: оборудование -->
+<section id="tab-hw" class="hide">
+  <div class="pagehead">
+    <div><h1>Система</h1><p class="lead" id="hwUpd"></p></div>
+    <button id="hwRefresh">Обновить</button>
   </div>
+  <div class="subnav"><a href="#hw" class="on">Оборудование</a><a href="#log">Журнал действий</a></div>
+  <div class="hwgrid">
+    <div class="panel"><h3>Сервер</h3><div class="kv" id="hwServer"></div></div>
+    <div class="panel"><h3>Ресурсы</h3><div id="hwRes"></div></div>
+    <div class="panel"><h3>Службы</h3><div id="hwSvc"></div></div>
+  </div>
+
+  <div class="row between" style="margin-top:26px">
+    <h2 style="margin:0">Ридеры</h2>
+    <div class="row"><button class="sm" id="rdSimBtn" title="Виртуальный ридер: прогоняет участников соревнования через сервер в Wiclax">Симулятор</button><button class="sm" id="rdScanBtn">Найти ридеры</button><button class="sm primary" id="rdAddBtn">+ Добавить ридер</button><button class="sm" id="rdBulkBtn">Загрузить список</button></div>
+  </div>
+  <div id="rdScan" class="panel hide" style="margin-top:10px">
+    <div class="row" style="align-items:flex-end">
+      <div><label for="scNet">Сеть ящика</label><input id="scNet" placeholder="10.19.1" style="width:130px"></div>
+      <div><label for="scPort">Порт ридеров</label><input id="scPort" type="number" value="10000" style="width:100px"></div>
+      <div><label for="scBox">Ящик (подпись)</label><input id="scBox" placeholder="Финишный ящик" style="width:180px"></div>
+      <button class="primary sm" id="scGo">Найти</button><button class="sm" id="scClose">Закрыть</button>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">Сервер проверит адреса от .1 до .254 в сети ящика (через VPN) и покажет, где отвечает ридер. Ящик должен быть включён и на связи.</p>
+    <div id="scRes" style="margin-top:8px"></div>
+  </div>
+  <div id="rdForm" class="panel hide" style="margin-top:10px">
+    <div class="form">
+      <div><label for="rdId">Название ридера *</label><input id="rdId" placeholder="IPICO1" maxlength="32"></div>
+      <div><label for="rdHost">IP-адрес *</label><input id="rdHost" placeholder="10.19.1.61"></div>
+      <div><label for="rdPort">Порт</label><input id="rdPort" type="number" value="10000" min="1" max="65535"></div>
+      <div><label for="rdDev">Где стоит (точка)</label><input id="rdDev" placeholder="FINISH" list="rdDevList"><datalist id="rdDevList"></datalist></div>
+      <div><label for="rdBox">Ящик / место</label><input id="rdBox" placeholder="Финишный ящик 1"></div>
+      <div><label for="rdParser">Формат</label><select id="rdParser"><option value="ipico">IPICO</option><option value="auto">Другой (автоопределение)</option><option value="wiclax">Готовые строки Wiclax</option><option value="sim">Симулятор (тренировка без железа)</option></select></div>
+    </div>
+    <input type="hidden" id="rdOrig">
+    <div class="row" style="margin-top:12px"><button class="primary" id="rdSaveOn">Сохранить и подключить</button><button id="rdSave">Только сохранить</button><button id="rdCancel">Отмена</button></div>
+    <p class="small muted" style="margin-bottom:0">Сервер сам подключается к ридеру через VPN и переподключается при обрывах. У каждого ридера свой постоянный порт для Wiclax — он в таблице. Точку («Цель») и дублирующую линию задаёте в Wiclax.</p>
+  </div>
+  <div id="rdBulk" class="panel hide" style="margin-top:10px">
+    <label for="rdBulkText" style="margin-top:0">Список ридеров — по строке на ридер: <b>название; IP; порт; точка; ящик</b>. Можно скопировать прямо из Excel.</label>
+    <textarea id="rdBulkText" rows="6" placeholder="IPICO1;10.19.1.61;10000;FINISH;Финишный ящик 1&#10;IPICO2;10.19.1.62;10000;FINISH;Финишный ящик 1&#10;ELITE1;10.19.2.61;10000;KM5;Ящик 2 — 5 км"></textarea>
+    <div class="row" style="margin-top:10px"><button class="primary" id="rdBulkSave">Загрузить</button><button id="rdBulkCancel">Отмена</button></div>
+  </div>
+  <div class="tbl" style="margin-top:10px"><table>
+    <thead><tr><th>Ридер</th><th>Адрес</th><th>В Wiclax («Общий», 10.66.0.1)</th><th>Точка</th><th>Связь</th><th>Отметок</th><th>Часы ридера</th><th></th></tr></thead>
+    <tbody id="readersBody"></tbody>
+  </table></div>
+  <p class="small muted">«Часы ридера» — насколько время в отметке отличается от времени сервера. Перед стартом проверяйте тестовым чипом: больше ±2 с — синхронизируйте часы ридера.</p>
+
+  <h2>Wiclax</h2>
+  <div class="tbl"><table><thead><tr><th>Компьютер</th><th>Порт</th><th>Подключён с</th><th>Отправлено отметок</th><th>Режим</th></tr></thead><tbody id="hwWiclax"></tbody></table></div>
+  <div class="panel" style="margin-top:10px">
+    <div class="small"><b>Как подключать Wiclax.</b> Один ридер на финише — одно устройство «Общий»: 10.66.0.1, <b id="wxMain">порт 9854</b> (все отметки сразу).</div>
+    <div class="small" style="margin-top:4px">Несколько ридеров (отсечки, дублирующий финиш) — в Wiclax по устройству «Общий» <b>на каждый ридер</b>, порт ридера из таблицы выше. «Цель» и «Бэкап линию» выставляете в Wiclax. Шаблон устройств сохраняется один раз, перед гонкой меняете только «Цель».</div>
+  </div>
+  <details style="margin-top:8px"><summary class="small muted">Дополнительно: порты по точкам (старый способ)</summary>
+  <div class="panel" style="margin-top:6px">
+    <div class="small muted">Порт 9855–9860 отдаёт отметки всех ридеров с указанной точкой.</div>
+    <div class="tbl" style="margin-top:8px"><table><thead><tr><th>Порт</th><th>Точки</th><th>Для чего</th><th>Состояние</th><th></th></tr></thead><tbody id="wxPorts"></tbody></table></div>
+    <div class="row" style="margin-top:8px;align-items:flex-end">
+      <div><label for="wxPort">Порт</label><input id="wxPort" type="number" min="9855" max="9860" placeholder="9855" style="width:110px"></div>
+      <div><label for="wxDevs">Точки (через запятую)</label><input id="wxDevs" placeholder="KM5" list="rdDevList" style="width:180px"></div>
+      <div><label for="wxName">Для чего</label><input id="wxName" placeholder="Отсечка 5 км" style="width:200px"></div>
+      <button class="sm" id="wxAdd">Добавить порт</button>
+    </div>
+  </div></details>
+
+  <h2>Обновление сервера</h2>
+  <div class="panel">
+    <div class="row between">
+      <div><div class="small muted">Установлена версия</div><b id="upVer" style="font:600 24px var(--head)">—</b></div>
+      <div class="row"><button class="primary" id="ghCheck">Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">Из файла (timing-hub.zip)</button></div>
+    </div>
+    <div id="ghBox" class="small" style="margin-top:8px"></div>
+    <div id="upState" class="small" style="margin-top:8px"></div>
+    <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
+    <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
+  </div>
+
+  <h2>VPN-доступы</h2>
+  <div class="tbl"><table><thead><tr><th>Устройство (профиль)</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда (внешний IP)</th><th>На связи с</th><th>Трафик</th></tr></thead><tbody id="hwVpn"></tbody></table></div>
+  <div id="hwWgBox" class="hide"><h2>VPN-доступы (WireGuard)</h2>
+  <div class="tbl"><table><thead><tr><th>Устройство</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда</th><th>Трафик</th></tr></thead><tbody id="hwWg"></tbody></table></div></div>
+  <p class="small muted">Новые доступы и отзыв: <span class="mono">sudo timing-ovpn add ИМЯ</span> / <span class="mono">sudo timing-ovpn remove ИМЯ</span>. Называйте профили понятно: judge-petrova, wiclax-laptop, router-finish.</p>
+  <h2>Кто открывал сервер за последний час</h2>
+  <div class="tbl"><table><thead><tr><th>Адрес</th><th>VPN-профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
+
+  <h2>Последние отметки <span class="small muted" id="stReads"></span></h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
+    <tbody id="lastBody"></tbody>
+  </table></div>
+  <div class="datalinks"><a href="/export.csv">Все отметки (CSV)</a><a href="/export.csv?filtered=1">Только прохождения (CSV)</a><a href="/raw">Сырые строки</a><a href="/simple">Простая страница</a></div>
+</section>
+
+<!-- СИСТЕМА: журнал -->
+<section id="tab-log" class="hide">
+  <div class="pagehead">
+    <div><h1>Система</h1></div>
+    <label class="check" style="margin:0"><input type="checkbox" id="logAll"> все соревнования</label>
+  </div>
+  <div class="subnav"><a href="#hw">Оборудование</a><a href="#log" class="on">Журнал действий</a></div>
   <div class="tbl"><table>
     <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Подробности</th></tr></thead>
     <tbody id="logBody"></tbody>
@@ -561,8 +758,7 @@ td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width
 </section>
 
 </main>
-<div class="toast" id="toast"></div>
-
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -597,32 +793,72 @@ function beep(freq=880, dur=0.12){
 }
 const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">${a.level==="bad"?"⛔ ":a.level==="warn"?"⚠️ ":"ℹ️ "}${esc(a.text)}</div>`).join("");
 
-/* ---------- вкладки ---------- */
-function tabName(){ return (location.hash||"#overview").slice(1); }
+/* ---------- навигация: главная, этапы соревнования, система ---------- */
+const STEPS = ["prep","reg","check","timing","results","files"];
+const ALIAS = {overview:"home", events:"home", archive:"home", "":"home"};
+function tabName(){ const t = (location.hash||"#home").slice(1); return ALIAS[t] ?? t; }
 function showTab(){
-  const tab = tabName();
-  document.querySelectorAll("section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
-  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.tab === tab));
+  let tab = tabName();
+  if (!document.getElementById("tab-"+tab)) tab = "home";
+  if (STEPS.includes(tab) && !curEvent()) tab = "home";
+  document.body.dataset.view = tab;
+  document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
+  document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === tab));
+  $("lane").classList.toggle("hide", !STEPS.includes(tab));
+  $("gear").classList.toggle("on", tab === "hw" || tab === "log");
+  closeMenus();
+  if (tab === "home") { renderEvents(); }
+  if (tab === "prep") { openForm(curEvent(), "prep"); loadEntries(); }
   if (tab === "results" || tab === "timing") loadResults();
   if (tab === "timing") loadManual();
   if (tab === "check") loadCheck();
   if (tab === "log") loadLog();
-  if (tab === "archive") renderArchive();
-  if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); }
-  if (tab === "files") { filesEv = filesEv || curId; renderFilesTab(); }
+  if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); loadLast(); }
+  if (tab === "files") renderFilesTab();
   if (tab === "reg") { renderRegHead(true); loadRegs(); }
 }
-window.addEventListener("hashchange", showTab);
+window.addEventListener("hashchange", () => { showTab(); window.scrollTo(0, 0); });
+function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? "timing" : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
+function openEvent(id){
+  selectEvent(id);
+  const t = tabName(), step = STEPS.includes(t) ? t : defaultStep(curEvent());
+  if (location.hash !== "#"+step) location.hash = "#"+step; else showTab();
+}
+function closeMenus(){
+  document.querySelectorAll(".menu.open").forEach(m => m.classList.remove("open"));
+  $("evBtn").setAttribute("aria-expanded","false");
+  if ($("tMore")) $("tMore").open = false;
+}
+function toggleMenu(id, btn){
+  const open = !$(id).classList.contains("open"); closeMenus();
+  if (open) { $(id).classList.add("open"); if (btn) btn.setAttribute("aria-expanded","true"); }
+}
+$("evBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("evMenu", $("evBtn")); };
+$("scrBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("scrMenu"); };
+document.addEventListener("click", (e) => { if (!e.target.closest(".menu") && !e.target.closest(".more")) closeMenus(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
+$("evMenu").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-id],[data-new]"); if (!b) return;
+  closeMenus();
+  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => openForm(null, "home"), 0); return; }
+  openEvent(+b.dataset.id);
+});
+const MON_S = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+const MON_G = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const fmtDate = (d) => { if (!d) return ""; const p = d.split("-"); return p.length===3 ? `${+p[2]} ${MON_G[+p[1]-1]} ${p[0]}` : d; };
+const plural = (n, f) => f[(n%10===1 && n%100!==11) ? 0 : (n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20)) ? 1 : 2];
+function localDate(){ const d = new Date(nowMs()); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function setPill(id, text, cls){ const e = $(id); e.textContent = text; e.className = "h " + (cls||""); }
 
 /* ---------- обзор ---------- */
 async function loadStatus(){
   try{
     const st = await api("/api/status");
     offset = st.server_epoch_ms - Date.now();
-    $("stReads").textContent = st.totals.reads;
-    const live = st.sources.filter(s => s.mode !== "http");
-    $("stReaders").textContent = live.filter(s=>s.connected).length + " / " + live.length;
-    $("stWiclax").textContent = st.wiclax_clients.length ? "на связи" : "нет";
+    $("stReads").textContent = "· всего в базе " + st.totals.reads;
+    const live = st.sources.filter(s => s.mode !== "http"), on = live.filter(s=>s.connected).length;
+    setPill("hReaders", `Ридеры ${on}/${live.length}`, !live.length ? "" : on === live.length ? "ok" : on ? "warn" : "bad");
+    setPill("hWiclax", "Wiclax", st.wiclax_clients.length ? "ok" : "");
     if (tabName()==="hw") loadReaders();
   }catch(e){ console.warn(e); }
 }
@@ -649,37 +885,63 @@ async function loadEvents(){
   }
   renderEvents();
 }
+function evState(e){
+  if (e.status === "running") { const run = (e.waves||[]).filter(w => w.state==="running").map(w => w.name); return ["live", run.length ? "Идёт: " + run.join(", ") : "Идёт"]; }
+  if (e.status === "finished") return ["done", "Завершено"];
+  if (e.reg_open) return ["open", `Приём заявок · ${e.regs_count||0}`];
+  return ["", e.entries_count ? `${e.entries_count} ${plural(e.entries_count, ["участник","участника","участников"])}` : "Подготовка"];
+}
+function evRow(e, td){
+  const [cls, txt] = evState(e), d = e.date ? e.date.split("-") : null;
+  const meta = [e.place, e.entries_count ? `в списке ${e.entries_count}` : "", e.waves.length ? `${e.waves.length} ${plural(e.waves.length, ["забег","забега","забегов"])}` : "",
+    e.regs_pending ? `заявок ждут: ${e.regs_pending}` : ""].filter(Boolean).join(" · ");
+  return `<div class="evrow ${esc(e.status)} ${e.date===td?"today":""} ${e.id===curId?"sel":""}" data-id="${e.id}" tabindex="0" role="button" aria-label="Открыть ${esc(e.name)}">
+    <div class="date">${d ? `<b>${+d[2]}</b><span>${MON_S[+d[1]-1]}</span>` : "<b>—</b><span>без даты</span>"}</div>
+    <div><div class="t">${esc(e.name)}</div><div class="m">${esc(meta || "нет участников")}</div></div>
+    <div class="state ${cls}">${esc(txt)}</div>
+    <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">Открыть снова</button>' : ""}<button class="sm quiet danger" data-act="del">Удалить</button></div>
+  </div>`;
+}
 function renderEvents(){
-  const active = events.filter(e => !e.archived);
-  $("evList").innerHTML = active.map(e => `
-    <div class="card ev ${e.id===curId?"sel":""}" data-id="${e.id}">
-      <div class="row between"><h4>${esc(e.name)}</h4><span class="badge ${e.status}">${statusName[e.status]||e.status}</span></div>
-      <div class="small muted">${esc(e.date||"без даты")}${e.place?" · "+esc(e.place):""}</div>
-      <div class="small" style="margin-top:6px">Финиш: <b>${esc(e.finish_device||"не выбран")}</b> · участников: ${e.entries_count}${e.waves.length?` · забегов: ${e.waves.length}`:""}${e.files_count?` · файлов: ${e.files_count}`:""}</div>
-      ${e.start_time?`<div class="small mono muted">старт ${esc(e.start_time)}</div>`:""}
-      <div class="row" style="margin-top:10px">
-        <button class="sm" data-act="open">Хронометраж</button>
-        <button class="sm" data-act="edit">Изменить</button>
-        ${e.status==="finished"?'<button class="sm" data-act="reopen">Открыть снова</button><button class="sm" data-act="arch">В архив</button>':""}
-        <button class="sm danger" data-act="del">Удалить</button>
-      </div>
-    </div>`).join("") || `<div class="card empty">${events.length?"Все соревнования в архиве — смотрите вкладку «Архив».":"Соревнований пока нет — создайте первое."}</div>`;
+  const td = localDate(), active = events.filter(e => !e.archived);
+  const now = active.filter(e => e.status === "running" || e.date === td);
+  const soon = active.filter(e => !now.includes(e) && e.date && e.date > td).sort((a,b) => a.date.localeCompare(b.date));
+  const rest = active.filter(e => !now.includes(e) && !soon.includes(e));
+  const grp = (t, l) => l.length ? `<h2 class="group">${t}</h2>` + l.map(e => evRow(e, td)).join("") : "";
+  $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Прошли — ещё не в архиве", rest)
+    || `<div class="panel empty">${events.length ? "Все соревнования в архиве. Создайте новое или верните из архива." : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
   const ev = curEvent();
-  $("stEvent").textContent = ev ? ev.name : "—";
-  $("evDetail").classList.toggle("hide", !ev);
-  document.querySelectorAll(".dName").forEach(x => x.textContent = ev ? ev.name : "");
-  $("tSelect").innerHTML = events.filter(e => !e.archived || e.id===curId).map(e => `<option value="${e.id}" ${e.id===curId?"selected":""}>${esc(e.name)}${e.date?" ("+esc(e.date)+")":""}</option>`).join("") || "<option>нет соревнований</option>";
+  $("evBtnName").textContent = ev ? ev.name : "Выберите соревнование";
+  $("evBtnMeta").textContent = ev ? ([fmtDate(ev.date), ev.place].filter(Boolean).join(" · ") || "без даты") + (ev.archived ? " · архив" : "") : "все соревнования и архив";
+  const mlist = active.slice(); if (ev && ev.archived) mlist.unshift(ev);
+  $("evMenu").innerHTML = mlist.map(e => `<button class="mi ${e.id===curId?"sel":""}" data-id="${e.id}"><b class="${e.status==="running"?"live":""}">${esc(e.name)}</b><small>${esc([fmtDate(e.date), e.place].filter(Boolean).join(" · ") || "без даты")}${e.archived?" · архив":""}</small></button>`).join("")
+    + `${mlist.length?"<hr>":""}<a href="#home"><b>Все соревнования и архив</b></a><button class="mi" data-new="1"><b>+ Новое соревнование</b></button>`;
   $("lnkJudge").href = ev ? "/judge?event="+ev.id : "/judge";
-  $("lnkAnn").href = ev ? "/announcer?event="+ev.id : "#";
-  $("lnkBoard").href = ev ? "/board?event="+ev.id : "#";
-  $("lnkProto").href = ev ? "/protocol?event="+ev.id : "#";
-  $("stEventMeta").textContent = ev ? [ev.date, statusName[ev.status], `участников: ${ev.entries_count}`].filter(Boolean).join(" · ") : "";
-  const pend = events.reduce((n,e) => n + (e.archived?0:(e.regs_pending||0)), 0);
-  $("stRegs").textContent = pend;
-  if (ev) $("dFilesInfo").textContent = ev.files_count ? `Файлов: ${ev.files_count}. Положение, заявки, документы для судей, протоколы — по папкам.` : "Файлов пока нет. Положение, заявки, документы для судей, протоколы — по папкам.";
+  $("lnkAnn").href = ev ? "/announcer?event="+ev.id : "/announcer";
+  $("lnkBoard").href = ev ? "/board?event="+ev.id : "/board";
+  $("lnkProto").href = ev ? "/protocol?event="+ev.id : "/protocol";
   if (tabName()==="files") renderFilesTab();
-  renderWaves(); renderTimingHead(); renderRegHead();
-  if (tabName()==="archive") renderArchive();
+  renderWaves(); renderTimingHead(); renderRegHead(); renderLane();
+  if (tabName()==="home") renderArchive();
+  if (STEPS.includes(tabName()) && !ev && document.body.dataset.view !== "home") showTab();
+}
+let chkCache = null;
+function setStep(id, cls, text){ const a = $(id); a.className = "st " + (cls||"") + (a.dataset.step === document.body.dataset.view ? " on" : ""); a.querySelector("small").textContent = text || ""; }
+function renderLane(){
+  const ev = curEvent(); if (!ev) return;
+  const w = ev.waves.length, rp = ev.regs_pending || 0, rc = ev.regs_count || 0;
+  setStep("stPrep", ev.finish_device && (ev.entries_count || rc) ? "done" : "",
+    [ev.entries_count ? `${ev.entries_count} в списке` : "список пуст", w ? `${w} ${plural(w, ["забег","забега","забегов"])}` : ""].filter(Boolean).join(" · "));
+  setStep("stReg", rp ? "warn" : rc ? "done" : "", rp ? `${rp} ждут проверки` : rc ? `${rc} ${plural(rc, ["заявка","заявки","заявок"])}` : ev.reg_open ? "приём открыт" : "приём не открыт");
+  const c = chkCache && chkCache.ev === ev.id ? chkCache : null;
+  setStep("stCheck", c && c.total ? (c.checked >= c.total ? "done" : c.since ? "warn" : "") : "",
+    c && c.total ? (c.checked >= c.total ? "все проверены" : `${c.total - c.checked} не проверены`) : "перед стартом");
+  const run = ev.waves.filter(x => x.state === "running").map(x => x.name);
+  setStep("stTiming", ev.status === "running" ? "live" : ev.status === "finished" ? "done" : "",
+    ev.status === "running" ? (run.length ? "идёт: " + run.join(", ") : "идёт") : ev.status === "finished" ? "завершено" : "старт не дан");
+  const r = lastRes && lastRes._ev === ev.id ? lastRes : null;
+  setStep("stResults", ev.status === "finished" ? "done" : "", r && r.finished.length ? `финишировали: ${r.finished.length}` : "появятся после старта");
+  setStep("stFiles", "", ev.files_count ? `${ev.files_count} ${plural(ev.files_count, ["файл","файла","файлов"])}` : "протоколы, файлы");
 }
 const heatState = {planned:"ждёт старта", running:"идёт", finished:"завершён"};
 function renderWaves(){
@@ -714,15 +976,18 @@ $("btnAddWave").onclick = async () => {
 };
 function selectEvent(id){
   if (id === curId) return;
-  curId = id; store.set("timing.event", String(id)); filesEv = id;
+  curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
   lastId = 0; $("feedBody").innerHTML = "";
   renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") loadCheck();
   regLoaded = null; renderRegHead(true); if (tabName()==="reg") loadRegs();
+  if (tabName()==="prep") openForm(curEvent(), "prep");
 }
 let editId = null;
-async function openForm(ev){
+async function openForm(ev, where){
   editId = ev ? ev.id : null;
-  $("evFormTitle").textContent = ev ? "Изменить соревнование" : "Новое соревнование";
+  $(where === "prep" ? "evFormPrep" : "evFormHome").appendChild($("evForm"));
+  $("evFormTitle").textContent = ev ? "Параметры соревнования" : "Новое соревнование";
+  $("btnCancel").textContent = ev ? "Вернуть как было" : "Отмена";
   await loadDevices();
   const devs = devices.slice(); ["JUDGE"].forEach(d => devs.includes(d) || devs.push(d));
   if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.push(ev.finish_device);
@@ -734,7 +999,7 @@ async function openForm(ev){
   $("fStartClock").value = ev?.start_clock||""; $("fOrg").value = ev?.organizer||(events.find(x=>x.organizer)||{}).organizer||"";
   $("fJudge").value = ev?.chief_judge||""; $("fSecr").value = ev?.chief_secretary||"";
   $("fSeq").checked = ev ? !!ev.heats_sequential : false;
-  $("evForm").classList.remove("hide"); $("fName").focus();
+  $("evForm").classList.remove("hide"); if (!ev) $("fName").focus();
 }
 $("fFinish").onchange = () => {
   if (!editId) $("fSeq").checked = $("fFinish").value === "JUDGE";
@@ -743,8 +1008,8 @@ $("fFinish").onchange = () => {
   if (v) { const o=document.createElement("option"); o.textContent=v; $("fFinish").insertBefore(o, $("fFinish").lastChild); $("fFinish").value=v; }
   else $("fFinish").value="";
 };
-$("btnNew").onclick = () => openForm(null);
-$("btnCancel").onclick = () => $("evForm").classList.add("hide");
+$("btnNew").onclick = () => openForm(null, "home");
+$("btnCancel").onclick = () => { if (editId && tabName()==="prep") openForm(curEvent(), "prep"); else $("evForm").classList.add("hide"); };
 $("btnSave").onclick = async () => {
   const body = {name:$("fName").value.trim(), date:$("fDate").value||null, place:$("fPlace").value.trim(),
     finish_device:$("fFinish").value||null, min_time_sec:Number($("fMin").value||0), alert_silence_min:Number($("fSilence").value||0),
@@ -753,23 +1018,27 @@ $("btnSave").onclick = async () => {
     chief_judge:$("fJudge").value.trim(), chief_secretary:$("fSecr").value.trim(), heats_sequential:$("fSeq").checked};
   if (!body.name) return toast("Укажите название");
   try{
+    const wasNew = !editId;
     const ev = await api(editId ? `/api/events/${editId}` : "/api/events", body);
-    $("evForm").classList.add("hide"); await loadEvents(); selectEvent(ev.id); toast("Сохранено");
+    if (wasNew) $("evForm").classList.add("hide");
+    loadEvents._sig = null; await loadEvents(); selectEvent(ev.id); toast(wasNew ? "Соревнование создано" : "Сохранено");
+    if (wasNew) location.hash = "#prep";
   }catch(e){ toast("Ошибка: "+e.message); }
 };
 $("evList").onclick = async (e) => {
-  const card = e.target.closest(".ev"); if (!card) return;
+  const card = e.target.closest(".evrow"); if (!card) return;
   const id = +card.dataset.id, ev = events.find(x=>x.id===id), act = e.target.dataset.act;
-  if (act === "edit") return openForm(ev);
-  if (act === "reopen") { await api(`/api/events/${id}/reopen`, {}); return loadEvents(); }
-  if (act === "arch") { await api(`/api/events/${id}/archive`, {}); toast("Перенесено в архив"); return loadEvents(); }
-  if (act === "del") {
-    if (!confirm(`Удалить «${ev.name}»? Отметки ридеров в архиве останутся; удалятся карточка, забеги, список участников и ручные отметки.`)) return;
-    await api(`/api/events/${id}/delete`, {}); if (curId===id) curId=null; await loadEvents(); return toast("Удалено");
-  }
-  selectEvent(id);
-  if (act === "open") location.hash = "#timing";
+  try{
+    if (act === "reopen") { await api(`/api/events/${id}/reopen`, {}); return loadEvents(); }
+    if (act === "arch") { await api(`/api/events/${id}/archive`, {}); toast("Перенесено в архив"); loadEvents._sig = null; return loadEvents(); }
+    if (act === "del") {
+      if (!confirm(`Удалить «${ev.name}»? Отметки ридеров в архиве останутся; удалятся карточка, забеги, список участников и ручные отметки.`)) return;
+      await api(`/api/events/${id}/delete`, {}); if (curId===id) curId=null; loadEvents._sig = null; await loadEvents(); return toast("Удалено");
+    }
+  }catch(err){ return toast("Ошибка: "+err.message); }
+  if (!act) openEvent(id);
 };
+$("evList").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("evrow")) { e.preventDefault(); openEvent(+e.target.dataset.id); } });
 async function loadEntries(){
   if (curId == null) return;
   try{ const r = await api(`/api/events/${curId}/entries`); $("dEntries").value = r.text; $("dEntriesInfo").textContent = `в списке: ${r.count}`; }catch(e){}
@@ -833,15 +1102,13 @@ const stName = {pending:"на рассмотрении", approved:"подтве�
 function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
 function renderRegHead(force){
   const ev = curEvent();
-  $("gSelect").innerHTML = events.filter(e => !e.archived || e.id===curId).map(e => `<option value="${e.id}" ${e.id===curId?"selected":""}>${esc(e.name)}${e.date?" ("+esc(e.date)+")":""}</option>`).join("") || "<option>нет соревнований</option>";
-  const pend = events.reduce((n,e) => n + (e.archived?0:(e.regs_pending||0)), 0);
-  $("regBadge").textContent = pend; $("regBadge").classList.toggle("hide", !pend);
   if (!ev) return;
   if (!force && regLoaded === ev.id && regBusy()) return;
   if (force || regLoaded !== ev.id) {
     $("gOpen").checked = !!ev.reg_open; $("gDeadline").value = (ev.reg_deadline||"").slice(0,16);
     $("gLanes").value = ev.reg_lanes || 8; $("gDist").value = ev.reg_distances||""; $("gRules").value = ev.reg_rules||"";
     $("gInfo").value = ev.reg_info||""; $("gConsent").value = ev.reg_consent||"";
+    $("gSettings").open = !(ev.reg_distances||"").trim();
   }
   const url = ev.reg_url || (ev.reg_path ? location.origin + ev.reg_path : "");
   $("gUrl").value = url;
@@ -871,7 +1138,6 @@ async function drawQr(url){
     setTimeout(() => { const c = box.querySelector("canvas"); if (c) { $("gQrDl").href = c.toDataURL("image/png"); $("gQrDl").classList.remove("hide"); } }, 100);
   }catch(e){ box.innerHTML = '<span class="small muted" style="padding:50px 0">QR не загрузился</span>'; }
 }
-$("gSelect").onchange = (e) => selectEvent(+e.target.value);
 $("gRulesDefault").onclick = (e) => { e.preventDefault(); if ($("gRules").value.trim() && !confirm("Заменить правила образцом?")) return; $("gRules").value = regDefaults; toast("Образец подставлен — поправьте годы рождения по положению"); };
 $("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select(); try{ document.execCommand("copy"); toast("Ссылка скопирована"); }catch(e){ toast("Скопируйте вручную: Ctrl+C"); } };
 $("gSave").onclick = async () => {
@@ -894,9 +1160,10 @@ async function loadRegs(){
 function renderRegs(){
   const r = regData, ev = curEvent(); if (!r || !ev) return;
   const c = r.counts;
-  $("gCounts").innerHTML = `<span class="p">на рассмотрении: ${c.pending}</span><span>подтверждено: ${c.approved}</span><span>отклонено: ${c.rejected}</span>`
-    + (r.no_category ? `<span style="color:var(--warn)">без категории: ${r.no_category}</span>` : "")
-    + (r.unassigned ? `<span style="color:var(--warn)">не в забеге: ${r.unassigned}</span>` : "");
+  const fcur = $("gFilter").value;
+  $("gTabs").innerHTML = [["", "Все", c.pending + c.approved + c.rejected], ["pending", "Ждут проверки", c.pending], ["approved", "Подтверждены", c.approved], ["rejected", "Отклонены", c.rejected]]
+    .map(([v, t, n]) => `<button data-f="${v}" class="${v===fcur?"on":""}">${t}<i>${n}</i></button>`).join("");
+  $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "") + (r.unassigned ? `<span>подтверждены, но не в забеге: ${r.unassigned}</span>` : "");
   const dists = (ev.reg_distances||"").split("\n").map(x=>x.trim()).filter(Boolean);
   const cats = [...new Set(((ev.reg_rules||"").split("\n").map(l=>l.split(";")[0].trim()).filter(Boolean)).concat(r.regs.map(x=>x.category).filter(Boolean)))];
   $("gCats").innerHTML = cats.map(x => `<option>${esc(x)}</option>`).join("");
@@ -912,12 +1179,13 @@ function renderRegs(){
     <td><select class="cell" data-f="distance">${[...new Set(dists.concat([x.distance]))].map(d => `<option ${d===x.distance?"selected":""}>${esc(d)}</option>`).join("")}</select></td>
     <td><input class="cell mono" data-f="best" value="${esc(x.best||"")}" style="width:72px"></td>
     <td class="small">${esc(x.team||"")}<div class="muted">${esc(x.coach||"")}</div></td>
-    <td><span class="st ${x.status}">${stName[x.status]}</span></td>
-    <td style="white-space:nowrap">${x.status!=="approved"?'<button class="sm" data-st="approved" title="Подтвердить">✓</button>':""}${x.status!=="rejected"?' <button class="sm danger" data-st="rejected" title="Отклонить">✕</button>':""}${x.status!=="pending"?' <button class="sm" data-st="pending" title="Вернуть на рассмотрение">↺</button>':""}</td>
+    <td><span class="st-pill ${x.status}">${stName[x.status]}</span></td>
+    <td style="white-space:nowrap">${x.status!=="approved"?'<button class="sm ok" data-st="approved" title="Подтвердить">✓ Подтвердить</button>':""}${x.status!=="rejected"?' <button class="sm danger" data-st="rejected" title="Отклонить">✕</button>':""}${x.status!=="pending"?' <button class="sm" data-st="pending" title="Вернуть на рассмотрение">↺</button>':""}</td>
     <td class="small">${x.entry_bib?`<b>${esc(x.entry_bib)}</b><div class="muted">${esc(x.entry_wave||"")}${x.entry_lane?" · дор. "+x.entry_lane:""}</div>`:"—"}</td>
   </tr>`).join("") || `<tr><td colspan="10" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
 }
 $("gFilter").onchange = renderRegs; $("gSearch").oninput = renderRegs;
+$("gTabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (!b) return; $("gFilter").value = b.dataset.f; renderRegs(); });
 $("gBody").addEventListener("click", async (e) => {
   const st = e.target.dataset.st; if (!st) return;
   const id = e.target.closest("tr").dataset.id;
@@ -992,7 +1260,7 @@ function renderHeats(sl){
     </tbody></table></div>`).join("") || '<div class="card empty">Забегов пока нет — подтвердите заявки и нажмите «Сформировать забеги».</div>';
   const loose = regData ? regData.regs.filter(x => x.status==="approved" && !x.entry_bib) : [];
   const noHeat = sl.no_heat || [];
-  $("gLoose").innerHTML = (loose.length || noHeat.length) ? `<h3>Не распределены</h3><div class="tbl"><table><tbody>
+  $("gLoose").innerHTML = (loose.length || noHeat.length) ? `<h2>Не распределены</h2><div class="tbl"><table><tbody>
     ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><b>${esc(e.bib)}</b></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
     ${loose.map(x => `<tr data-reg="${x.id}"><td class="muted">—</td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
     </tbody></table></div>` : "";
@@ -1020,11 +1288,14 @@ async function loadCheck(){
     $("btnCheckStart").textContent = on ? "Начать заново" : "Начать проверку";
     $("btnCheckStop").disabled = !on;
     $("chkDone").textContent = `${c.checked} / ${c.total}`;
-    $("chkUnknown").textContent = c.unknown.length;
+    $("chkUnknown").textContent = c.unknown.length ? "· " + c.unknown.length : "";
+    $("chkBar").style.width = (c.total ? Math.round(100 * c.checked / c.total) : 0) + "%";
+    chkCache = Object.assign({ev: curId}, c); renderLane();
     $("chkLeft").innerHTML = c.total === 0 ? '<span class="muted" style="background:none">в списке участников нет чипов</span>'
       : (c.unchecked.map(b => `<span>${esc(b)}</span>`).join("") || '<span class="muted" style="background:none">все проверены ✓</span>');
     $("chkUnk").innerHTML = c.unknown.map(x => `<span>${esc(x)}</span>`).join("") || '<span class="muted" style="background:none">нет</span>';
     const last = c.last[0];
+    $("chkBig").className = "checkbig" + (on && last ? (last.known ? " ok" : " bad") : "");
     if (!on) { $("chkBig").innerHTML = '<div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div>'; return; }
     if (!last) { $("chkBig").innerHTML = '<div class="num muted">…</div><div class="sub">Ждём чип на коврике</div>'; return; }
     $("chkBig").innerHTML = last.known
@@ -1040,24 +1311,25 @@ $("btnCheckStop").onclick = async () => { await api(`/api/events/${curId}/check`
 function renderTimingHead(){
   const ev = curEvent();
   document.querySelectorAll(".tName").forEach(x => x.textContent = ev ? ev.name : "Выберите соревнование");
-  $("tMeta").textContent = ev ? [ev.date, ev.place, "финиш: "+(ev.finish_device||"не выбран"), statusName[ev.status]].filter(Boolean).join(" · ") : "";
+  $("tMeta").textContent = ev ? [fmtDate(ev.date), ev.place, "финиш: "+(ev.finish_device||"не выбран"), statusName[ev.status]].filter(Boolean).join(" · ") : "";
   const hasWaves = ev && ev.waves.length > 0;
   $("singleStart").classList.toggle("hide", !!hasWaves);
   $("wavesStart").classList.toggle("hide", !hasWaves);
+  $("wavesActs").classList.toggle("hide", !hasWaves);
   $("tStartInfo").textContent = ev && ev.start_time ? "старт дан в " + ev.start_time.slice(11) + (ev.push_wiclax?" · отправлено в Wiclax":"") : "";
   ["btnStart","btnManual","btnReset","btnFinish","btnMark"].forEach(b => $(b).disabled = !ev);
   if (ev && ev.start_time) $("btnStart").disabled = true;
   if (ev && !ev.start_time) { $("btnReset").disabled = true; $("btnFinish").disabled = true; }
   if (hasWaves) {
-    $("wavesBody").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}" class="${w.state==="running"?"fin":""}">
+    $("wavesBody").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}" class="${w.state==="running"?"wrun":""}">
       <td><b>${esc(w.name)}</b><div class="small muted">${esc([w.category,w.distance].filter(Boolean).join(" · ")||"—")}</div></td><td>${w.entries_count}</td>
       <td class="wclock" data-start="${w.start_epoch_ms||""}" data-fin="${w.finish_epoch_ms||""}">${w.start_epoch_ms?"":'<span class="muted" style="font-size:16px">ждёт старта</span>'}</td>
       <td class="mono small">${w.start_time?esc(w.start_time.slice(11)):"—"}${w.finished_at?"<br>"+esc(w.finished_at.slice(11)):""}</td>
       <td><div class="row">
-        ${w.state==="planned"?'<button class="primary" data-act="start">СТАРТ</button><input data-act="time" placeholder="ЧЧ:ММ:СС" style="width:110px"><button data-act="set">Задать</button>':''}
-        ${w.state==="running"?'<button data-act="wfin">■ ФИНИШ забега</button>':''}
+        ${w.state==="planned"?'<button class="primary" data-act="start">Старт</button><input data-act="time" placeholder="ЧЧ:ММ:СС" style="width:110px"><button data-act="set">Задать</button>':''}
+        ${w.state==="running"?'<button class="primary" data-act="wfin">■ Финиш забега</button>':''}
         ${w.state==="finished"?'<button class="sm" data-act="wreopen">Открыть снова</button>':''}
-        ${w.start_time?'<button class="danger sm" data-act="reset">Сбросить</button>':''}
+        ${w.start_time?'<button class="danger sm" data-act="reset">Сбросить старт…</button>':''}
       </div></td></tr>`).join("");
     $("seqInfo").textContent = ev.heats_sequential ? "старт забега автоматически завершает предыдущий" : "забеги могут идти одновременно";
   }
@@ -1065,14 +1337,16 @@ function renderTimingHead(){
   const devs = devices.slice(); if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.unshift(ev.finish_device);
   dsel.innerHTML = devs.map(d => `<option ${ev && d===ev.finish_device?"selected":""}>${esc(d)}</option>`).join("");
   if (prev && devs.includes(prev)) dsel.value = prev;
-  $("rName").textContent = ev ? "Результаты — " + ev.name : "Результаты";
+  $("dlProto").href = ev ? `/protocol?event=${ev.id}` : "#";
+  $("dlStart").href = ev ? `/protocol?event=${ev.id}&kind=start` : "#";
+  $("dlCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
+  $("dlClax").href = ev ? `/api/events/${ev.id}/event.clax` : "#";
   $("rCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
   const ws = $("rWave"), wprev = ws.value;
   ws.innerHTML = '<option value="">все забеги</option>' + (ev ? ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("") : "");
   $("rProto").href = ev ? `/protocol?event=${ev.id}` : "#";
   ws.classList.toggle("hide", !hasWaves); ws.value = wprev;
 }
-$("tSelect").onchange = (e) => selectEvent(+e.target.value);
 async function doStart(time, wave){
   const ev = curEvent(); if (!ev) return;
   if (!ev.finish_device && !confirm("Точка финиша не выбрана — результаты не посчитаются. Всё равно дать старт?")) return;
@@ -1083,7 +1357,7 @@ async function doStart(time, wave){
 }
 $("btnStart").onclick = () => doStart(null);
 $("btnManual").onclick = () => { const t=$("tManual").value.trim(); if(!t) return toast("Введите время ЧЧ:ММ:СС"); doStart(t); };
-$("btnReset").onclick = async () => { if (!confirm("Сбросить время старта?")) return; await api(`/api/events/${curId}/reset`, {}); await loadEvents(); loadResults(); };
+$("btnReset").onclick = async () => { if (!confirm("Сбросить время старта? Результаты пересчитаются после нового старта.")) return; await api(`/api/events/${curId}/reset`, {}); await loadEvents(); loadResults(); };
 const finishEv = async () => { if (!confirm("Завершить соревнование?")) return; await api(`/api/events/${curId}/finish`, {}); await loadEvents(); toast("Соревнование завершено"); };
 $("btnFinish").onclick = finishEv; $("btnFinish2").onclick = finishEv;
 $("wavesBody").onclick = async (e) => {
@@ -1097,7 +1371,7 @@ $("wavesBody").onclick = async (e) => {
   if (act === "wreopen") { await api(`/api/events/${curId}/waves`, {name:wave, reopen:true}); await loadEvents(); loadResults(); }
 };
 $("btnNextHeat").onclick = async () => {
-  try{ const r = await api(`/api/events/${curId}/waves`, {next:true}); await loadEvents(); toast(r.created+" создан — категория и дистанция как у предыдущего (поменять — во вкладке «Соревнования»)"); }
+  try{ const r = await api(`/api/events/${curId}/waves`, {next:true}); await loadEvents(); toast(r.created+" создан — категория и дистанция как у предыдущего (поменять — на этапе «Подготовка»)"); }
   catch(err){ toast("Ошибка: "+err.message); }
 };
 /* ручные отметки */
@@ -1133,9 +1407,17 @@ $("manualBody").addEventListener("click", async (e) => {
 
 function tick(){
   $("hdrClock").textContent = new Date(nowMs()).toLocaleTimeString("ru-RU",{hour12:false});
-  const ev = curEvent(), c = $("tClock");
-  if (ev && ev.start_epoch_ms) { c.classList.remove("idle"); c.textContent = fmtElapsed(nowMs() - ev.start_epoch_ms); }
-  else { c.classList.add("idle"); c.textContent = ev ? "Старт не дан" : "—"; }
+  const ev = curEvent(), c = $("tClock"), pill = $("tState");
+  let start = null, fin = null, label = "";
+  if (ev && ev.waves.length) {
+    const started = ev.waves.filter(w => w.start_epoch_ms).sort((a,b) => b.start_epoch_ms - a.start_epoch_ms);
+    const run = started.find(w => w.state === "running"), w = run || started[0];
+    if (w) { start = w.start_epoch_ms; fin = run ? null : (w.finish_epoch_ms || null); label = w.name + (run ? " идёт" : " завершён"); }
+  } else if (ev && ev.start_epoch_ms) { start = ev.start_epoch_ms; label = ev.status === "finished" ? "Соревнование завершено" : "Идёт"; }
+  if (start) { c.classList.remove("idle"); c.textContent = fmtElapsed((fin || nowMs()) - start); }
+  else { c.classList.add("idle"); c.textContent = ev ? "Старт не дан" : "—"; label = ev && ev.waves.length ? "Забеги ждут старта" : "Ждёт старта"; }
+  const live = !!start && !fin && ev.status !== "finished", key = label + live;
+  if (pill._k !== key) { pill._k = key; pill.className = "state-pill" + (live ? " live" : ev && ev.status === "finished" ? " done" : ""); pill.querySelector("span").textContent = label; }
   document.querySelectorAll(".wclock[data-start]").forEach(td => { const s = +td.dataset.start, f = +td.dataset.fin; if (s) td.textContent = fmtElapsed((f||nowMs()) - s); });
 }
 async function pollFeed(){
@@ -1146,7 +1428,7 @@ async function pollFeed(){
     if (r.reads.length){
       const html = r.reads.slice().reverse().map(x =>
         `<tr class="${x.finish?"fin":""} ${fresh?"new":""}"><td class="mono">${esc(x.time)}</td><td class="mono">${esc(x.elapsed||"")}</td>
-         <td><b>${esc(x.bib||"")}</b></td><td class="mono small">${esc(x.chip)}</td><td>${esc(x.device)}</td></tr>`).join("");
+         <td class="bib">${esc(x.bib||"")}</td><td class="mono small">${esc(x.chip)}</td><td>${esc(x.device)}</td></tr>`).join("");
       const body = $("feedBody");
       body.insertAdjacentHTML("afterbegin", html);
       while (body.rows.length > 300) body.deleteRow(-1);
@@ -1158,7 +1440,8 @@ async function pollFeed(){
 /* ---------- результаты ---------- */
 async function loadResults(){
   if (curId == null) { $("rBody").innerHTML = '<tr><td class="empty">Выберите соревнование</td></tr>'; return; }
-  try{ renderResults(await api(`/api/events/${curId}/results`)); }catch(e){}
+  const id = curId;
+  try{ const r = await api(`/api/events/${id}/results`); if (id !== curId) return; r._ev = id; renderResults(r); }catch(e){}
 }
 function renderResults(r){
   lastRes = r;
@@ -1166,7 +1449,7 @@ function renderResults(r){
   $("tNot").textContent = r.not_seen.length; $("tPend").textContent = r.manual_pending;
   $("tAlerts").innerHTML = alertsHtml(r.alerts); $("rAlerts").innerHTML = alertsHtml(r.alerts);
   const ev = r.event, fin = ev.finish_device, splits = r.devices.filter(d => d !== fin), hasW = ev.waves.length > 0;
-  $("rMeta").textContent = r.started ? `старт ${ev.start_time||""} · финишировали ${r.finished.length} · на трассе ${r.on_course.length}` : "старт ещё не дан";
+  $("rMeta").textContent = [ev.name, r.started ? `старт ${ev.start_time||""} · финишировали ${r.finished.length} · на дистанции ${r.on_course.length}` : "старт ещё не дан"].join(" · ");
   const q = $("rSearch").value.trim().toUpperCase(), wf = $("rWave").value;
   const match = x => (!q || String(x.bib).toUpperCase().includes(q) || (x.chip||"").includes(q)) && (!wf || x.wave === wf);
   const hand = (x, d) => x.manual.includes(d) ? ' <span class="hand" title="ручная отметка">✋</span>' : "";
@@ -1174,9 +1457,9 @@ function renderResults(r){
   $("rHead").innerHTML = `<tr>${hasCat?"<th>Категория · дист.</th>":""}${hasW?"<th>Забег</th><th>Место</th><th>Общее</th>":"<th>Место</th>"}<th>Номер</th>${hasName?"<th>Участник</th>":""}<th>Результат</th>${splits.map(d=>`<th>${esc(d)}</th>`).join("")}<th>Чип</th></tr>`;
   const ncol = 4 + (hasCat?1:0) + (hasW?2:0) + (hasName?1:0) + splits.length;
   $("rBody").innerHTML = r.finished.filter(match).map(x =>
-    `<tr>${hasCat?`<td class="small">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td>`:""}${hasW?`<td class="small">${esc(x.wave)}</td><td class="mono"><b>${x.place}</b></td><td class="mono">${x.place_overall??""}</td>`:`<td class="mono"><b>${x.place}</b></td>`}
-     <td><b>${esc(x.bib)}</b></td>${hasName?`<td>${esc(x.name||"")}<div class="small muted">${esc([x.birth_year,x.team].filter(Boolean).join(" · "))}</div></td>`:""}
-     <td class="mono"><b>${esc(x.result||x.time)}</b>${hand(x, fin)}</td>
+    `<tr>${hasCat?`<td class="small">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td>`:""}${hasW?`<td class="small">${esc(x.wave)}</td><td class="pl p${x.place}">${x.place}</td><td class="pl">${x.place_overall??""}</td>`:`<td class="pl p${x.place}">${x.place}</td>`}
+     <td class="bib">${esc(x.bib)}</td>${hasName?`<td>${esc(x.name||"")}<div class="small muted">${esc([x.birth_year,x.team].filter(Boolean).join(" · "))}</div></td>`:""}
+     <td class="res">${esc(x.result||x.time)}${hand(x, fin)}</td>
      ${splits.map(d=>`<td class="mono">${esc(x.splits[d]||"")}${hand(x,d)}</td>`).join("")}<td class="mono small muted">${esc(x.chip.startsWith("#")?"":x.chip)}</td></tr>`
   ).join("") || `<tr><td colspan="${ncol}" class="empty">${r.started?"Финишировавших пока нет":"Старт ещё не дан"}</td></tr>`;
   $("cHead").innerHTML = `<tr>${hasW?"<th>Забег</th>":""}<th>Номер</th><th>Последняя точка</th><th>Время там</th><th>Чип</th></tr>`;
@@ -1184,6 +1467,7 @@ function renderResults(r){
     `<tr>${hasW?`<td class="small">${esc(x.wave)}</td>`:""}<td><b>${esc(x.bib)}</b></td><td>${esc(x.last_point)}</td><td class="mono">${esc(x.last_time)}</td><td class="mono small muted">${esc(x.chip)}</td></tr>`
   ).join("") || `<tr><td colspan="5" class="empty">Никого</td></tr>`;
   $("nList").textContent = r.not_seen.filter(x => !wf || x.wave===wf).map(x => x.bib).join(", ") || "—";
+  renderLane();
 }
 $("rSearch").oninput = () => lastRes && renderResults(lastRes);
 $("rWave").onchange = () => lastRes && renderResults(lastRes);
@@ -1194,13 +1478,7 @@ const FOLDER_ICONS = {"Положение и документы":"📜","Зая�
 let filesEv = null, filesFolder = "", filesData = {files:[], folders:Object.keys(FOLDER_ICONS)};
 function loadFiles(){ if (tabName()==="files") renderFilesTab(); }
 async function renderFilesTab(){
-  const sel = $("fEvent");
-  const opts = []; let lastY = null;
-  const evs = events.slice().sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id-a.id);
-  for (const e of evs) { const y = (e.date||"").slice(0,4) || "без даты";
-    if (y !== lastY) { if (lastY !== null) opts.push("</optgroup>"); opts.push(`<optgroup label="${esc(y)}">`); lastY = y; }
-    opts.push(`<option value="${e.id}" ${e.id===filesEv?"selected":""}>${esc(e.name)}${e.archived?" (архив)":""}${e.files_count?` · ${e.files_count}`:""}</option>`); }
-  sel.innerHTML = opts.join("") + (lastY!==null?"</optgroup>":"") || "<option>нет соревнований</option>";
+  filesEv = curId;
   if (!filesEv) return;
   try{ filesData = await api(`/api/events/${filesEv}/files`); }catch(e){ return; }
   const cnt = {}; filesData.files.forEach(f => cnt[f.folder] = (cnt[f.folder]||0)+1);
@@ -1216,7 +1494,6 @@ async function renderFilesTab(){
       <div class="row">${move(f)}<a class="btn" href="/files/${f.id}?dl=1" style="padding:4px 9px;font-size:13px">Скачать</a><button class="sm danger" data-act="fdel">Удалить</button></div>
     </div>`).join("") || `<div class="small muted">${filesFolder?"В этой папке пока пусто.":"Файлов пока нет."}${filesFolder==="Для судей"?" Стартовый список попадает сюда сам при «Сформировать забеги».":filesFolder==="Результаты"?" Снимок результатов сохраняется сам при «Завершить».":""}</div>`;
 }
-$("fEvent").onchange = (e) => { filesEv = +e.target.value; renderFilesTab(); };
 $("fFolders").addEventListener("click", (e) => { const d = e.target.closest(".folder"); if (!d) return; filesFolder = d.dataset.f; renderFilesTab(); });
 async function uploadFiles(list){
   if (!filesEv) return toast("Выберите соревнование");
@@ -1263,14 +1540,12 @@ async function loadHw(){
   const d = hwData, sv = d.server;
   const vpnOn = d.vpn.filter(v => v.online).length + d.wireguard.filter(w => w.handshake_ago != null && w.handshake_ago < 180).length;
   const svcBad = d.services.filter(x => x.state !== "active").length;
-  $("stVpn").textContent = vpnOn;
-  $("stSvc").innerHTML = d.services.length ? (svcBad ? `<span style="color:var(--bad)">${svcBad} с ошибкой</span>` : "все работают") : "—";
-  $("stDisk").textContent = fmtBytes(sv.disk_free);
-  const readersOff = d.readers.filter(r => r.mode !== "http" && !r.connected).length;
-  $("hwDot").className = "dot " + (svcBad ? "bad" : readersOff ? "" : "ok"); $("hwDot").classList.toggle("hide", !svcBad && !readersOff);
+  setPill("hVpn", `VPN ${vpnOn}`, vpnOn ? "ok" : "");
+  $("hwDot").className = "dot bad" + (svcBad ? "" : " hide");
+  $("gear").title = svcBad ? `Служб с ошибкой: ${svcBad} — откройте «Система»` : "Система: оборудование, обновление, журнал";
   if (tabName() !== "hw") return;
   $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о VPN и службах не собираются — обновите сервер (install.sh)." :
-    sv.collector_age_sec > 120 ? `Сведения о VPN и службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Обновляется каждые 10 секунд";
+    sv.collector_age_sec > 120 ? `Сведения о VPN и службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Оборудование, доступы и обновление сервера. Сведения обновляются каждые 10 секунд.";
   const cert = d.certs[0];
   $("hwServer").innerHTML = [
     ["Имя", esc(sv.hostname)], ["Время сервера", esc(sv.time)], ["Часовой пояс", esc(sv.timezone)],
@@ -1278,16 +1553,16 @@ async function loadHw(){
     ["Работает", fmtUp(sv.uptime_sec)], ["Сервер хронометража", "v" + esc(sv.version) + (sv.hub_started ? " · с " + esc(sv.hub_started.slice(5,16)) : "")],
     ["Брандмауэр", sv.firewall ? (sv.firewall==="active" ? '<span class="dot ok"></span>включён' : '<span class="dot bad"></span>' + esc(sv.firewall)) : "—"],
     ["Форма регистрации", sv.public_url ? `<a href="${esc(sv.public_url)}/r/" target="_blank">${esc(sv.public_url.replace("https://",""))}</a>` : "не опубликована"],
-    ["Сертификат HTTPS", cert ? `до ${esc(cert.until)}` + (cert.days < 20 ? ` <b style="color:var(--bad)">(${cert.days} дн)</b>` : "") : "—"],
+    ["Сертификат HTTPS", cert ? `до ${esc(cert.until)}` + (cert.days < 20 ? ` <b style="color:var(--track)">(${cert.days} дн)</b>` : "") : "—"],
   ].map(([k,v]) => `<span>${k}</span><span>${v}</span>`).join("");
   const memUsed = sv.mem_total ? 1 - sv.mem_avail/sv.mem_total : null, diskUsed = sv.disk_total ? 1 - sv.disk_free/sv.disk_total : null;
-  const bar = (x) => x == null ? "" : `<div class="bar"><i class="${x>.9?"bad":x>.75?"warn":""}" style="width:${Math.round(x*100)}%"></i></div>`;
+  const bar = (x) => x == null ? "" : `<div class="bar2"><i class="${x>.9?"bad":x>.75?"warn":""}" style="width:${Math.round(x*100)}%"></i></div>`;
   $("hwRes").innerHTML = `
     <div class="small muted">Процессор: ${sv.cpus||"?"} ядр. · нагрузка ${(sv.load||[]).join(" / ")}</div>
     <div style="margin-top:8px">Память: ${fmtBytes(sv.mem_total && sv.mem_total - sv.mem_avail)} из ${fmtBytes(sv.mem_total)}${bar(memUsed)}</div>
     <div style="margin-top:8px">Диск: свободно ${fmtBytes(sv.disk_free)} из ${fmtBytes(sv.disk_total)}${bar(diskUsed)}</div>
     <div class="kv" style="margin-top:10px"><span>База отметок</span><span>${fmtBytes(sv.db_size)}</span><span>Файлы</span><span>${fmtBytes(sv.files_size)}</span>
-    <span>Резервные копии</span><span>${sv.backups ? `${sv.backups} шт., последняя ${esc(sv.backup_last.at)}` : '<span style="color:var(--warn)">ещё не было</span>'}</span></div>`;
+    <span>Резервные копии</span><span>${sv.backups ? `${sv.backups} шт., последняя ${esc(sv.backup_last.at)}` : '<span style="color:var(--start)">ещё не было</span>'}</span></div>`;
   $("hwSvc").innerHTML = d.services.map(x => `<div class="svc">${svcState[x.state] || esc(x.state)}<span style="flex:1"></span><b>${esc(x.name)}</b></div>`).join("") || '<div class="small muted">Нет данных — после обновления сервера появятся через минуту.</div>';
   $("hwWiclax").innerHTML = d.wiclax.map(c => `<tr><td class="mono">${esc(c.peer)}</td><td class="mono">${c.port||""}${c.devices?` <span class="small muted">(${esc(c.devices.join(", "))})</span>`:""}</td><td class="mono small">${esc((c.since||"").slice(5,19))}</td><td>${c.sent}</td><td>${c.live?"передача включена":"пауза"}</td></tr>`).join("")
     || '<tr><td colspan="5" class="empty">Wiclax не подключён. В Wiclax: устройство «Общий», 10.66.0.1, порт 9854.</td></tr>';
@@ -1328,7 +1603,7 @@ function rdWx(w){
 function rdClock(live){
   const off = live && live.clock_offset_sec;
   if (off == null) return "—";
-  return `<span class="mono" style="${Math.abs(off)>2?"color:var(--bad);font-weight:700":""}">${off>0?"+":""}${off.toFixed(2)} с</span>`;
+  return `<span class="mono" style="${Math.abs(off)>2?"color:var(--track);font-weight:700":""}">${off>0?"+":""}${off.toFixed(2)} с</span>`;
 }
 const RD_POINTS = ["START","FINISH","KM1","KM2","KM3","KM5","KM10","KM15","KM21","LAP","CP1","CP2","CP3"];
 function rdPointOpts(cur){
@@ -1399,9 +1674,9 @@ async function loadReaders(){
   $("rdDevList").innerHTML = d.devices.map(x => `<option value="${esc(x)}">`).join("");
   let html = "", box = null;
   for (const r of d.readers) {
-    if ((r.box||"") !== box) { box = r.box||""; html += `<tr><td colspan="8" class="small muted" style="background:var(--bg2,#f4f4f4)"><b>${esc(box||"Без ящика")}</b></td></tr>`; }
+    if ((r.box||"") !== box) { box = r.box||""; html += `<tr><td colspan="8" class="small muted" style="background:var(--ice)"><b>${esc(box||"Без ящика")}</b></td></tr>`; }
     const L = r.live;
-    html += `<tr data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b>${r.parser==="sim"?' <span class="small" style="color:var(--warn,#b26b00)">симулятор</span>':r.parser!=="ipico"?` <span class="small muted">${esc(r.parser)}</span>`:""}</td>
+    html += `<tr data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b>${r.parser==="sim"?' <span class="small" style="color:var(--start)">симулятор</span>':r.parser!=="ipico"?` <span class="small muted">${esc(r.parser)}</span>`:""}</td>
       <td class="mono small">${esc(r.host)}:${r.port}</td><td>${rdWx(r.wiclax)}</td><td><select class="rdPoint" data-id="${esc(r.id)}" title="Точка на этом старте — меняется сразу, без переподключения">${rdPointOpts(r.device)}</select></td>
       <td>${rdConn(L, r.enabled)}</td>
       <td class="mono">${L?L.reads:"—"}${L&&L.parse_errors?`<div class="small muted">не разобрано ${L.parse_errors}</div>`:""}</td>
@@ -1464,7 +1739,7 @@ $("scGo").onclick = async () => {
       r.found.map(f => `<tr><td class="mono"><b>${esc(f.host)}</b></td><td class="mono">${f.port}</td><td>${f.known ? `<span class="small muted">уже есть: ${esc(f.known)}</span>` :
         `<button class="sm primary" data-host="${esc(f.host)}" data-port="${f.port}">Добавить</button>`}</td></tr>`).join("")}</tbody></table></div>`
       : `<span class="small">В сети ${esc(r.subnet)}.x на порту ${r.port} никто не ответил. Проверьте, что ящик включён и на связи (VPN), а сеть указана верно.</span>`;
-  }catch(err){ $("scRes").innerHTML = `<span class="small" style="color:var(--bad)">${esc(err.message)}</span>`; }
+  }catch(err){ $("scRes").innerHTML = `<span class="small" style="color:var(--track)">${esc(err.message)}</span>`; }
   $("scGo").disabled = false;
 };
 $("scRes").addEventListener("click", e => {
@@ -1528,7 +1803,7 @@ async function renderArchive(){
   const list = arch.filter(e => (!y || ((e.date||"").slice(0,4)||"без даты")===y) &&
     (!q || (e.name+" "+(e.place||"")).toLowerCase().includes(q)))
     .sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id-a.id);
-  if (!list.length) { $("aList").innerHTML = `<div class="card empty">${arch.length?"Ничего не найдено":"В архиве пока пусто. Завершённое соревнование переносится кнопкой «В архив» на его карточке."}</div>`; return; }
+  if (!list.length) { $("aList").innerHTML = `<div class="panel empty">${arch.length?"Ничего не найдено":"В архиве пока пусто. Завершённое соревнование переносится кнопкой «В архив» в списке выше."}</div>`; return; }
   const need = list.filter(e => e.files_count && !archFiles[e.id]);
   await Promise.all(need.map(async e => { try{ archFiles[e.id] = (await api(`/api/events/${e.id}/files`)).files; }catch(_){ archFiles[e.id]=[]; } }));
   let html = "", curY = null, curM = null;
@@ -1540,7 +1815,7 @@ async function renderArchive(){
     if (mm !== curM) { if (curM!==null) html += "</div>"; html += `<div class="month">${esc(mm)}</div><div class="tbl" style="margin-bottom:6px">`; curM = mm; }
     const files = (archFiles[e.id]||[]).map(f => `<a href="/files/${f.id}" target="_blank">📄 ${esc(f.name)}</a>`).join("");
     html += `<div class="arow" data-id="${e.id}">
-      <div class="mono small">${esc(e.date||"—")}</div>
+      <div class="small muted">${esc(fmtDate(e.date)||"без даты")}</div>
       <div><div class="t">${esc(e.name)}</div><div class="small muted">${esc(e.place||"")}${e.place?" · ":""}участников: ${e.entries_count}</div>
         ${files?`<div class="files">${files}</div>`:""}</div>
       <div class="row"><button class="sm" data-act="aopen">Результаты</button><button class="sm" data-act="arestore">Вернуть</button></div>
@@ -1553,7 +1828,7 @@ $("aYear").onchange = renderArchive; $("aSearch").oninput = renderArchive;
 $("aList").addEventListener("click", async e => {
   const row = e.target.closest(".arow"); const act = e.target.dataset.act; if (!row || !act) return;
   const id = +row.dataset.id;
-  if (act === "aopen") { selectEvent(id); location.hash = "#results"; }
+  if (act === "aopen") { selectEvent(id); if (location.hash === "#results") showTab(); else location.hash = "#results"; }
   if (act === "arestore") { await api(`/api/events/${id}/archive`, {restore:true}); toast("Возвращено в соревнования"); loadEvents._sig=null; await loadEvents(); }
 });
 
@@ -1574,14 +1849,14 @@ $("logAll").onchange = loadLog;
   showTab();
   setInterval(tick, 100);
   setInterval(loadStatus, 4000);
-  setInterval(() => { if (tabName()==="overview") loadLast(); }, 2000);
+  setInterval(() => { if (tabName()==="hw") loadLast(); }, 2000);
   setInterval(() => { if (tabName()==="reg") loadRegs(); }, 10000);
-  setInterval(() => { const t=tabName(); if (t==="hw" || t==="overview") loadHw(); }, 10000);
+  setInterval(loadHw, 10000);
   loadHw();
   setInterval(pollFeed, 1000);
   setInterval(() => { const t=tabName(); if (t==="check") loadCheck(); if (t==="timing") loadManual(); if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
   setInterval(async () => { try{ const id=curId; await loadEvents(); if (id!==curId) loadEntries(); }catch(e){} }, 15000);
-  loadLast(); pollFeed();
+  pollFeed();
 })();
 </script>
 </body>

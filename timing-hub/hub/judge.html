@@ -3,78 +3,149 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#16181a">
+<meta name="theme-color" content="#0B1D37">
 <title>Судья — хронометраж</title>
+<link rel="stylesheet" href="/assets/brand.css">
 <style>
-:root{--bg:#f3f4f1;--panel:#fff;--ink:#16181a;--muted:#646b72;--line:#e2e4e0;--accent:#c8462b;--ok:#1f8a4c;--warn:#b54708;--bad:#b42318;--soft:#f7f1ee;
-  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#101214;--panel:#1b1e21;--ink:#eceeef;--muted:#9aa2a9;--line:#2b3035;--accent:#e8603f;--soft:#2a1f1b;--ok:#3fbf73;--warn:#f0a03a;--bad:#ff6b5b}}
+/* Экран судьи на финише: всегда тёмный (ночной синий ФЛАСО), под телефон 360–430 px. */
+:root{color-scheme:dark;
+  --j-ink:#fff;                 /* текст на тёмном */
+  --j-soft:var(--night-muted);  /* вторичный текст */
+  --j-ok:#3FBF73;               /* «на связи», завершённое время — светлее, чтобы читалось на синем */
+  --j-gap:16px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.wrap{max-width:520px;margin:0 auto;padding:10px 12px 40px}
-.top{display:flex;gap:8px;align-items:center;justify-content:space-between}
-.top b{font-size:16px;line-height:1.2}
-.net{font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--ok);color:#fff;white-space:nowrap}
-.net.off{background:var(--bad)}
-.sel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-select,input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%}
-.clockbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-top:10px;padding:10px;text-align:center}
-.clock{font:800 clamp(44px,15vw,72px)/1.05 var(--mono);letter-spacing:-1px}
-.clock.idle{color:var(--muted);font-size:28px;padding:10px 0}
-.small{font-size:13px;color:var(--muted)}
-button{font:inherit;font-weight:700;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:12px;cursor:pointer;touch-action:manipulation}
-button:active{transform:scale(.97)}
-.startbtn{width:100%;margin-top:8px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:22px;padding:16px}
-.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-.modes button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.display{display:flex;align-items:baseline;justify-content:space-between;background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:8px 14px;margin-top:10px;min-height:72px}
-.display .num{font:800 46px var(--mono)}
-.display .num:empty::before{content:"номер";color:var(--muted);font:600 22px system-ui}
-.display .t{font:600 16px var(--mono);color:var(--muted)}
-.display.armed{border-color:var(--accent)}
-.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
-.pad button{font:800 30px var(--mono);padding:16px 0}
-.pad .ok{background:var(--ok);border-color:var(--ok);color:#fff;font-size:26px}
-.pad .del{color:var(--bad)}
-.big{width:100%;margin-top:10px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:30px;padding:34px 0;border-radius:18px}
-h3{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px;display:flex;justify-content:space-between}
-.list{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.item{display:grid;grid-template-columns:2.2em 1fr 6.5em 2em;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+html,body{margin:0;background:var(--night);color:var(--j-ink);font:16px/1.4 var(--body)}
+body{min-height:100vh;display:flex;flex-direction:column}
+button,select,input{font:inherit}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--start);outline-offset:2px}
+
+/* шапка */
+.top{border-bottom:3px solid var(--track);background:var(--night)}
+.top-in{max-width:520px;margin:0 auto;padding:12px var(--j-gap);display:flex;gap:12px;align-items:center;justify-content:space-between}
+.top .brand{display:block;height:30px;width:auto;flex:0 0 auto}
+.top-r{display:flex;align-items:center;gap:10px;min-width:0}
+.role{font-size:13px;color:var(--j-soft);white-space:nowrap}
+.net{font:700 12px/1 var(--body);padding:6px 10px 6px 20px;border-radius:99px;background:rgba(63,191,115,.16);color:var(--j-ok);white-space:nowrap;position:relative;max-width:62vw;overflow:hidden;text-overflow:ellipsis}
+.net::before{content:"";position:absolute;left:9px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:currentColor}
+.net.off{background:var(--track);color:#fff}
+.top-r:has(.net.off) .role{display:none}   /* без связи важнее статус, чем подпись */
+
+.wrap{width:100%;max-width:520px;margin:0 auto;padding:14px var(--j-gap) 24px;flex:1}
+.evname{margin:0;font:600 22px/1.15 var(--head);letter-spacing:.2px;overflow-wrap:anywhere}
+
+/* выбор соревнования / забега / устройства / судьи */
+.sel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+select,input{color:var(--j-ink);background:var(--night-2);border:1px solid var(--night-line);border-radius:var(--r);padding:10px 12px;width:100%;min-width:0;min-height:44px}
+select{appearance:none;-webkit-appearance:none;padding-right:30px;text-overflow:ellipsis;
+  background-image:linear-gradient(45deg,transparent 50%,var(--j-soft) 50%),linear-gradient(135deg,var(--j-soft) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+select option{background:var(--night-2);color:var(--j-ink)}
+input::placeholder{color:var(--j-soft);opacity:1}
+select:focus-visible,input:focus-visible{outline:2px solid var(--start);outline-offset:0;border-color:var(--start)}
+
+/* документы */
+.docs{background:var(--night-2);border:1px solid var(--night-line);border-radius:var(--r);margin-top:10px;padding:0 12px;font-size:15px}
+.docs summary{cursor:pointer;font-weight:700;padding:11px 0;list-style-position:inside}
+.docs summary span{color:var(--j-soft);font-weight:400}
+.docs a{display:block;padding:10px 0;border-top:1px solid var(--night-line);color:var(--start);text-decoration:none}
+.docs a:hover{text-decoration:underline}
+
+/* секундомер */
+.clockbox{margin-top:14px;padding:12px 0 4px;border-top:1px solid var(--night-line)}
+.heatinfo{display:flex;gap:6px 8px;align-items:center;flex-wrap:wrap;font:600 17px/1.25 var(--head);letter-spacing:.2px}
+.heatinfo .small{font:400 14px/1.35 var(--body)}
+.clock{font:600 clamp(60px,19vw,84px)/1 var(--head);font-variant-numeric:tabular-nums;letter-spacing:-.5px;margin-top:6px;white-space:nowrap}
+.clock.idle{color:var(--j-soft);font-size:34px;line-height:1.2;padding:8px 0 2px;letter-spacing:0}
+.clock.done{color:var(--j-ok)}
+.small{font-size:13px;color:var(--j-soft)}
+#clockInfo{margin-top:4px}
+.badge{font:700 12px/1 var(--body);letter-spacing:.2px;padding:5px 9px;border-radius:99px;background:var(--night-line);color:var(--j-ink)}
+.badge.run{background:var(--track);color:#fff}
+.badge.fin{background:#fff;color:var(--night)}
+
+/* кнопки */
+button{font-weight:700;border:1px solid var(--night-line);background:var(--night-2);color:var(--j-ink);border-radius:var(--r);padding:12px;cursor:pointer;touch-action:manipulation}
+button:hover{border-color:var(--j-soft)}
+.startbtn,.finbtn,.nextbox .go,.big{display:block;width:100%;font-family:var(--head);font-weight:600;letter-spacing:.6px;border:0}
+.startbtn{margin-top:12px;background:var(--track);color:var(--track-ink);font-size:26px;padding:16px;min-height:64px}
+.finbtn{margin-top:12px;background:#fff;color:var(--night);font-size:22px;padding:14px;min-height:58px}
+.link{display:inline-block;background:none;border:0;color:var(--j-soft);text-decoration:underline;text-underline-offset:3px;font-weight:400;padding:10px 0;font-size:15px}
+.link:hover{color:var(--j-ink)}
+
+/* следующий забег */
+.nextbox{border:1px dashed var(--night-line);border-radius:var(--r);padding:12px;margin-top:14px}
+.nextbox .small{font:600 15px var(--head);letter-spacing:.3px;color:var(--j-ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.nextbox .go{margin-top:10px;background:var(--track);color:var(--track-ink);font-size:18px;padding:12px;min-height:52px}
+
+/* режимы: ввод номера / отсечки */
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:16px;background:var(--night-2);border:1px solid var(--night-line);border-radius:8px;padding:3px}
+.modes button{border:0;background:none;color:var(--j-soft);font:600 16px/1 var(--head);letter-spacing:.3px;padding:12px 6px;border-radius:6px;min-height:44px}
+.modes button.on{background:#fff;color:var(--night)}
+
+/* табло ввода и клавиатура */
+.display{display:flex;align-items:baseline;justify-content:space-between;gap:10px;background:#fff;color:var(--night);border-radius:8px;padding:8px 16px;margin-top:12px;min-height:76px;box-shadow:inset 0 0 0 3px transparent}
+.display .num{font:600 52px/1.1 var(--head);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.display .num:empty::before{content:"номер";color:var(--muted);font:400 22px var(--body);letter-spacing:0}
+.display .t{font:500 18px var(--head);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.display.armed{box-shadow:inset 0 0 0 3px var(--track)}
+.display.armed .t{color:var(--track)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.pad button{font:600 30px/1 var(--head);padding:0;min-height:62px;border:0;background:var(--night-2);border-radius:8px}
+.pad button:hover{background:#1A3460}
+.pad .ok{background:var(--track);color:var(--track-ink);font-size:28px}
+.pad .ok:hover{background:#C9151B}
+.pad .del{color:var(--j-soft);font-size:26px}
+.hint{margin-top:8px;line-height:1.4}
+.big{margin-top:12px;background:var(--track);color:var(--track-ink);font-size:34px;padding:0;min-height:168px;border-radius:12px}
+
+/* список отметок */
+h3{font:600 15px/1.2 var(--head);letter-spacing:.6px;text-transform:uppercase;color:var(--j-soft);margin:22px 0 8px;display:flex;justify-content:space-between;gap:10px}
+#cnt{text-transform:none;letter-spacing:.2px}
+.list{background:var(--night-2);border:1px solid var(--night-line);border-radius:8px;overflow:hidden}
+.item{display:grid;grid-template-columns:2em minmax(0,1fr) 5.6em 2.5em;gap:8px;align-items:center;padding:8px 6px 8px 12px;border-bottom:1px solid var(--night-line)}
 .item:last-child{border-bottom:0}
-.item .n{color:var(--muted);font:600 14px var(--mono)}
-.item .tm{font:700 18px var(--mono)}
-.item input{padding:7px 8px;font:700 18px var(--mono);text-align:center}
-.item input.need{border-color:var(--warn);background:var(--soft)}
-.item .st{font-size:16px;text-align:center}
-.item .x{background:none;border:0;color:var(--bad);padding:4px;font-size:18px}
-.empty{padding:16px;text-align:center;color:var(--muted)}
+.item .n{color:var(--j-soft);font:500 15px var(--head)}
+.item .tm{font:500 20px/1.15 var(--head);font-variant-numeric:tabular-nums;min-width:0}
+.item .tm .small{font:400 12px/1.3 var(--body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item input{padding:6px 6px;min-height:42px;font:600 20px var(--head);text-align:center;background:var(--night);color:#fff}
+.item input.need{border-color:var(--start);background:rgba(243,72,29,.14)}
+.item .st{font-size:16px;text-align:center;color:var(--j-soft)}
+.item .x{background:none;border:0;color:var(--j-soft);padding:0;width:40px;height:40px;font-size:18px;font-weight:400;border-radius:var(--r)}
+.item .x:hover{color:var(--track);background:rgba(231,30,37,.12)}
+.empty{padding:18px;text-align:center;color:var(--j-soft)}
+
 .hide{display:none!important}
-.docs{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:8px;padding:8px 12px;font-size:14px}
-.docs summary{cursor:pointer;font-weight:700}
-.docs a{display:block;padding:8px 0;border-bottom:1px solid var(--line);color:var(--accent);text-decoration:none}
-.docs a:last-child{border-bottom:0}
-.heatinfo{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:4px;font-size:14px}
-.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--ink)}
-.badge.run{background:var(--ok);color:#fff}.badge.fin{background:var(--ink);color:var(--bg)}
-.clock.done{color:var(--ok)}
-.finbtn{width:100%;margin-top:8px;background:var(--ink);border-color:var(--ink);color:var(--bg);font-size:20px;padding:14px}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-.nextbox{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:10px;margin-top:10px}
-.nextbox .go{width:100%;margin-top:8px;background:var(--accent);border-color:var(--accent);color:#fff}
-.link{background:none;border:0;color:var(--muted);text-decoration:underline;font-weight:600;padding:6px;font-size:14px}
-.blocked{opacity:.45}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+.blocked{opacity:.4}
+
+/* подвал с логотипами: Сахалин → ФЛАСО */
+.foot{max-width:520px;width:100%;margin:0 auto;padding:18px var(--j-gap) 26px;border-top:1px solid var(--night-line)}
+.foot .logos{gap:16px;opacity:.85}
+.foot .lg-sakh{height:30px}
+.foot .lg-flaso{height:28px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;max-width:calc(100% - 32px);background:#fff;color:var(--night);font-weight:700;padding:11px 16px;border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.35);border-left:4px solid var(--track);opacity:0;pointer-events:none;z-index:9}
 .toast.show{opacity:1}
+@media (prefers-reduced-motion:no-preference){
+  button:active{transform:scale(.97)}
+  button{transition:background-color .12s,border-color .12s,color .12s}
+  .toast{transition:opacity .2s}
+}
 </style>
 </head>
 <body>
+<header class="top"><div class="top-in">
+  <img class="brand" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+  <div class="top-r"><span class="role">Судья</span><span class="net" id="net">на связи</span></div>
+</div></header>
 <div class="wrap">
-  <div class="top"><b id="evName">Судья</b><span class="net" id="net">на связи</span></div>
+  <h1 class="evname" id="evName">Судья</h1>
   <div class="sel">
-    <select id="evSel"></select>
-    <select id="waveSel"></select>
-    <select id="devSel"></select>
-    <input id="judge" placeholder="Ваше имя (судья)">
+    <select id="evSel" aria-label="Соревнование"></select>
+    <select id="waveSel" aria-label="Забег"></select>
+    <select id="devSel" aria-label="Точка отметки"></select>
+    <input id="judge" placeholder="Ваше имя (судья)" aria-label="Ваше имя (судья)">
   </div>
 
   <details class="docs hide" id="docs"><summary>📁 Документы для судей <span id="docsN"></span></summary><div id="docsList"></div></details>
@@ -91,8 +162,8 @@ h3{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted
   <div class="nextbox" id="nextBox">
     <div class="small" id="nextTitle">Следующий забег</div>
     <div class="row2">
-      <input id="nextCat" list="cats" placeholder="Категория">
-      <input id="nextDist" list="dists" placeholder="Дистанция">
+      <input id="nextCat" list="cats" placeholder="Категория" aria-label="Категория">
+      <input id="nextDist" list="dists" placeholder="Дистанция" aria-label="Дистанция">
     </div>
     <button class="go" id="btnNext">+ Создать следующий забег</button>
   </div>
@@ -110,20 +181,24 @@ h3{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted
       <button>1</button><button>2</button><button>3</button>
       <button>4</button><button>5</button><button>6</button>
       <button>7</button><button>8</button><button>9</button>
-      <button class="del" data-k="del">⌫</button><button>0</button><button class="ok" data-k="ok">✓</button>
+      <button class="del" data-k="del" aria-label="Стереть">⌫</button><button>0</button><button class="ok" data-k="ok" aria-label="Записать">✓</button>
     </div>
-    <div class="small" style="margin-top:6px">Время фиксируется в момент первого нажатия цифры. ✓ без номера — отсечка без номера.</div>
+    <div class="small hint">Время фиксируется в момент первого нажатия цифры. ✓ без номера — отсечка без номера.</div>
   </div>
 
   <div id="paneTap" class="hide">
     <button class="big" id="btnTap">⏱ ФИНИШ</button>
-    <div class="small" style="margin-top:6px">Нажимайте на каждого финишировавшего по порядку, номера впишите ниже, когда будет время.</div>
+    <div class="small hint">Нажимайте на каждого финишировавшего по порядку, номера впишите ниже, когда будет время.</div>
   </div>
 
   <h3><span id="listTitle">Отметки</span><span id="cnt"></span></h3>
   <div class="list" id="list"></div>
 </div>
-<div class="toast" id="toast"></div>
+<footer class="foot"><div class="logos">
+  <img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалинская область">
+  <img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО">
+</div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 "use strict";

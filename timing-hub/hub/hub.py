@@ -3475,6 +3475,20 @@ class Hub:
         name = f"Результаты (снимок) {now_local():%Y-%m-%d %H-%M}.csv"
         return self.save_file(ev["id"], name, data.encode("utf-8"), "snapshot", author)
 
+    ASSET_TYPES = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".css": "text/css; charset=utf-8"}
+
+    def _asset(self, name: str):
+        """Шрифты, логотипы и общий стиль из папки assets рядом с hub.py (только известные типы, без подкаталогов)."""
+        ext = os.path.splitext(name)[1].lower()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", name) or name.startswith(".") or ext not in self.ASSET_TYPES:
+            return None
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", name)
+        try:
+            with open(p, "rb") as f:
+                return self.ASSET_TYPES[ext], f.read()
+        except OSError:
+            return None
+
     def _ui_file(self, name: str) -> Optional[str]:
         p = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
         try:
@@ -4142,6 +4156,12 @@ class Hub:
                     await self._send(writer, 200, "text/html; charset=utf-8", self._page_status())
                 else:
                     await self._send(writer, 200, "text/html; charset=utf-8", page)
+            elif path.startswith("/assets/"):
+                a = self._asset(path[8:])
+                if a is None:
+                    await self._send(writer, 404, "text/plain", "нет такого файла")
+                else:
+                    await self._send(writer, 200, a[0], a[1], extra={"Cache-Control": "public, max-age=86400"})
             elif re.fullmatch(r"/files/\d+", path):
                 f = self.store.get_file(int(path.rsplit("/", 1)[1]))
                 fp = os.path.join(self.files_dir, f["stored"]) if f else None
@@ -4210,6 +4230,11 @@ class Hub:
         if method == "GET" and path in ("/r", "/r/"):
             page = self._ui_file("reg.html")
             return 200, "text/html; charset=utf-8", page or "нет reg.html", None
+        if method == "GET" and path.startswith("/r/assets/"):
+            a = self._asset(path[10:])
+            if a is None:
+                return 404, "text/plain; charset=utf-8", "нет такого файла", None
+            return 200, a[0], a[1], {"Cache-Control": "public, max-age=86400"}
         if method == "GET" and path == "/r/api/open":
             out = []
             for e in self.store.list_events():
@@ -4323,8 +4348,9 @@ class Hub:
         hdr = [f"HTTP/1.1 {code} {reasons.get(code, 'OK')}",
                f"Content-Type: {ctype}",
                f"Content-Length: {len(data)}",
-               "Cache-Control: no-store",
                "Connection: close"]
+        if "Cache-Control" not in (extra or {}):
+            hdr.append("Cache-Control: no-store")
         for k, v in (extra or {}).items():
             hdr.append(f"{k}: {v}")
         writer.write(("\r\n".join(hdr) + "\r\n\r\n").encode("utf-8") + data)

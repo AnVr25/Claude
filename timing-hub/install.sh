@@ -152,6 +152,12 @@ fi
 install -d -m 755 "$APP_DIR" "$APP_DIR/tools" "$APP_DIR/wiclax"
 install -m 755 "$KIT_DIR/hub/hub.py" "$APP_DIR/hub.py"
 install -m 644 "$KIT_DIR"/hub/*.html "$APP_DIR/"
+# фирменный стиль: шрифты, логотипы, общий brand.css (работают и без интернета)
+if [[ -d "$KIT_DIR/hub/assets" ]]; then
+  install -d -m 755 "$APP_DIR/assets"
+  find "$APP_DIR/assets" -maxdepth 1 -type f -delete
+  install -m 644 "$KIT_DIR"/hub/assets/* "$APP_DIR/assets/"
+fi
 [[ -f "$KIT_DIR/ovpn.sh" ]] && install -m 755 "$KIT_DIR/ovpn.sh" /usr/local/sbin/timing-ovpn
 [[ -f "$KIT_DIR/reg-setup.sh" ]] && install -m 755 "$KIT_DIR/reg-setup.sh" /usr/local/sbin/timing-reg-setup
 [[ -f "$KIT_DIR/rollback.sh" ]] && install -m 755 "$KIT_DIR/rollback.sh" /usr/local/sbin/timing-rollback
