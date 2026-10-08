@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.3"
+VERSION = "2.4"
 log = logging.getLogger("timing-hub")
 
 
@@ -4401,17 +4401,30 @@ class Hub:
 
     @staticmethod
     def hash_password(pwd: str) -> str:
+        """scrypt; если его нет в сборке Python/OpenSSL на сервере — PBKDF2-SHA256 (600 000 итераций)."""
         salt = os.urandom(16)
-        h = hashlib.scrypt(pwd.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
-        return f"scrypt${salt.hex()}${h.hex()}"
+        try:
+            h = hashlib.scrypt(pwd.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32, maxmem=64 * 1024 * 1024)
+            return f"scrypt${salt.hex()}${h.hex()}"
+        except (AttributeError, ValueError, MemoryError):
+            h = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt, 600_000)
+            return f"pbkdf2$600000${salt.hex()}${h.hex()}"
 
     @staticmethod
     def verify_password(pwd: str, stored: str) -> bool:
         try:
-            _, salt, h = stored.split("$")
-            got = hashlib.scrypt(pwd.encode("utf-8"), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1, dklen=32)
+            parts = stored.split("$")
+            if parts[0] == "scrypt":
+                _, salt, h = parts
+                got = hashlib.scrypt(pwd.encode("utf-8"), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1, dklen=32,
+                                     maxmem=64 * 1024 * 1024)
+            elif parts[0] == "pbkdf2":
+                _, it, salt, h = parts
+                got = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), bytes.fromhex(salt), int(it))
+            else:
+                return False
             return hmac.compare_digest(got.hex(), h)
-        except (ValueError, TypeError):
+        except (AttributeError, ValueError, TypeError, MemoryError):
             return False
 
     def check_login(self, login: str, pwd: str) -> Optional[dict]:
@@ -4744,9 +4757,13 @@ class Hub:
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError,
                 ConnectionError, ValueError):
             pass
-        except Exception:
+        except Exception as e:
             log.exception("HTTP: ошибка обработки запроса")
             try:
+                if str(locals().get("path", "")).startswith("/api/"):
+                    await self._send(writer, 500, "application/json; charset=utf-8", json.dumps(
+                        {"error": f"внутренняя ошибка сервера: {type(e).__name__}: {str(e)[:200]}"}, ensure_ascii=False))
+                    return
                 await self._send(writer, 500, "text/plain", "внутренняя ошибка")
             except Exception:
                 pass
