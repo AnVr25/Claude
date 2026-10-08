@@ -4,7 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Протокол результатов</title>
-<link rel="stylesheet" href="/assets/brand.css">
+<script>
+/* Публичный режим — /r/<slug>/protocol на reg.fla65.ru: наружу открыт только /r/…, поэтому и ресурсы — из /r/assets/ */
+window.PUB=/^\/r\/([A-Za-z0-9]{4,20})\/protocol\/?$/.exec(location.pathname);
+window.ASSETS=window.PUB?"/r/assets/":"/assets/";
+document.write('<link rel="stylesheet" href="'+window.ASSETS+'brand.css">');
+</script>
 <style>
 /* Протокол — официальный документ: всегда светлый лист, чёрный текст, печать на A4. */
 @page{size:A4;margin:12mm 12mm 14mm 12mm}
@@ -27,6 +32,7 @@ body{font:12.5px/1.38 var(--body);-webkit-font-smoothing:antialiased}
 .bar label{display:flex;gap:6px;align-items:center;color:#D5DEEA;cursor:pointer}
 .bar input[type=checkbox]{width:16px;height:16px;margin:0;accent-color:var(--start)}
 .bar .sp{flex:1}
+.bar.off>:not(.lg-ss):not(.back):not(#barName){display:none}
 :focus-visible{outline:2px solid var(--start);outline-offset:2px}
 
 /* Лист A4 */
@@ -78,11 +84,25 @@ thead{display:table-header-group}
 .sign .nm{min-width:150px}
 .foot{margin-top:8mm;padding-top:2mm;border-top:1px solid var(--pr-line);font-size:10px;color:var(--pr-muted);display:flex;justify-content:space-between;gap:12px}
 .empty{padding:30px;text-align:center;color:var(--pr-muted)}
+.empty b{display:block;font:600 18px/1.25 var(--head);color:var(--pr-navy);margin-bottom:4px}
+.empty a{color:var(--pr-navy)}
+/* публичный режим: ссылка на страницу события, отметка «предварительные / официальные» */
+.bar a.back{border-color:transparent;background:transparent;padding-left:4px;padding-right:4px;color:#D5DEEA}
+.bar a.back:hover{color:#fff;border-color:transparent;text-decoration:underline}
+.stamp{display:flex;align-items:center;justify-content:center;text-align:center;flex-wrap:wrap;gap:4px 8px;margin:-1mm 0 3mm;font:500 13px/1.3 var(--head);letter-spacing:.03em;color:var(--pr-navy)}
+.stamp.pre{color:#B4330F}
+.stamp.pre::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--start)}
+.stamp.live::before{background:var(--track);animation:pulse 1.6s ease-out infinite}
+.stamp small{font:400 12px var(--body);letter-spacing:0;color:var(--pr-muted)}
+.stamp .po{display:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(231,30,37,.6)}70%{box-shadow:0 0 0 7px rgba(231,30,37,0)}100%{box-shadow:0 0 0 0 rgba(231,30,37,0)}}
+@media (prefers-reduced-motion:reduce){.stamp.live::before{animation:none}}
 
 @media print{
   :root{--pr-ink:#000;--pr-muted:#3B4452;--pr-line:#B9C3D0;--pr-line-2:#9AA7B8}
   html,body{background:#fff;color:#000}
   .bar{display:none}
+  .stamp .so{display:none}.stamp .po{display:inline}.stamp::before{display:none}
   .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
   .sheet,.meta b,.ev,td,.sign{color:#000}
   .brandrow,.org,h1,.ev,.meta{break-inside:avoid;page-break-inside:avoid}
@@ -94,7 +114,7 @@ thead{display:table-header-group}
 </head>
 <body>
 <div class="bar">
-  <img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+  <img class="lg-ss" id="barLogo" alt="SakhStart">
   <b id="barName">Протокол</b>
   <select id="mode">
     <option value="overall">Итоговый: общий рейтинг по категориям</option>
@@ -102,7 +122,7 @@ thead{display:table-header-group}
     <option value="start">Стартовый протокол</option>
   </select>
   <select id="grp"><option value="">все дистанции и категории</option></select>
-  <label><input type="checkbox" id="showChip"> чипы</label>
+  <label id="chipBox"><input type="checkbox" id="showChip"> чипы</label>
   <label><input type="checkbox" id="showSplits"> отсечки</label>
   <label><input type="checkbox" id="showDnf" checked> не финишировали</label>
   <label><input type="checkbox" id="showCoach" checked> тренеры</label>
@@ -126,11 +146,19 @@ const kind=new URLSearchParams(location.search).get("kind");
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
 });
 const dateRu=d=>{ if(!d) return ""; const [y,m,dd]=d.split("-"); return `${dd}.${m}.${y}`; };
-const BRAND=`<div class="brandrow"><span class="logos"><img class="lg-sakh" src="/assets/sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="/assets/flaso-light.png" alt="ФЛАСО"></span><img class="lg-ss" src="/assets/sakhstart.svg" alt="SakhStart"></div>`;
+const PUB=window.PUB, SLUG=PUB?PUB[1]:"", A=window.ASSETS||"/assets/";
+$("barLogo").src=A+"sakhstart-dark.svg";
+const BRAND=`<div class="brandrow"><span class="logos"><img class="lg-sakh" src="${A}sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="${A}flaso-light.png" alt="ФЛАСО"></span><img class="lg-ss" src="${A}sakhstart.svg" alt="SakhStart"></div>`;
+if(PUB){
+  // публичный протокол: без чипов, без CSV из закрытого API, со ссылкой на страницу события
+  $("csv").remove(); $("chipBox").remove();
+  const b=document.createElement("a"); b.className="back"; b.href="/r/"+SLUG; b.textContent="← к странице события"; $("barLogo").after(b);
+}
 const gkey=x=>(x.distance||"")+"|"+(x.category||"");
 const gtitle=(dist,cat)=>[dist,cat].filter(Boolean).join(" · ")||"Все участники";
 
 async function load(){
+  if(PUB) return loadPublic();
   if(!eid){$("sheet").innerHTML='<div class="empty">Не выбрано соревнование. Откройте протокол из интерфейса.</div>';return;}
   const r=await fetch(`/api/events/${encodeURIComponent(eid)}/results`,{headers:{"X-Requested-With":"timing-hub"}});
   if(!r.ok){$("sheet").innerHTML='<div class="empty">Не удалось загрузить результаты</div>';return;}
@@ -145,6 +173,49 @@ async function load(){
   if(kind==="start") $("mode").value="start";
   else if(kind==="results"&&$("mode").value==="start") $("mode").value="overall";
   render();
+}
+async function getPub(name){
+  const r=await fetch(`/r/${SLUG}/${name}`,{cache:"no-store"});
+  if(!r.ok){ r.text().catch(()=>{}); if(r.status===404||r.status===403) return null; throw new Error("HTTP "+r.status); }
+  const d=await r.json();
+  if(d.finished||d.not_seen){ ["finished","on_course","not_seen","devices"].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; }); }
+  if(d.event&&!Array.isArray(d.event.waves)) d.event.waves=[];
+  return d;
+}
+function pubEmpty(title,text){
+  $("sheet").innerHTML=`${BRAND}<div class="empty"><b>${esc(title)}</b>${esc(text)}<br><br><a href="/r/${esc(SLUG)}">← к странице события</a></div>`;
+  document.querySelector(".bar").classList.add("off");
+}
+async function loadPublic(){
+  try{ [R,SL]=await Promise.all([getPub("results.json"),getPub("startlist.json")]); }
+  catch(e){ return pubEmpty("Не удалось загрузить протокол","Проверьте интернет и обновите страницу."); }
+  if(!R&&!SL) return pubEmpty("Протокол ещё не опубликован","Он появится здесь, когда секретарь соревнований его опубликует.");
+  const ev=(R||SL).event;
+  document.title=(R?"Протокол — ":"Стартовый протокол — ")+ev.name;
+  $("barName").textContent=ev.name;
+  [...$("mode").options].forEach(o=>{ o.hidden=o.disabled=o.value==="start"?!SL:!R; });
+  const keys=[...new Set(R?R.finished.concat(R.on_course,R.not_seen).map(gkey):SL.heats.map(gkey))].sort();
+  const prev=LS.get("protocol.grp","");
+  $("grp").innerHTML='<option value="">все дистанции и категории</option>'+keys.map(k=>{const [d,c]=k.split("|");return `<option value="${esc(k)}">${esc(gtitle(d,c))}</option>`;}).join("");
+  if(keys.includes(prev)) $("grp").value=prev;
+  if(kind==="start"&&SL||!R) $("mode").value="start";
+  else if($("mode").value==="start"||$("mode").selectedIndex<0) $("mode").value="overall";
+  render();
+  setInterval(refresh,15000);
+}
+// предварительные результаты во время старта — обновляем каждые 15 с
+const liveOn=()=>!!(PUB&&R&&R.final===false&&R.event&&R.event.status==="running");
+async function refresh(){
+  if(!liveOn()||document.hidden) return;
+  try{ const d=await getPub("results.json"); if(!d) return; R=d; }catch(e){ return; }
+  if($("mode").value==="start") return;
+  const y=window.scrollY; render(); window.scrollTo(0,y);
+}
+function stampHtml(){
+  if(!PUB||!R) return "";
+  if(R.final) return '<div class="stamp">Официальные результаты</div>';
+  const now=new Date(), live=liveOn();
+  return `<div class="stamp pre${live?" live":""}"><span>Предварительные результаты${live?'<span class="so"> · обновляются автоматически</span>':""}<span class="po"> · по состоянию на ${now.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span></span>${live?`<small class="so">обновлено в ${now.toLocaleTimeString("ru-RU")}</small>`:""}</div>`;
 }
 async function loadStart(){
   const r=await fetch(`/api/events/${encodeURIComponent(eid)}/startlist`,{headers:{"X-Requested-With":"timing-hub"}});
@@ -167,7 +238,7 @@ function headHtml(ev,title){
 }
 function renderStart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
-  const ev=R.event, gf=$("grp").value, coach=$("showCoach").checked;
+  const ev=(R||SL).event, gf=$("grp").value, coach=$("showCoach").checked;
   const anyCoach=SL.heats.some(h=>h.entries.some(e=>e.coach)), anySeed=SL.heats.some(h=>h.entries.some(e=>e.seed));
   const anyLane=SL.heats.some(h=>h.entries.some(e=>e.lane));
   let body="";
@@ -180,22 +251,23 @@ function renderStart(){
       ${h.entries.map(e=>`<tr>${anyLane?`<td class="c"><b>${e.lane??""}</b></td>`:""}<td class="c">${esc(e.bib)}</td><td>${esc(e.name||"")}</td><td class="c">${esc(e.birth_year||"")}</td><td>${esc(e.team||"")}</td>
         ${coach&&anyCoach?`<td>${esc(e.coach||"")}</td>`:""}${anySeed?`<td class="r">${esc(e.seed||"")}</td>`:""}<td></td></tr>`).join("")}</tbody></table>`;
   });
-  if(!body) body='<div class="empty">Забегов пока нет — сформируйте их во вкладке «Регистрация».</div>';
+  if(!body) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Забегов пока нет — сформируйте их во вкладке «Регистрация».</div>';
   $("sheet").innerHTML=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ")+body+
     `<div class="note">Забеги сформированы по заявленным результатам. Колонка «Результат» — для записи судьями.</div>`+signs(ev)+
     `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`;
 }
 
 function render(){
-  if(!R) return;
+  if(!R){ if(PUB&&SL) renderStart(); return; }
   const ev=R.event, mode=$("mode").value, gf=$("grp").value;
   if(mode==="start") return renderStart();
   const coachOn=$("showCoach").checked&&R.finished.concat(R.not_seen).some(x=>x.coach);
-  const chip=$("showChip").checked, spl=$("showSplits").checked, dnf=$("showDnf").checked;
-  const fin=ev.finish_device, splitDevs=R.devices.filter(d=>d!==fin);
+  const chip=!PUB&&$("showChip").checked, spl=$("showSplits").checked, dnf=$("showDnf").checked;
+  const fin=ev.finish_device, splitDevs=(R.devices||[]).filter(d=>d!==fin);
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
   const anyTeam=R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team), hasHeats=ev.waves.length>0;
-  const allManual=R.finished.length&&R.finished.every(x=>x.manual.includes(fin)), someManual=R.finished.some(x=>x.manual.includes(fin));
+  const man=x=>(x.manual||[]).includes(fin);
+  const allManual=R.finished.length&&R.finished.every(man), someManual=R.finished.some(man);
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
   const startTxt=ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
 
@@ -208,8 +280,10 @@ function render(){
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
     ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
     <td class="r"><b>${esc(res)}</b></td>${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
-  const handNote=x=>x.manual&&x.manual.includes(fin)&&!allManual?"р":"";
-  const dnfRows=(list,withHeat)=>list.map(x=>tr(x,"—",withHeat,x.last_point?"DNF":"DNS","")).join("");
+  const handNote=x=>man(x)&&!allManual?"р":"";
+  // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
+  const outCode=x=>x.status||(x.last_point?"DNF":"DNS");
+  const dnfRows=(list,withHeat)=>list.map(x=>tr(x,"—",withHeat,outCode(x),"")).join("");
 
   let body="";
   if(mode==="overall"){
@@ -237,14 +311,18 @@ function render(){
   if(allManual) notes.push("Хронометраж ручной, результаты округлены до 0,1 с в большую сторону.");
   else if(someManual) notes.push("«р» — результат по ручному хронометражу (округлён до 0,1 с в большую сторону).");
   if(mode==="overall"&&hasHeats) notes.push("Места определены по результатам всех забегов в категории; в скобках — место в забеге. Равный результат в разных забегах — одно место.");
-  if(dnf&&(R.on_course.length||R.not_seen.length)) notes.push("DNS — не стартовал, DNF — не финишировал.");
+  if(dnf&&(R.on_course.length||R.not_seen.length)){
+    const codes=new Set(R.on_course.concat(R.not_seen).map(outCode));
+    const more=[["DQ","дисквалифицирован"],["NM","нет результата"]].filter(([k])=>codes.has(k)).map(([k,v])=>`, ${k} — ${v}`).join("");
+    notes.push(`DNS — не стартовал, DNF — не финишировал${more}.`);
+  }
 
   $("sheet").innerHTML=`
     ${BRAND}${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
     <h1>ПРОТОКОЛ РЕЗУЛЬТАТОВ</h1>
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>
-    ${body}
+    ${stampHtml()}${body}
     ${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}
     <div class="sign">
       <span>Главный судья</span><span class="u"></span><span class="nm">${esc(ev.chief_judge||"/____________________/")}</span>

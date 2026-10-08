@@ -175,6 +175,44 @@ button.ghost:hover{border-color:var(--hover-line);background:var(--soft)}
 .list .dl{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:13px;font-weight:700;color:var(--ok)}
 .list .dl::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 
+/* страница события: статус в шапке, плитки, документы */
+.band .lead{white-space:pre-line}
+.band .st{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;font-weight:700;line-height:1.3}
+.band .st::before{content:"";flex:none;width:8px;height:8px;border-radius:50%}
+.band .st.reg{color:var(--live)}
+.band .st.reg::before{background:var(--live);box-shadow:0 0 0 3px rgba(62,212,138,.22)}
+.band .st.run{color:#fff}
+.band .st.run::before{background:var(--track);animation:pulse 1.6s ease-out infinite}
+.band .st.fin{color:var(--night-muted)}
+.band .st.fin::before{background:var(--night-muted)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(231,30,37,.65)}70%{box-shadow:0 0 0 7px rgba(231,30,37,0)}100%{box-shadow:0 0 0 0 rgba(231,30,37,0)}}
+h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:16px}
+.tile{position:relative;display:flex;flex-direction:column;gap:3px;min-height:104px;padding:14px 14px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);color:inherit;text-decoration:none;box-shadow:var(--shadow);transition:border-color .15s;-webkit-tap-highlight-color:transparent}
+.tile:hover{border-color:var(--track)}
+.tile:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.tile svg{flex:none;color:var(--track)}
+.tile b{font:600 19px/1.15 var(--head);letter-spacing:.2px;margin-top:auto;padding-top:8px;overflow-wrap:anywhere}
+.tile small{font-size:13px;line-height:1.3;color:var(--muted);overflow-wrap:anywhere}
+.tile svg.xa{position:absolute;right:12px;top:12px;color:var(--muted)}
+.tile.hot{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
+.tile .live,.list .run{display:inline-flex;align-items:center;gap:7px;color:var(--bad);font-weight:700}
+.tile .live::before,.list .run::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--track);animation:pulse 1.6s ease-out infinite}
+.docs{margin-top:12px;scroll-margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.docs h2{font-size:20px;line-height:1.2;padding:16px 16px 10px}
+.docs a{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 16px;border-top:1px solid var(--line);color:inherit;text-decoration:none;transition:background-color .15s}
+.docs a:hover{background:var(--soft)}
+.docs a:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
+.docs .fx{flex:none;display:flex;align-items:flex-end;justify-content:center;width:34px;height:40px;padding-bottom:5px;border:1px solid var(--field-line);border-radius:3px 10px 3px 3px;font:600 10px/1 var(--head);letter-spacing:.4px;text-transform:uppercase;color:var(--bad);background:var(--field)}
+.docs .t{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere;line-height:1.3}
+.docs .t small{display:block;font-weight:400;font-size:13px;color:var(--muted)}
+.state.calm .ic{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+.list .fin{display:block;margin-top:6px;font-size:13px;font-weight:700;color:var(--muted)}
+.list .run{margin-top:6px;font-size:13px}
+.sig .staff{margin-top:8px}
+.sig .staff a{color:var(--muted);font-size:13px;letter-spacing:0;text-underline-offset:3px}
+.sig .staff a:hover{color:var(--ink)}
+
 .muted{color:var(--muted)}
 .foot{margin-top:18px;font-size:13px;color:var(--muted);text-align:center;line-height:1.45}
 .sig{flex:none;padding:18px 16px 24px;text-align:center;font-size:12px;letter-spacing:.3px;color:var(--muted)}
@@ -185,7 +223,7 @@ button.ghost:hover{border-color:var(--hover-line);background:var(--soft)}
 </head>
 <body>
 <div id="root"><header class="band"><div class="in"><div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div></div></header><div class="card muted">Загрузка…</div></div>
-<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО</footer>
+<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО<div class="staff"><a href="/login">Вход для организаторов</a></div></footer>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -195,7 +233,20 @@ const dRu=d=>{if(!d)return"";const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d);return m?`
 const dtRu=d=>{if(!d)return"";const t=d.slice(11,16);return dRu(d)+(t?" до "+t:"");};
 const parts=location.pathname.replace(/\/+$/,"").split("/");
 const slug=parts[2]||"";
-let INFO=null;
+let INFO=null, CARD=null;
+// ссылки из карточки события: свой сайт — относительной ссылкой, чужие — как есть; только http(s)
+const href=u=>{if(!u)return"";try{const x=new URL(u,location.href);if(!/^https?:$/.test(x.protocol))return"";return x.origin===location.origin?x.pathname+x.search+x.hash:x.href;}catch(e){return"";}};
+const isExt=u=>/^https?:/.test(u);
+const host=u=>{try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return"";}};
+const dShort=d=>{const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d||"");return m?{y:m[1],m:+m[2],d:+m[3]}:null;};
+function dRange(a,b){
+  const x=dShort(a),y=dShort(b); if(!x) return a||""; if(!y||b===a) return dRu(a);
+  if(x.y===y.y&&x.m===y.m) return `${x.d}–${y.d} ${months[y.m-1]} ${y.y}`;
+  if(x.y===y.y) return `${x.d} ${months[x.m-1]} – ${y.d} ${months[y.m-1]} ${y.y}`;
+  return dRu(a)+" – "+dRu(b);
+}
+const dtComma=d=>{if(!d)return"";const t=String(d).slice(11,16);return dRu(d)+(t?", "+t:"");};
+const fsize=n=>!n?"":n<1024*1024?Math.max(1,Math.round(n/1024))+" КБ":(n/1048576).toFixed(1).replace(".",",")+" МБ";
 const LOGOS=`<div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div>`;
 const band=inner=>`<header class="band"><div class="in">${LOGOS}${inner||""}</div></header>`;
 
@@ -204,14 +255,88 @@ async function main(){
   try{
     const r=await fetch(`/r/${slug}/info`); const d=await r.json();
     if(!r.ok) throw new Error(d.error||"ошибка");
-    INFO=d; document.title="Регистрация — "+d.name; render();
+    INFO=d; CARD=d.card&&typeof d.card==="object"?d.card:null;
+    if(CARD){ document.title=d.name; layout(); }
+    else { document.title="Регистрация — "+d.name; render(); }
   }catch(e){ $("root").innerHTML=band()+`<div class="card state"><span class="ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><div><b>Регистрация не найдена.</b><div class="muted">Проверьте ссылку у организатора.</div></div></div>`; }
 }
 async function listOpen(){
-  let ev=[]; try{ev=(await (await fetch("/r/api/open")).json()).events||[];}catch(e){}
+  const year=new Date().getFullYear();
+  const [ev,cal]=await Promise.all([
+    fetch("/r/api/open").then(r=>r.json()).then(d=>d.events||[]).catch(()=>[]),
+    fetch(`/r/api/calendar?year=${year}`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   $("root").innerHTML=band(`<h1>Регистрация на соревнования</h1>`)+`
-    <div class="list">${ev.map(e=>`<a href="/r/${esc(e.slug)}"><b>${esc(e.name)}</b><span class="muted">${esc([dRu(e.date),e.place].filter(Boolean).join(" · "))}</span>${e.deadline?`<div class="dl">приём заявок ${esc(dtRu(e.deadline))}</div>`:""}</a>`).join("")||'<div class="card muted">Сейчас нет открытых регистраций.</div>'}</div>`;
+    <div class="list">${ev.map(e=>`<a href="/r/${esc(e.slug)}"><b>${esc(e.name)}</b><span class="muted">${esc([dRu(e.date),e.place].filter(Boolean).join(" · "))}</span>${e.deadline?`<div class="dl">приём заявок ${esc(dtRu(e.deadline))}</div>`:""}</a>`).join("")||'<div class="card muted">Сейчас нет открытых регистраций.</div>'}</div>`
+    +calendarList(cal,new Set(ev.map(e=>e.slug)));
 }
+// «Ближайшие и недавние»: идут → предстоящие по дате → 5 последних завершённых с результатами
+function calendarList(cal,skip){
+  if(!cal||!Array.isArray(cal.events)) return "";
+  const all=cal.events.filter(e=>e&&href(e.page)&&!skip.has(e.slug));
+  const byDate=(a,b)=>String(a.date||"").localeCompare(String(b.date||""));
+  const pick=[...all.filter(e=>e.status==="running").sort(byDate),
+    ...all.filter(e=>e.status==="planned").sort(byDate),
+    ...all.filter(e=>e.status==="finished"&&e.results).sort(byDate).reverse().slice(0,5)];
+  if(!pick.length) return "";
+  const badge=e=>e.status==="running"?`<span class="run">${e.results_live?"Идёт старт · результаты онлайн":"Идёт старт"}</span>`
+    :e.status==="finished"?`<span class="fin">Результаты</span>`
+    :e.reg&&e.reg.open?`<div class="dl">Регистрация открыта</div>`:"";
+  return `<h2 class="sect">Ближайшие и недавние события</h2>
+    <div class="list">${pick.map(e=>`<a href="${esc(href(e.page))}"><b>${esc(e.name)}</b><span class="muted">${esc([dRange(e.date,e.date_end),e.city||e.place].filter(Boolean).join(" · "))}</span>${badge(e)}</a>`).join("")}</div>`;
+}
+// страница события (сервер прислал card): шапка со статусом → протоколы и материалы → регистрация
+function headerCard(){
+  const d=INFO,c=CARD;
+  const when=dRange(c.date||d.date,c.date_end), where=[c.place||d.place,c.city].filter(Boolean).join(", ");
+  const st=c.status==="running"?`<div class="st run">${c.results_live?"Идёт старт — результаты онлайн":"Идёт старт"}</div>`
+    :c.status==="finished"?`<div class="st fin">Соревнование завершено</div>`
+    :d.open?`<div class="st reg">Регистрация открыта${d.deadline?" до "+esc(dtComma(d.deadline)):""}</div>`:"";
+  return band(`
+    ${d.organizer?`<div class="org">${esc(d.organizer)}</div>`:""}
+    <h1>${esc(d.name||c.name)}</h1>
+    <div class="meta">${when?`<span>Дата: <b>${esc(when)}</b></span>`:""}${where?`<span>Место: <b>${esc(where)}</b></span>`:""}${d.start_clock?`<span>Начало: <b>${esc(d.start_clock)}</b></span>`:""}</div>
+    ${c.note?`<div class="lead">${esc(c.note)}</div>`:""}${st}`);
+}
+const IC={
+  start:'<path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/>',
+  res:'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2.5M9.5 2.5h5M12 2.5V6"/>',
+  live:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9.2 5 2.8-5 2.8z"/>',
+  photo:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/>'};
+function tile(url,ic,title,sub,cls){
+  const h=href(url); if(!h) return "";
+  const ext=isExt(h);
+  return `<a class="tile${ext?" ext":""}${cls?" "+cls:""}" href="${esc(h)}"${ext?' target="_blank" rel="noopener"':""}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[ic]}</svg>${ext?'<svg class="xa" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>':""}<b>${esc(title)}</b><small>${sub}</small></a>`;
+}
+function eventBlock(head){
+  const c=CARD, live=!!c.results_live;
+  const tiles=[
+    tile(c.start_list,"start","Стартовый протокол","Забеги и стартовые номера"),
+    tile(c.results,"res","Результаты",live?'<span class="live">онлайн</span>':c.status==="finished"?"Итоговый протокол":"Протокол результатов",live?"hot":""),
+    tile(c.live,"live","Трансляция",esc(host(c.live)||"видео")),
+    tile(c.photo,"photo","Фото",esc(host(c.photo)||"фотоальбом")),
+    ...(Array.isArray(c.links)?c.links:[]).filter(l=>l&&l.url).map(l=>tile(l.url,"link",l.title||host(l.url)||"Ссылка",esc(host(l.url))))].join("");
+  const files=(Array.isArray(c.files)?c.files:[]).filter(f=>f&&href(f.url));
+  const docs=files.length?`<div class="docs" id="docs"><h2>Документы</h2>${files.map(f=>{
+    const ext=String(f.ext||(/\.(\w{1,5})$/.exec(f.title||"")||[])[1]||"файл").slice(0,4), h=href(f.url);
+    return `<a href="${esc(h)}"${isExt(h)?' target="_blank" rel="noopener"':""}><span class="fx" aria-hidden="true">${esc(ext)}</span><span class="t">${esc(f.title||"Документ")}<small>${esc([ext.toUpperCase(),fsize(f.size)].filter(Boolean).join(" · "))}</small></span></a>`;}).join("")}</div>`:"";
+  if(!tiles&&!docs) return "";
+  return (head&&tiles?'<h2 class="sect">Материалы соревнования</h2>':"")+(tiles?`<div class="tiles">${tiles}</div>`:"")+docs;
+}
+function layout(){
+  const d=INFO,c=CARD;
+  const regFirst=d.open&&c.status==="planned"&&!c.results;
+  const ev=eventBlock(regFirst);
+  let reg="";
+  if(d.open) reg=(ev&&!regFirst?'<h2 class="sect">Регистрация</h2>':"")+(d.info?`<div class="info">${esc(d.info)}</div>`:"")+'<section id="regbox"></section>';
+  else if(c.reg&&c.status!=="finished") reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`;
+  const empty=!ev&&!reg?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
+  $("root").innerHTML=headerCard()+(regFirst?reg+ev:ev+reg)+empty;
+  if(d.open) render();
+}
+// куда рисовать форму: на странице события — в блок регистрации, иначе (старый сервер) — вся страница
+function paint(html){ if(CARD&&$("regbox")) $("regbox").innerHTML=html; else $("root").innerHTML=header()+html; }
+function toTop(){ const b=CARD&&$("regbox"); if(b) b.scrollIntoView(); else window.scrollTo(0,0); }
 function header(){
   const d=INFO;
   return band(`
@@ -226,9 +351,9 @@ function field(id,label,req,attrs="",hint=""){
 }
 function render(keep){
   const d=INFO;
-  if(!d.open){ $("root").innerHTML=header()+`<div class="card state"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`; return; }
+  if(!d.open){ paint(`<div class="card state"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`); return; }
   const one=d.distances.length===1;
-  $("root").innerHTML=header()+modeSwitch("one")+`
+  paint(modeSwitch("one")+`
   <form id="f" novalidate>
     <div class="card"><h2>Участник</h2>
       <div class="grid">
@@ -266,7 +391,7 @@ function render(keep){
     <button id="send" type="submit">Отправить заявку</button>
     <div class="formerr" id="formErr"></div>
   </form>
-  <div class="foot">Заявку проверит секретарь соревнований. Стартовый номер и забег будут в стартовом протоколе.</div>`;
+  <div class="foot">Заявку проверит секретарь соревнований. Стартовый номер и забег будут в стартовом протоколе.</div>`);
   if(keep){ ["team","coach","contact"].forEach(k=>$(k).value=keep[k]||""); }
   $("birth_date").max=new Date().toISOString().slice(0,10);
   $("birth_date").addEventListener("change",minorCheck);
@@ -279,7 +404,7 @@ let TEAM={check:null,keep:{}};
 function renderTeam(){
   const d=INFO, k=TEAM.keep;
   if(!d.open) return render();
-  $("root").innerHTML=header()+modeSwitch("team")+`
+  paint(modeSwitch("team")+`
   <form id="tf" novalidate>
     <div class="card"><h2>Команда</h2>
       <div class="grid">
@@ -306,7 +431,7 @@ function renderTeam(){
     <button id="t_send" type="submit" disabled>Отправить заявку команды</button>
     <div class="formerr" id="formErr"></div>
   </form>
-  <div class="foot">Заявки проверит секретарь соревнований. Стартовые номера и забеги будут в стартовом протоколе.</div>`;
+  <div class="foot">Заявки проверит секретарь соревнований. Стартовые номера и забеги будут в стартовом протоколе.</div>`);
   ["team","coach","contact"].forEach(x=>{ if(k[x]) $("t_"+x).value=k[x]; });
   $("t_file").addEventListener("change",teamFile);
   $("tf").addEventListener("submit",teamSubmit);
@@ -361,8 +486,7 @@ async function teamSubmit(ev){
   $("t_send").disabled=false; $("t_send").textContent=`Отправить заявку команды (${TEAM.check?TEAM.check.ok:0})`;
 }
 function teamDone(d){
-  window.scrollTo(0,0);
-  $("root").innerHTML=header()+`<div class="card done">
+  paint(`<div class="card done">
     <div class="big">✓</div>
     <h2>Заявка команды принята</h2>
     <div><b>${esc(d.team||"")}</b></div>
@@ -370,8 +494,8 @@ function teamDone(d){
     ${d.duplicates&&d.duplicates.length?`<div class="muted" style="margin-top:6px">Уже были зарегистрированы (пропущены): ${esc(d.duplicates.join("; "))}</div>`:""}
     <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовые номера и забеги появятся в стартовом протоколе.</div>
     <button class="ghost" id="more">Загрузить ещё один файл</button>
-  </div>`;
-  $("more").onclick=()=>{renderTeam();window.scrollTo(0,0);};
+  </div>`); toTop();
+  $("more").onclick=()=>{renderTeam();toTop();};
 }
 function age(bd){
   const ref=INFO.date?new Date(INFO.date+"T12:00"):new Date(); const b=new Date(bd+"T12:00");
@@ -418,8 +542,7 @@ async function submit(ev){
   $("send").disabled=false; $("send").textContent="Отправить заявку";
 }
 function done(d,body){
-  window.scrollTo(0,0);
-  $("root").innerHTML=header()+`<div class="card done">
+  paint(`<div class="card done">
     <div class="big">✓</div>
     <h2>Заявка принята</h2>
     <div><b>${esc(d.name||"")}</b></div>
@@ -428,8 +551,8 @@ function done(d,body){
     <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовый номер и забег появятся в стартовом протоколе.</div>
     <button class="ghost" id="more">Зарегистрировать ещё одного участника</button>
     <div class="muted" style="font-size:13px;margin-top:8px">Команда и тренер подставятся сами — удобно тренеру, который регистрирует группу.</div>
-  </div>`;
-  $("more").onclick=()=>{render({team:body.team,coach:body.coach,contact:body.contact});window.scrollTo(0,0);};
+  </div>`); toTop();
+  $("more").onclick=()=>{render({team:body.team,coach:body.coach,contact:body.contact});toTop();};
 }
 main();
 </script>
