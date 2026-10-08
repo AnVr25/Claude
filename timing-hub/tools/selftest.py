@@ -563,7 +563,8 @@ def main() -> int:
         http("POST", f"/api/events/{es['id']}", json.dumps({"pub_results": True, "live_url": "https://vk.com/video1",
              "links": "Итоги | https://fla65.ru/news/1\nПлохая | javascript:alert(1)"}).encode(), J)
         code, txt, _ = pub("GET", f"/r/{sslug}/results.json")
-        check("результаты опубликованы — на сайте без чипов", code == 200 and '"chip"' not in txt and "Петров" in txt, txt[:200])
+        check("результаты опубликованы — на сайте без чипов, с результатом", code == 200 and '"chip"' not in txt and "Петров" in txt
+              and any(x.get("result") == "7.94" for x in json.loads(txt)["finished"]), txt[:300])
         code, txt, _ = pub("GET", f"/r/{sslug}/info")
         cd = json.loads(txt).get("card", {})
         check("страница события: ссылки только http(s), трансляция, протокол",

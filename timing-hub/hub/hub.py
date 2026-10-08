@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.0"
+VERSION = "2.1"
 log = logging.getLogger("timing-hub")
 
 
@@ -1753,8 +1753,7 @@ class Hub:
 
     @staticmethod
     def _no_chips(rows: list) -> list:
-        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "result", "status") or
-                 (k == "status" and val)} for r in rows]
+        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id")} for r in rows]
 
     def public_results(self, ev: dict) -> dict:
         r = self.compute(ev)
