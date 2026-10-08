@@ -333,6 +333,7 @@ function layout(){
   const ev=eventBlock(regFirst);
   let reg="";
   if(d.open) reg=(ev&&!regFirst?'<h2 class="sect">Регистрация</h2>':"")+(d.info?`<div class="info">${esc(d.info)}</div>`:"")+'<section id="regbox"></section>';
+  else if(c.status==="planned"&&c.ours!==false) reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>Приём заявок пока не открыт</b><div class="muted">Регистрация появится на этой странице — следите за новостями федерации.</div></div></div>`;
   else if(c.reg&&c.status!=="finished") reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`;
   const empty=!ev&&!reg?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
   $("root").innerHTML=headerCard()+(regFirst?reg+ev:ev+reg)+empty;

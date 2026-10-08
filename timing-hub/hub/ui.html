@@ -51,9 +51,10 @@ a{color:inherit}
 
 /* ── дорожка этапов ── */
 .lane{position:relative;display:flex;align-items:stretch;background:var(--panel);border-bottom:1px solid var(--line);padding:0 18px;position:sticky;top:67px;z-index:20}
-.lane::before,.lane::after{content:"";position:absolute;left:0;right:0;height:1px;background:var(--track);opacity:.28;pointer-events:none}
-.lane::before{top:22px}.lane::after{top:30px}
-.st{position:relative;flex:1;min-width:0;max-width:230px;display:grid;grid-template-columns:auto 1fr;column-gap:10px;padding:10px 12px 10px 0;text-decoration:none;color:var(--muted)}
+/* две линии дорожки под этапами; активный этап — сплошная красная полоса поверх них */
+.st{--lanec:#E71E2566;background:linear-gradient(var(--lanec),var(--lanec)) 0 calc(100% - 9px)/100% 1px no-repeat,
+  linear-gradient(var(--lanec),var(--lanec)) 0 calc(100% - 4px)/100% 1px no-repeat}
+.st{position:relative;flex:1;min-width:0;max-width:none;display:grid;grid-template-columns:auto 1fr;column-gap:10px;padding:10px 12px 18px 0;text-decoration:none;color:var(--muted)}
 .st .pin{grid-row:1/3;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 15px var(--head);background:var(--panel);border:2px solid var(--line);color:var(--muted);position:relative;z-index:1}
 .st b{font:600 15px var(--head);color:var(--ink);white-space:nowrap}
 .st small{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -61,7 +62,8 @@ a{color:inherit}
 .st.warn small{color:var(--start);font-weight:700}
 .st.live .pin{background:var(--track);border-color:var(--track);color:#fff;box-shadow:0 0 0 4px #E71E2530}
 .st.live small{color:var(--track);font-weight:700}
-.st.on::after{content:"";position:absolute;left:0;right:12px;bottom:-1px;height:3px;background:var(--night)}
+.st.on::after,.st.on.done::after{content:"";position:absolute;left:0;right:12px;bottom:3px;height:7px;background:var(--track);border-radius:1px}
+.st.done:not(.on)::after{content:"";position:absolute;left:0;right:12px;bottom:6px;height:1px;background:var(--ok);opacity:.9}
 .st:hover b{color:var(--track)}
 .screens{margin-left:auto;align-self:center;position:relative;padding-left:10px}
 
@@ -325,6 +327,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 .usr{background:var(--night-2);border:1px solid var(--night-line);color:#d5deeb;font:600 14px var(--body);padding:6px 10px}
 .usr:hover{border-color:#4a6491;color:#fff}
 .pubchk{margin:0;font-size:13px}
+.addone{border-bottom:1px solid var(--line);margin-bottom:12px}
 @media (max-width:1100px){
   .health .h:not(.bad){display:none}
   .st{max-width:none}
@@ -332,8 +335,20 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 }
 @media (max-width:900px){
   .logos .lg-sakh,.logos .lg-flaso,.logos .lg-sep{display:none}
-  .bar{gap:10px;flex-wrap:wrap;padding:8px 12px}
-  .evbtn{max-width:56vw}
+  .logos .lg-ss{height:30px}
+  .bar{gap:8px;flex-wrap:wrap;padding:8px 12px;min-height:0;position:relative}
+  .bar .logos{order:1}
+  .bar .clock{order:2;margin-left:auto;font-size:16px;min-width:0}
+  .bar .scr{order:3}.bar .usrwrap{order:4}.bar .gear{order:5}
+  .bar .scr .lbl{display:none}
+  .bar .ev{order:10;flex:1 1 100%;min-width:0}
+  .evbtn{max-width:none;width:100%}
+  .health{order:11;margin-left:0;flex:1 1 100%}
+  .health:not(:has(.h.bad)){display:none}
+  .usr{padding:6px 8px}
+  .menu{max-width:calc(100vw - 24px)}
+  .bar .scr .menu,.bar .usrwrap .menu{position:fixed;left:12px;right:12px;top:54px;min-width:0;max-width:none}
+  .kinds{grid-template-columns:1fr}
   .lane{overflow-x:auto;top:auto;position:relative;padding:0 10px}
   .st{flex:0 0 auto}
   .st b{font-size:14px}
@@ -358,7 +373,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <span class="lg-sep"></span>
     <img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart">
   </a>
-  <div class="evswitch">
+  <div class="evswitch ev">
     <button class="evbtn" id="evBtn" aria-haspopup="true" aria-expanded="false">
       <span class="n" id="evBtnName">Выберите соревнование</span>
       <span class="m" id="evBtnMeta">все соревнования и архив</span>
@@ -372,7 +387,17 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <a class="h" id="hVpn" href="#hw" title="Устройства в VPN">VPN —</a>
   </div>
   <span class="clock" id="hdrClock">--:--:--</span>
-  <div class="evswitch">
+  <div class="evswitch scr">
+    <button class="usr" id="scrBtn" aria-haspopup="true" title="Экраны для судьи, диктора, табло, протокол">
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2"/></svg><span class="lbl"> Экраны</span> ▾</button>
+    <div class="menu right" id="scrMenu">
+      <a id="lnkJudge" target="_blank"><b>Судья на финише ↗</b><small>телефон: старт, финиш, ввод номеров, секундомер</small></a>
+      <a id="lnkAnn" target="_blank"><b>Диктор ↗</b><small>кто подбегает к финишу</small></a>
+      <a id="lnkBoard" target="_blank"><b>Табло ↗</b><small>для экрана у финиша</small></a>
+      <a id="lnkProto" target="_blank"><b>Протокол ↗</b><small>результаты для печати и сайта</small></a>
+    </div>
+  </div>
+  <div class="evswitch usrwrap">
     <button class="usr" id="usrBtn" aria-haspopup="true" title="Пользователь">…</button>
     <div class="menu right" id="usrMenu">
       <div class="small muted" id="usrRole" style="padding:6px 10px"></div>
@@ -393,15 +418,6 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">4</span><b>Старт и финиш</b><small></small></a>
   <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">5</span><b>Результаты</b><small></small></a>
   <a href="#files" data-step="files" class="st" id="stFiles"><span class="pin">6</span><b>Документы</b><small></small></a>
-  <div class="screens">
-    <button id="scrBtn" aria-haspopup="true">Экраны ▾</button>
-    <div class="menu right" id="scrMenu">
-      <a id="lnkJudge" target="_blank"><b>Судья на финише ↗</b><small>телефон: старт, финиш, ввод номеров</small></a>
-      <a id="lnkAnn" target="_blank"><b>Диктор ↗</b><small>кто подбегает к финишу</small></a>
-      <a id="lnkBoard" target="_blank"><b>Табло ↗</b><small>для экрана у финиша</small></a>
-      <a id="lnkProto" target="_blank"><b>Протокол ↗</b><small>результаты для печати и сайта</small></a>
-    </div>
-  </div>
 </nav>
 
 <main>
@@ -475,6 +491,14 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <div><label for="sPhoto">Фото (ссылка на альбом)</label><input id="sPhoto" placeholder="https://disk.yandex.ru/…"></div>
       </div>
       <label class="check"><input type="checkbox" id="sAdaptive"> Адаптивный спорт</label>
+      <div class="regsite">
+        <label class="switch" style="margin-top:14px"><input type="checkbox" id="sReg"><i></i>Приём заявок на сайте открыт</label>
+        <div class="sitegrid">
+          <div><label for="sRegTill">Принимать до</label><input id="sRegTill" type="datetime-local"></div>
+          <div><label for="sDist">Дистанции — по одной в строке *</label><textarea id="sDist" style="min-height:70px" placeholder="60 м&#10;5 км"></textarea></div>
+        </div>
+        <p class="small muted" style="margin:6px 0 0">На странице события появится форма: спортсмен записывается сам, тренер — командой списком (Excel). Заявки приходят на этап «Регистрация»; там же их подтверждают, вносят спортсмена вручную и задают категории.</p>
+      </div>
       <label for="sLinks">Дополнительные ссылки — по одной в строке: <span class="mono">Название | https://…</span></label>
       <textarea id="sLinks" style="min-height:70px" placeholder="Итоги в новостях | https://fla65.ru/news/…&#10;Положение на сайте ВФЛА | https://rusathletics.info/…"></textarea>
       <div class="switches" style="margin-top:12px">
@@ -508,6 +532,19 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <div class="sect">
     <h2>Стартовый список</h2>
     <div class="panel">
+      <div class="addone">
+        <label style="margin-top:0">Добавить спортсмена</label>
+        <div class="regform">
+          <input id="nBib" placeholder="№" inputmode="numeric" aria-label="Стартовый номер">
+          <input id="nName" placeholder="Фамилия Имя" aria-label="Фамилия и имя" style="grid-column:span 2">
+          <input id="nYear" placeholder="Год рожд." inputmode="numeric" aria-label="Год рождения">
+          <input id="nTeam" placeholder="Команда" aria-label="Команда">
+          <input id="nChip" placeholder="Чип (если есть)" aria-label="Чип">
+          <select id="nWave" aria-label="Забег"></select>
+          <button class="primary" id="nAdd">Добавить</button>
+        </div>
+        <p class="small muted" style="margin:6px 0 12px">Или списком: вставьте строки ниже, перетащите Excel / CSV, загрузите файл Wiclax.</p>
+      </div>
       <div class="drop" id="drop">Перетащите сюда CSV или Excel со стартовым списком — или нажмите, чтобы выбрать файл. Можно и вставить строки ниже.</div>
       <details class="small muted" style="margin-bottom:8px"><summary>Какие колонки нужны</summary>
         <p>Порядок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке: можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны для протокола; храните их с согласия участников.</p></details>
@@ -910,6 +947,8 @@ function showTab(){
   document.body.dataset.view = tab;
   document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
   document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === tab));
+  const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
+  if (onStep && lane.scrollWidth > lane.clientWidth) lane.scrollLeft = onStep.offsetLeft - (lane.clientWidth - onStep.offsetWidth) / 2;
   $("lane").classList.toggle("hide", !STEPS.includes(tab));
   $("gear").classList.toggle("on", tab === "hw" || tab === "log" || tab === "users");
   closeMenus();
@@ -1062,6 +1101,9 @@ function renderLane(){
 const heatState = {planned:"ждёт старта", running:"идёт", finished:"завершён"};
 function renderWaves(){
   const ev = curEvent(); if (!ev) return;
+  const wsel = $("nWave"), wprev = wsel.value;
+  wsel.innerHTML = '<option value="">— без забега</option>' + ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("");
+  wsel.value = ev.waves.some(w => w.name === wprev) ? wprev : (ev.waves[0] ? ev.waves[0].name : "");
   $("wavesList").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}">
       <td><input data-f="name" value="${esc(w.name)}" style="width:130px"></td>
       <td><input data-f="category" list="catList" value="${esc(w.category||"")}" style="width:140px"></td>
@@ -1208,6 +1250,21 @@ $("btnClax").onclick = () => {
   };
   i.click();
 };
+$("nAdd").onclick = async () => {
+  const bib = $("nBib").value.trim(), name = $("nName").value.trim().replace(/;/g, " ");
+  if (!bib || !name) { (bib ? $("nName") : $("nBib")).focus(); return toast("Укажите номер и фамилию с именем"); }
+  const lines = $("dEntries").value.split("\n").filter(l => l.trim());
+  if (lines.some(l => l.split(";")[0].trim() === bib) && !confirm(`Номер ${bib} уже есть в списке. Добавить ещё одного с этим номером?`)) return;
+  const clean = (v) => v.trim().replace(/;/g, " ");
+  lines.push([bib, clean($("nChip").value), $("nWave").value, name, clean($("nYear").value), clean($("nTeam").value)].join(";").replace(/;+$/, ""));
+  try{
+    const r = await api(`/api/events/${curId}/entries`, {text: lines.join("\n")});
+    $("dEntriesInfo").textContent = `в списке: ${r.count}`;
+    ["nBib", "nName", "nYear", "nChip"].forEach(i => $(i).value = "");
+    await loadEntries(); loadEvents._sig = null; await loadEvents(); $("nBib").focus(); toast(`${name} добавлен(а)`);
+  }catch(e){ toast("Ошибка: " + e.message); }
+};
+["nBib", "nName", "nYear", "nTeam", "nChip"].forEach(i => $(i).addEventListener("keydown", (e) => { if (e.key === "Enter") $("nAdd").click(); }));
 $("btnEntries").onclick = async () => {
   try{
     const r = await api(`/api/events/${curId}/entries`, {text:$("dEntries").value});
@@ -2004,6 +2061,7 @@ function renderSite(){
   $("sLevel").value = ev.level || (ev.kind === "mass" ? "mass" : "region"); $("sNote").value = ev.note || "";
   $("sLive").value = ev.live_url || ""; $("sPhoto").value = ev.photo_url || ""; $("sAdaptive").checked = !!ev.adaptive;
   $("sLinks").value = ev.links || ""; $("sPubStart").checked = !!ev.pub_start; $("sPubRes").checked = !!ev.pub_results;
+  $("sReg").checked = !!ev.reg_open; $("sRegTill").value = (ev.reg_deadline || "").slice(0, 16); $("sDist").value = ev.reg_distances || "";
   $("sPage").innerHTML = pageLinkHtml(ev); $("sPage").classList.toggle("hide", !ev.page_url);
 }
 function renderPub(){
@@ -2016,8 +2074,11 @@ $("sSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
   const body = {pub_site:$("sSite").checked, ours:$("sOurs").checked, level:$("sLevel").value, note:$("sNote").value.trim(),
     live_url:$("sLive").value.trim(), photo_url:$("sPhoto").value.trim(), adaptive:$("sAdaptive").checked,
-    links:$("sLinks").value.trim(), pub_start:$("sPubStart").checked, pub_results:$("sPubRes").checked};
-  try{ await api(`/api/events/${ev.id}`, body); loadEvents._sig = null; await loadEvents(); renderSite(); toast(body.pub_site ? "Сохранено — событие в календаре fla65.ru" : "Сохранено"); }
+    links:$("sLinks").value.trim(), pub_start:$("sPubStart").checked, pub_results:$("sPubRes").checked,
+    reg_open:$("sReg").checked, reg_deadline:$("sRegTill").value || null, reg_distances:$("sDist").value.trim()};
+  if (body.reg_open && !body.reg_distances) { $("sDist").focus(); return toast("Чтобы открыть приём заявок, укажите хотя бы одну дистанцию"); }
+  try{ await api(`/api/events/${ev.id}`, body); loadEvents._sig = null; regLoaded = null; await loadEvents(); renderSite();
+    toast(body.reg_open ? "Сохранено — приём заявок открыт на странице события" : body.pub_site ? "Сохранено — событие в календаре fla65.ru" : "Сохранено"); }
   catch(e){ toast("Ошибка: "+e.message); }
 };
 [["dPubStart","pub_start","Стартовый протокол"],["dPubRes","pub_results","Результаты"]].forEach(([id, key, what]) => $(id).addEventListener("change", async () => {

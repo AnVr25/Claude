@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.2"
+VERSION = "2.3"
 log = logging.getLogger("timing-hub")
 
 
