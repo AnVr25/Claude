@@ -38,12 +38,14 @@ h1, h2, h3 { font-family: var(--head); font-weight: 600; text-transform: upperca
 .muted { color: var(--muted); }
 
 /* ---------- brand ---------- */
-.brand { display: flex; align-items: center; gap: 10px; font-family: var(--head); font-weight: 600; font-size: 24px; letter-spacing: .04em; color: var(--gto-red); }
-.brand-mark { width: 12px; height: 26px; display: inline-block; background: linear-gradient(90deg, var(--gto-blue) 0 33%, #fff 33% 66%, var(--gto-red) 66%); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line); }
-.brand-sub { color: var(--text); }
-.brand-sub { font-family: var(--body); font-weight: 400; font-size: 13px; letter-spacing: 0; opacity: .7; text-transform: none; }
-.brand-lg { font-size: 34px; }
-.brand-lg .brand-mark { height: 38px; width: 14px; }
+/* Логотип ГТО по брендбуку: аббревиатура из линий, один цвет, без теней и градиентов;
+   охранное поле — толщина линии (заложено в viewBox файла). */
+.brand { display: flex; align-items: center; gap: 12px; }
+.gto-logo { display: block; height: 38px; width: auto; }
+.brand-sub { color: var(--text); font-family: var(--body); font-weight: 400; font-size: 13px; opacity: .7; }
+.gto-full { display: flex; align-items: center; gap: 14px; margin: 4px 0 2px; }
+.gto-full .gto-logo { height: 58px; }
+.gto-name { font: 700 12px/1.3 'PT Sans', var(--body); color: #AF1E28; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -94,7 +96,7 @@ textarea { min-height: 160px; font-family: ui-monospace, Menlo, Consolas, monosp
 .topbar-logo { height: 46px; width: auto; display: block; }
 .topbar-sep { width: 1px; align-self: stretch; background: var(--line); }
 .operator { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.login-logo { width: 190px; height: auto; display: block; margin: 0 auto 10px; }
+.login-logo { width: 170px; height: auto; display: block; margin: 0 auto 6px; }
 .topbar {
   background: #fff; color: var(--text); border-bottom: 4px solid var(--gto-red); display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 10px 20px; flex-wrap: wrap;
@@ -244,6 +246,7 @@ body.can-edit .grid td.res.empty:not(.na):hover::after { content: '+'; color: va
   .topbar { padding: 10px 16px; }
   .brand-sub, .me, .operator, .topbar-sep { display: none; }
   .topbar-logo { height: 34px; }
+  .gto-logo { height: 28px; }
   .toolbar { padding: 12px 16px; position: static; }
   .toolbar select { flex: 1 1 calc(50% - 4px); max-width: none; min-width: 0; }
   .search { flex-basis: 100%; max-width: none; }
