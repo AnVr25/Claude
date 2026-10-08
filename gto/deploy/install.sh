@@ -65,7 +65,8 @@ id gto >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nolo
 mkdir -p "$BASE/app" "$DATA" "$BACKUPS"
 # копируем только код; база живёт в $DATA и при обновлении не затирается
 tar -C "$APP_SRC" --exclude=./data --exclude=./node_modules --exclude='*.sqlite*' -cf - . | tar -C "$BASE/app" -xf -
-chown -R root:root "$BASE/app"
+# если заведён пользователь для удалённых обновлений — код принадлежит ему
+if id gto-deploy >/dev/null 2>&1; then chown -R gto-deploy:gto-deploy "$BASE/app"; else chown -R root:root "$BASE/app"; fi
 chown gto:gto "$DATA"
 chmod 750 "$DATA"
 chmod 700 "$BACKUPS"
