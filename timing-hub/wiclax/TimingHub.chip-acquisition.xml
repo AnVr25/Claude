@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Тип приёма «Timing Hub» для Wiclax (необязательно).
+  Положите этот файл в папку:  <папка установки Wiclax>\Ressources\Acquisitions\
+  (папки Ressources и Acquisitions создайте, если их нет) и перезапустите Wiclax.
+  В списке типов приёма появится «Timing Hub» с портом 9854 по умолчанию.
+  Протокол — стандартный «generic acquisition», поэтому можно обойтись и без
+  этого файла, выбрав в Wiclax тип «Generic / Générique».
+-->
+<Acquisition
+        name="Timing Hub"
+        defaultTCPPort="9854"
+        isWithHeartbeat="1"
+        heartbeatValue="*">
+</Acquisition>

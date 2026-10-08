@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Табло финиша</title>
+<style>
+:root{--bg:#0d0f11;--ink:#f2f3f4;--muted:#8b939a;--accent:#e8603f;--line:#23282d;--mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{display:flex;flex-direction:column;height:100%;padding:3vh 4vw}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
+.name{font-size:clamp(20px,3.2vw,44px);font-weight:700}
+.meta{color:var(--muted);font-size:clamp(14px,1.6vw,22px)}
+.clock{font:700 clamp(70px,17vw,260px)/1 var(--mono);text-align:center;letter-spacing:-.03em;margin:2vh 0}
+.clock.idle{color:var(--muted);font-size:clamp(36px,7vw,100px)}
+h2{margin:0 0 1vh;font-size:clamp(14px,1.5vw,20px);color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+.list{flex:1;overflow:hidden}
+.r{display:grid;grid-template-columns:3.2em 1fr auto;align-items:baseline;gap:1em;padding:.5vh 0;border-bottom:1px solid var(--line);font-size:clamp(22px,3.6vw,52px)}
+.r .p{color:var(--muted);font-family:var(--mono)}
+.r .b{font-weight:700}
+.r .t{font-family:var(--mono)}
+.r.new{animation:flash 2s ease-out}
+@keyframes flash{from{background:var(--accent)}to{background:transparent}}
+.foot{color:var(--muted);font-size:13px;text-align:right}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="name" id="name">Табло</div><div class="meta" id="meta"></div></div>
+  <div class="clock idle" id="clock">ожидание старта</div>
+  <h2>Последние финишировавшие</h2>
+  <div class="list" id="list"></div>
+  <div class="foot">Предварительные результаты · F11 — во весь экран</div>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const eid=new URLSearchParams(location.search).get("event");
+let offset=0,startMs=null,seen=new Set(),first=true;
+function fmt(ms){const n=ms<0;ms=Math.abs(ms);const t=Math.floor(ms/100),h=Math.floor(t/36000),m=Math.floor(t%36000/600),s=Math.floor(t%600/10),d=t%10;
+  return (n?"-":"")+h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"."+d;}
+async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing-hub"}});if(!r.ok)throw new Error(r.status);return r.json();}
+async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_ms-Date.now();}catch(e){}}
+async function load(){
+  if(!eid){$("name").textContent="Не выбрано соревнование";return;}
+  try{
+    const r=await get(`/api/events/${encodeURIComponent(eid)}/results`);
+    const ev=r.event; startMs=ev.start_epoch_ms;
+    $("name").textContent=ev.name;
+    $("meta").textContent=[ev.date,ev.place,`финишировали: ${r.finished.length}`].filter(Boolean).join(" · ");
+    const last=r.finished.slice(-10).reverse();
+    $("list").innerHTML=last.map(x=>{const k=x.chip+x.time,isNew=!first&&!seen.has(k);seen.add(k);
+      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||x.chip.slice(-6))}</span><span class="t">${esc(x.time)}</span></div>`;}).join("");
+    first=false;
+  }catch(e){$("meta").textContent="нет связи с сервером…";}
+}
+function tick(){const c=$("clock");if(startMs){c.classList.remove("idle");c.textContent=fmt(Date.now()+offset-startMs);}else{c.classList.add("idle");c.textContent="ожидание старта";}}
+sync();load();setInterval(tick,100);setInterval(load,1500);setInterval(sync,60000);
+</script>
+</body>
+</html>

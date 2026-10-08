@@ -1,0 +1,1556 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сервер хронометража</title>
+<style>
+:root{
+  --bg:#f3f4f1; --panel:#ffffff; --ink:#16181a; --muted:#646b72; --line:#e2e4e0;
+  --accent:#c8462b; --accent-ink:#fff; --ok:#1f8a4c; --warn:#b54708; --bad:#b42318; --soft:#f7f1ee;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121416; --panel:#1b1e21; --ink:#eceeef; --muted:#9aa2a9; --line:#2b3035;
+        --accent:#e8603f; --soft:#2a1f1b; --ok:#3fbf73; --warn:#f0a03a; --bad:#ff6b5b;}
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{font-weight:700;display:flex;align-items:center;gap:8px}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block}
+nav{display:flex;gap:2px;flex-wrap:wrap}
+nav a{padding:6px 8px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px}
+nav a.on{background:var(--soft);color:var(--accent)}
+nav{align-items:center}
+.ng{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);opacity:.7;margin:0 0 0 10px;font-weight:700}
+.ng:first-of-type{margin-left:8px}
+.hwgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv span:nth-child(odd){color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
+.svc{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.svc:last-child{border-bottom:0}
+.folders{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.folder{border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;background:var(--panel);display:flex;gap:10px;align-items:center}
+.folder:hover{border-color:var(--muted)}
+.folder.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+.folder .ic{font-size:24px;line-height:1}
+.folder b{display:block;font-size:14px}
+.folder small{color:var(--muted)}
+.hwsum{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.hwsum a{color:inherit;text-decoration:none}
+.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hdr-right a{color:var(--muted);font-weight:600;text-decoration:none;font-size:14px}
+.hdr-right a:hover{color:var(--accent)}
+.clock{font:600 15px var(--mono);color:var(--muted)}
+main{max-width:1200px;margin:0 auto;padding:18px 16px 60px}
+h2{font-size:18px;margin:0 0 12px}
+h3{font-size:13px;margin:20px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat b{display:block;font:700 28px var(--mono)}
+.stat span{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;background:var(--panel)}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;position:sticky;top:0;background:var(--panel)}
+.tbl{border:1px solid var(--line);border-radius:12px;overflow:auto}
+.scroll{max-height:520px}
+.mono{font-family:var(--mono)} .muted{color:var(--muted)} .small{font-size:13px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--muted)}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
+.badge.running{background:var(--accent);color:var(--accent-ink)} .badge.finished{background:var(--ok);color:#fff}
+.hand{color:var(--warn);font-weight:700;cursor:help}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:9px;cursor:pointer;text-decoration:none;display:inline-block;white-space:nowrap}
+button:hover,.btn:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.danger{color:var(--bad)} button.sm{padding:4px 9px;font-size:13px}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+textarea{font-family:var(--mono);min-height:170px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.between{justify-content:space-between}
+.form{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.events{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.ev{cursor:pointer} .ev.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+.ev h4{margin:0 0 6px;font-size:16px}
+.bigclock{font:700 clamp(54px,10vw,120px)/1 var(--mono);letter-spacing:-2px;text-align:center;padding:14px 0 6px}
+.bigclock.idle{color:var(--muted);font-size:clamp(28px,5vw,44px);letter-spacing:0}
+.wclock{font:700 30px var(--mono)}
+.feed tr.fin td{background:var(--soft)}
+.feed tr.new td{animation:flash 1.2s ease-out}
+@keyframes flash{from{background:var(--accent);color:var(--accent-ink)}to{}}
+.alerts{display:grid;gap:6px;margin-top:12px}
+.alert{padding:9px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-size:14px}
+.alert.bad{border-color:var(--bad);color:var(--bad)} .alert.warn{border-color:var(--warn);color:var(--warn)}
+.alert.info{color:var(--muted)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:12px;text-align:center;color:var(--muted);font-size:14px;margin-bottom:10px}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.checkbig{text-align:center;padding:20px 10px}
+.checkbig .num{font:800 clamp(64px,14vw,150px)/1 var(--mono)}
+.checkbig .num.unknown{color:var(--bad);font-size:clamp(36px,7vw,72px)}
+.checkbig .sub{color:var(--muted);margin-top:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font:600 13px var(--mono);padding:3px 8px;border-radius:7px;background:var(--line)}
+.toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;z-index:20}
+.toast.show{opacity:1}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+.hide{display:none!important}
+td input.bibedit{width:80px;padding:4px 6px}
+.year{font:800 22px var(--mono);margin:22px 0 8px;display:flex;align-items:baseline;gap:10px}
+.year span{font:600 13px system-ui;color:var(--muted)}
+.month{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px}
+.arow{display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:0}
+.arow .t{font-weight:600}
+.files a{display:inline-block;margin:2px 8px 2px 0;font-size:13px;color:var(--accent);text-decoration:none}
+.arow{background:var(--panel)}
+.flist{display:grid;gap:6px}
+.regtop{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:16px;align-items:start}
+@media (max-width:760px){.regtop{grid-template-columns:1fr}}
+.qr{background:#fff;padding:10px;border-radius:10px;border:1px solid var(--line);display:flex;justify-content:center}
+.qr img,.qr canvas{width:170px;height:170px}
+.switch{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600;margin:0}
+.switch input{width:auto}
+.counts{display:flex;gap:8px;flex-wrap:wrap}
+.counts span{padding:4px 10px;border-radius:99px;background:var(--line);font-size:13px;font-weight:600}
+.counts .p{background:var(--soft);color:var(--accent)}
+.st{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.st.pending{background:var(--soft);color:var(--accent)} .st.approved{background:var(--ok);color:#fff} .st.rejected{background:var(--line);color:var(--muted)}
+tr.rej td{opacity:.55}
+td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width:70px}
+.dupe{color:var(--warn);font-size:12px;font-weight:700}
+.heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
+@media (max-width:520px){.heats{grid-template-columns:1fr}}
+.heat{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--bg)}
+.heat .hh b{font-size:15px}
+.heat table{background:transparent} .heat td{padding:5px 8px;font-size:13px}
+.heat td input.lane{width:46px;padding:3px 5px;text-align:center}
+.heat td select{width:auto;padding:3px 5px;font-size:12px}
+.regform{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-top:10px}
+.frow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
+@media (max-width:640px){.arow{grid-template-columns:1fr}}
+@media (max-width:700px){header{padding:10px 16px}.hdr-right{margin-left:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><i></i>Сервер хронометража</div>
+  <nav>
+    <a href="#overview" data-tab="overview">Обзор</a>
+    <span class="ng">Соревнование</span>
+    <a href="#events" data-tab="events">Соревнования</a>
+    <a href="#reg" data-tab="reg">Регистрация <span class="badge running hide" id="regBadge"></span></a>
+    <a href="#check" data-tab="check">Проверка</a>
+    <a href="#timing" data-tab="timing">Хронометраж</a>
+    <a href="#results" data-tab="results">Результаты</a>
+    <span class="ng">Документы</span>
+    <a href="#files" data-tab="files">Файлы</a>
+    <a href="#archive" data-tab="archive">Архив</a>
+    <span class="ng">Система</span>
+    <a href="#hw" data-tab="hw">Оборудование <span class="dot hide" id="hwDot" style="margin:0 0 0 4px"></span></a>
+    <a href="#log" data-tab="log">Журнал</a>
+  </nav>
+  <div class="hdr-right">
+    <span class="ng" style="margin:0">Экраны</span>
+    <a id="lnkJudge" target="_blank">Судья ↗</a>
+    <a id="lnkAnn" target="_blank">Диктор ↗</a>
+    <a id="lnkBoard" target="_blank">Табло ↗</a>
+    <a id="lnkProto" target="_blank">Протокол ↗</a>
+    <span class="clock" id="hdrClock">--:--:--</span>
+  </div>
+</header>
+<main>
+
+<!-- ОБЗОР -->
+<section id="tab-overview" class="hide">
+  <div class="grid">
+    <div class="card stat"><b id="stEvent" style="font-size:18px">—</b><span>текущее соревнование</span><div class="small muted" id="stEventMeta" style="margin-top:4px"></div></div>
+    <div class="card stat"><b id="stRegs">—</b><span>заявок на рассмотрении</span></div>
+    <div class="card stat"><b id="stReads">0</b><span>отметок в архиве</span></div>
+  </div>
+  <h3>Оборудование <a href="#hw" class="small" style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--accent);text-decoration:none">подробнее →</a></h3>
+  <div class="hwsum">
+    <a href="#hw" class="card stat"><b id="stReaders">0 / 0</b><span>ридеров на связи</span></a>
+    <a href="#hw" class="card stat"><b id="stWiclax" style="font-size:22px">—</b><span>Wiclax</span></a>
+    <a href="#hw" class="card stat"><b id="stVpn">—</b><span>устройств в VPN</span></a>
+    <a href="#hw" class="card stat"><b id="stSvc" style="font-size:20px">—</b><span>службы сервера</span></a>
+    <a href="#hw" class="card stat"><b id="stDisk">—</b><span>свободно на диске</span></a>
+  </div>
+  <h3>Последние отметки</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
+    <tbody id="lastBody"></tbody>
+  </table></div>
+  <p class="small"><a href="/export.csv">Все отметки (CSV)</a> · <a href="/export.csv?filtered=1">Только прохождения (CSV)</a> · <a href="/raw">Сырые строки</a> · <a href="/simple">Простая страница</a></p>
+</section>
+
+<!-- ОБОРУДОВАНИЕ -->
+<section id="tab-hw" class="hide">
+  <div class="row between" style="margin-bottom:6px">
+    <div><h2 style="margin:0">Оборудование и подключения</h2><div class="small muted" id="hwUpd"></div></div>
+    <button id="hwRefresh">Обновить</button>
+  </div>
+  <div class="hwgrid">
+    <div class="card"><h3 style="margin-top:0">Сервер</h3><div class="kv" id="hwServer"></div></div>
+    <div class="card"><h3 style="margin-top:0">Ресурсы</h3><div id="hwRes"></div></div>
+    <div class="card"><h3 style="margin-top:0">Службы</h3><div id="hwSvc"></div></div>
+  </div>
+  <div class="row between" style="margin-top:18px">
+    <h3 style="margin:0">Ридеры</h3>
+    <div class="row"><button class="sm" id="rdSimBtn" title="Виртуальный ридер: прогоняет участников соревнования через сервер в Wiclax">🧪 Симулятор</button><button class="sm" id="rdScanBtn">🔍 Найти ридеры</button><button class="sm" id="rdAddBtn">+ Добавить ридер</button><button class="sm" id="rdBulkBtn">Загрузить список</button></div>
+  </div>
+  <div id="rdScan" class="card hide" style="margin-top:10px">
+    <div class="row" style="align-items:flex-end">
+      <div><label>Сеть ящика</label><input id="scNet" placeholder="10.19.1" style="width:130px"></div>
+      <div><label>Порт ридеров</label><input id="scPort" type="number" value="10000" style="width:100px"></div>
+      <div><label>Ящик (подпись)</label><input id="scBox" placeholder="Финишный ящик" style="width:180px"></div>
+      <button class="primary sm" id="scGo">Найти</button><button class="sm" id="scClose">Закрыть</button>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">Сервер проверит адреса от .1 до .254 в сети ящика (через VPN) и покажет, где отвечает ридер. Занимает несколько секунд. Ящик должен быть включён и на связи.</p>
+    <div id="scRes" style="margin-top:8px"></div>
+  </div>
+  <div id="rdForm" class="card hide" style="margin-top:10px">
+    <div class="form">
+      <div><label>Название ридера *</label><input id="rdId" placeholder="IPICO1" maxlength="32"></div>
+      <div><label>IP-адрес *</label><input id="rdHost" placeholder="10.19.1.61"></div>
+      <div><label>Порт</label><input id="rdPort" type="number" value="10000" min="1" max="65535"></div>
+      <div><label>Где стоит (подпись)</label><input id="rdDev" placeholder="FINISH" list="rdDevList"><datalist id="rdDevList"></datalist></div>
+      <div><label>Ящик / место</label><input id="rdBox" placeholder="Финишный ящик 1"></div>
+      <div><label>Формат</label><select id="rdParser"><option value="ipico">IPICO</option><option value="auto">Другой (автоопределение)</option><option value="wiclax">Готовые строки Wiclax</option><option value="sim">Симулятор (тренировка без железа)</option></select></div>
+    </div>
+    <input type="hidden" id="rdOrig">
+    <div class="row" style="margin-top:12px"><button class="primary" id="rdSaveOn">Сохранить и подключить</button><button id="rdSave">Только сохранить</button><button id="rdCancel">Отмена</button></div>
+    <p class="small muted" style="margin-bottom:0">Сервер сам подключается к ридеру через VPN и переподключается при обрывах. За каждым ридером закрепляется свой постоянный порт для Wiclax — его видно в таблице. Точку («Цель») и дублирующую линию задаёте в Wiclax.</p>
+  </div>
+  <div id="rdBulk" class="card hide" style="margin-top:10px">
+    <label style="margin-top:0">Список ридеров — по строке на ридер: <b>название; IP; порт; точка; ящик</b>. Можно скопировать прямо из Excel.</label>
+    <textarea id="rdBulkText" rows="6" class="mono" placeholder="IPICO1;10.19.1.61;10000;FINISH;Финишный ящик 1&#10;IPICO2;10.19.1.62;10000;FINISH;Финишный ящик 1&#10;ELITE1;10.19.2.61;10000;KM5;Ящик 2 — 5 км"></textarea>
+    <div class="row" style="margin-top:10px"><button class="primary" id="rdBulkSave">Загрузить</button><button id="rdBulkCancel">Отмена</button></div>
+  </div>
+  <div class="tbl" style="margin-top:10px"><table>
+    <thead><tr><th>Ридер</th><th>Адрес</th><th>В Wiclax («Общий», 10.66.0.1)</th><th>Где стоит</th><th>Связь</th><th>Отметок</th><th>Часы ридера</th><th></th></tr></thead>
+    <tbody id="readersBody"></tbody>
+  </table></div>
+  <p class="small muted">«Часы ридера» — насколько время в отметке отличается от времени сервера. Перед стартом проверяйте тестовым чипом: больше ±2 с — синхронизируйте часы ридера.</p>
+  <h3>Wiclax</h3>
+  <div class="tbl"><table><thead><tr><th>Компьютер</th><th>Порт</th><th>Подключён с</th><th>Отправлено отметок</th><th>Режим</th></tr></thead><tbody id="hwWiclax"></tbody></table></div>
+  <div class="card" style="margin-top:10px">
+    <div class="small"><b>Как подключать Wiclax.</b> Один ридер на финише — одно устройство «Общий»: 10.66.0.1, <b id="wxMain">порт 9854</b> (все отметки сразу).</div>
+    <div class="small" style="margin-top:4px">Несколько ридеров (отсечки, дублирующий финиш) — в Wiclax по устройству «Общий» <b>на каждый ридер</b>, порт ридера из таблицы выше. «Цель» и «Бэкап линию» выставляете в Wiclax. Шаблон устройств сохраняется один раз, перед гонкой меняете только «Цель».</div>
+  </div>
+  <details style="margin-top:8px"><summary class="small muted">Дополнительно: порты по точкам (старый способ)</summary>
+  <div class="card" style="margin-top:6px">
+    <div class="small muted">Порт 9855–9860 отдаёт отметки всех ридеров с указанной подписью «Где стоит».</div>
+    <div class="tbl" style="margin-top:8px"><table><thead><tr><th>Порт</th><th>Точки</th><th>Для чего</th><th>Состояние</th><th></th></tr></thead><tbody id="wxPorts"></tbody></table></div>
+    <div class="row" style="margin-top:8px;align-items:flex-end">
+      <div><label>Порт</label><input id="wxPort" type="number" min="9855" max="9860" placeholder="9855" style="width:110px"></div>
+      <div><label>Точки (через запятую)</label><input id="wxDevs" placeholder="KM5" list="rdDevList" style="width:180px"></div>
+      <div><label>Для чего</label><input id="wxName" placeholder="Отсечка 5 км" style="width:200px"></div>
+      <button class="sm" id="wxAdd">Добавить порт</button>
+    </div>
+  </div></details>
+  <h3>Обновление сервера</h3>
+  <div class="card">
+    <div class="row between" style="align-items:center">
+      <div><div class="small muted">Сейчас установлена</div><b id="upVer" class="mono" style="font-size:18px">—</b></div>
+      <div class="row"><input type="file" id="upFile" accept=".zip" class="hide"><button class="primary" id="upBtn">⬆ Установить обновление (timing-hub.zip)</button></div>
+    </div>
+    <div id="upState" class="small" style="margin-top:8px"></div>
+    <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
+    <p class="small muted" style="margin-bottom:0">Перед установкой сервер сам сохраняет прежнюю версию. Если новая не запустится — автоматически вернётся прежняя. Отметки и соревнования не затрагиваются.</p>
+  </div>
+  <h3>VPN-доступы (OpenVPN)</h3>
+  <div class="tbl"><table><thead><tr><th>Устройство (профиль)</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда (внешний IP)</th><th>На связи с</th><th>Трафик</th></tr></thead><tbody id="hwVpn"></tbody></table></div>
+  <div id="hwWgBox" class="hide"><h3>VPN-доступы (WireGuard)</h3>
+  <div class="tbl"><table><thead><tr><th>Устройство</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда</th><th>Трафик</th></tr></thead><tbody id="hwWg"></tbody></table></div></div>
+  <h3>Кто открывал сервер за последний час</h3>
+  <div class="tbl"><table><thead><tr><th>Адрес</th><th>VPN-профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
+  <p class="small muted">Новые VPN-доступы и отзыв: <span class="mono">sudo timing-ovpn add ИМЯ</span> / <span class="mono">sudo timing-ovpn remove ИМЯ</span>. Называйте профили понятно: judge-petrova, wiclax-laptop, router-finish — тогда здесь сразу видно, кто на связи.</p>
+</section>
+
+<!-- ФАЙЛЫ -->
+<section id="tab-files" class="hide">
+  <div class="row between" style="margin-bottom:12px">
+    <div><h2 style="margin:0">Файлы соревнования</h2><div class="small muted">Папки по назначению. «Для судей» видно на телефоне судьи.</div></div>
+    <select id="fEvent" style="width:auto;min-width:260px"></select>
+  </div>
+  <div class="folders" id="fFolders"></div>
+  <div class="card" style="margin-top:12px">
+    <div class="row between" style="margin-bottom:8px"><b id="fTitle">Все файлы</b>
+      <div class="row"><button id="btnSnap" class="sm">Снимок результатов сейчас</button></div></div>
+    <div class="drop" id="fdrop">Перетащите сюда файлы (PDF, Excel, CSV, фото) — или нажмите, чтобы выбрать. Попадут в выбранную папку.</div>
+    <div class="flist" id="fList"></div>
+  </div>
+</section>
+
+<!-- СОРЕВНОВАНИЯ -->
+<section id="tab-events" class="hide">
+  <div class="row between" style="margin-bottom:12px">
+    <h2 style="margin:0">Соревнования</h2>
+    <button class="primary" id="btnNew">+ Новое соревнование</button>
+  </div>
+  <div id="evForm" class="card hide" style="margin-bottom:16px">
+    <h2 id="evFormTitle">Новое соревнование</h2>
+    <div class="form">
+      <div><label>Название *</label><input id="fName" placeholder="Кросс Нации — 10 км"></div>
+      <div><label>Дата</label><input id="fDate" type="date"></div>
+      <div><label>Место</label><input id="fPlace" placeholder="Южно-Сахалинск, парк Гагарина"></div>
+      <div><label>Точка финиша (код ридера)</label><select id="fFinish"></select></div>
+      <div><label>Не считать финишем раньше, сек</label><input id="fMin" type="number" min="0" step="1" value="0"></div>
+      <div><label>Предупреждать, если точка молчит, мин</label><input id="fSilence" type="number" min="0" step="1" value="10"></div>
+      <div><label>Начало соревнований (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
+      <div><label>Организатор (шапка протокола)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
+      <div><label>Главный судья, ФИО</label><input id="fJudge" placeholder="Иванов И. И."></div>
+      <div><label>Главный секретарь, ФИО</label><input id="fSecr" placeholder="Петрова А. А."></div>
+    </div>
+    <label>Заметки</label><input id="fNotes" placeholder="дистанции, круги, особенности">
+    <label style="color:var(--ink);margin-top:12px"><input id="fPush" type="checkbox" checked style="width:auto"> Отправлять старт в Wiclax</label>
+    <label style="color:var(--ink);margin-top:6px"><input id="fSeq" type="checkbox" style="width:auto"> Забеги идут по очереди: старт следующего забега автоматически завершает предыдущий <span class="muted">(стадион, судья с секундомером)</span></label>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="btnSave">Сохранить</button>
+      <button id="btnCancel">Отмена</button>
+      <span class="muted small">Финишную точку можно ввести вручную, если ридер ещё не подключался — например FINISH. Для забегов только с судьёй выберите «JUDGE».</span>
+    </div>
+  </div>
+  <div id="evList" class="events"></div>
+
+  <div id="evDetail" class="hide">
+    <h3>Забеги «<span class="dName"></span>»</h3>
+    <div class="card">
+      <p class="small muted" style="margin-top:0">Забег = группа с общим стартом. У каждого забега своя категория и дистанция — по ним строится протокол: место в забеге и общее место среди всех забегов той же категории и дистанции. Если старт один на всех — забеги не нужны.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Забег</th><th>Категория</th><th>Дистанция</th><th>Участников</th><th>Состояние</th><th></th></tr></thead>
+        <tbody id="wavesList"></tbody>
+      </table></div>
+      <div class="row" style="margin-top:10px">
+        <input id="wName" placeholder="название (пусто = «Забег N»)" style="max-width:220px">
+        <input id="wCat" list="catList" placeholder="категория" style="max-width:160px">
+        <input id="wDist" list="distList" placeholder="дистанция" style="max-width:120px">
+        <button id="btnAddWave">Добавить забег</button>
+      </div>
+    </div>
+    <datalist id="catList"><option>Мальчики до 12 лет<option>Девочки до 12 лет<option>Мальчики до 14 лет<option>Девочки до 14 лет<option>Юноши до 16 лет<option>Девушки до 16 лет<option>Юноши до 18 лет<option>Девушки до 18 лет<option>Юниоры до 20 лет<option>Юниорки до 20 лет<option>Мужчины до 23 лет<option>Женщины до 23 лет<option>Мужчины<option>Женщины<option>Ветераны</datalist>
+    <datalist id="distList"><option>60 м<option>100 м<option>200 м<option>400 м<option>800 м<option>1000 м<option>1500 м<option>3000 м<option>5 км<option>10 км<option>21,1 км<option>42,2 км</datalist>
+
+    <h3>Участники</h3>
+    <div class="card">
+      <div class="drop" id="drop">Перетащите сюда файл CSV или Excel со стартовым списком — или вставьте строки ниже</div>
+      <p class="small muted" style="margin-top:0">Порядок колонок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке — можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны только для протокола; храните их с согласия участников.</p>
+      <textarea id="dEntries" placeholder="Номер;Чип;Забег;ФИО;Год;Команда;Категория&#10;101;E2801160600002084A5C1234;Забег 1;Иванов Иван;2008;СШОР им. Комнацкого;Юноши&#10;15;;Забег 2;Петрова Анна;2009;Холмск"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="btnEntries">Сохранить список</button>
+        <span id="dEntriesInfo" class="small muted"></span>
+        <span style="flex:1"></span>
+        <button id="btnClax" title="Загрузить участников, дистанции и чипы из файла соревнования Wiclax">Импорт из Wiclax (.clax)</button>
+        <a class="btn" id="lnkClax" title="Готовый файл соревнования: дистанции, старты, участники, чипы — открыть в Wiclax">⬇ Файл для Wiclax (.clax)</a>
+        <a class="btn" id="lnkWiclax" title="Стартовый список для импорта в Wiclax">Экспорт для Wiclax (CSV)</a>
+      </div>
+    </div>
+
+    <h3>Файлы</h3>
+    <div class="card row between"><span class="small muted" id="dFilesInfo">Положение, заявки, документы для судей, протоколы, снимки результатов — по папкам.</span><a class="btn" href="#files">Открыть файлы соревнования →</a></div>
+  </div>
+</section>
+
+<!-- РЕГИСТРАЦИЯ -->
+<section id="tab-reg" class="hide">
+  <div class="row between" style="margin-bottom:12px">
+    <div><h2 style="margin:0">Регистрация участников</h2><div class="muted small">Публичная форма → заявки → подтверждение секретарём → забеги по лучшему результату → стартовый протокол.</div></div>
+    <select id="gSelect" style="width:auto;min-width:240px"></select>
+  </div>
+
+  <div class="card">
+    <div class="regtop">
+      <div>
+        <div class="row" style="gap:16px">
+          <label class="switch"><input type="checkbox" id="gOpen"> Приём заявок открыт</label>
+          <div class="row" style="gap:6px"><span class="small muted">до</span><input id="gDeadline" type="datetime-local" style="width:auto"></div>
+          <div class="row" style="gap:6px"><span class="small muted">дорожек</span><input id="gLanes" type="number" min="1" max="50" value="8" style="width:72px"></div>
+        </div>
+        <label>Ссылка для участников</label>
+        <div class="row" style="flex-wrap:nowrap"><input id="gUrl" readonly placeholder="появится после первого открытия приёма заявок"><button id="gCopy">Копировать</button><a class="btn" id="gPreview" target="_blank">Открыть ↗</a></div>
+        <div class="small muted" id="gUrlNote" style="margin-top:4px"></div>
+        <div class="form" style="margin-top:4px">
+          <div><label>Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:120px" placeholder="60 м&#10;100 м&#10;400 м&#10;1000 м"></textarea></div>
+          <div><label>Категории: название;пол;год с;год по <a href="#" id="gRulesDefault" style="color:var(--accent)">образец</a></label><textarea id="gRules" style="min-height:120px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea></div>
+        </div>
+        <label>Пояснение для участников (необязательно)</label><input id="gInfo" placeholder="Выдача номеров с 9:30 у секретариата. Шиповки — не длиннее 6 мм.">
+        <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Текст согласия на обработку персональных данных</summary>
+          <textarea id="gConsent" style="min-height:110px;font-family:inherit" placeholder=""></textarea>
+          <div class="small muted">Пусто — используется стандартный текст (виден выше серым). Согласуйте текст с юристом организации.</div></details>
+        <div class="row" style="margin-top:12px"><button class="primary" id="gSave">Сохранить настройки</button><span class="small muted" id="gSaved"></span></div>
+      </div>
+      <div><div class="qr" id="gQr"><span class="small muted" style="padding:60px 0">QR появится<br>со ссылкой</span></div>
+        <div class="small muted" style="text-align:center;margin-top:6px">QR для афиши и чатов</div>
+        <a class="btn" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR</a></div>
+    </div>
+  </div>
+
+  <h3>Заявки</h3>
+  <div class="card">
+    <div class="row between">
+      <div class="counts" id="gCounts"></div>
+      <div class="row">
+        <select id="gFilter" style="width:auto"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
+        <input id="gSearch" placeholder="поиск: фамилия, команда" style="width:200px">
+        <button id="gApproveAll">Подтвердить все</button>
+        <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
+        <a class="btn" id="gCsv">CSV</a>
+        <a class="btn" id="gTpl" title="Отдать тренеру: он заполнит и загрузит сам через форму или пришлёт вам">⬇ Шаблон Excel</a>
+        <button id="gImport" title="Загрузить заполненный шаблон — заявки сразу подтверждены">Импорт из Excel</button>
+      </div>
+    </div>
+    <details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">+ Внести заявку вручную (без формы, сразу подтверждена)</summary>
+      <div class="regform">
+        <input id="mLast" placeholder="Фамилия"><input id="mFirst" placeholder="Имя"><input id="mBirth" type="date">
+        <select id="mSex"><option value="">пол</option><option>М</option><option>Ж</option></select>
+        <input id="mTeam" placeholder="Команда"><input id="mCoach" placeholder="Тренер"><select id="mDist"></select>
+        <input id="mBest" placeholder="лучший, 12.8"><input id="mRep" placeholder="представитель (до 18 лет)">
+        <button class="primary" id="mAdd">Добавить</button>
+      </div></details>
+  </div>
+  <div class="tbl scroll" style="margin-top:10px;max-height:640px"><table>
+    <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
+    <tbody id="gBody"></tbody>
+  </table></div>
+  <datalist id="gCats"></datalist>
+
+  <h3>Забеги и стартовый список</h3>
+  <div class="card">
+    <div class="row">
+      <button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button>
+      <a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a>
+      <span class="small muted">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</span>
+    </div>
+  </div>
+  <div class="heats" id="gHeatsBox" style="margin-top:12px"></div>
+  <div id="gLoose"></div>
+</section>
+
+<!-- ПРОВЕРКА -->
+<section id="tab-check" class="hide">
+  <div class="row between">
+    <div><h2 style="margin:0">Проверка чипов перед стартом</h2><div class="muted small">Проносите чипы над ковриком — экран покажет номер. Удобно при выдаче стартовых пакетов.</div></div>
+    <div class="row">
+      <label style="margin:0;color:var(--ink)"><input type="checkbox" id="chkSound" checked style="width:auto"> звук</label>
+      <button class="primary" id="btnCheckStart">Начать проверку</button>
+      <button id="btnCheckStop">Остановить</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="checkbig" id="chkBig"><div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div></div>
+  </div>
+  <div class="grid" style="margin-top:12px">
+    <div class="card stat"><b id="chkDone">0 / 0</b><span>проверено</span></div>
+    <div class="card stat"><b id="chkUnknown">0</b><span>чипов не из списка</span></div>
+  </div>
+  <h3>Ещё не проверены</h3><div class="chips" id="chkLeft"></div>
+  <h3>Чипы не из списка</h3><div class="chips" id="chkUnk"></div>
+</section>
+
+<!-- ХРОНОМЕТРАЖ -->
+<section id="tab-timing" class="hide">
+  <div class="row between">
+    <div><h2 style="margin:0" class="tName">Выберите соревнование</h2><div class="muted small" id="tMeta"></div></div>
+    <select id="tSelect" style="width:auto;min-width:240px"></select>
+  </div>
+  <div class="alerts" id="tAlerts"></div>
+
+  <div class="card" style="margin-top:12px" id="singleStart">
+    <div id="tClock" class="bigclock idle">Старт не дан</div>
+    <div class="muted small" style="text-align:center" id="tStartInfo"></div>
+    <div class="row" style="justify-content:center;margin-top:12px">
+      <button class="primary" id="btnStart" style="font-size:20px;padding:12px 36px">СТАРТ</button>
+      <input id="tManual" placeholder="или время: 10:00:00.000" style="width:200px">
+      <button id="btnManual">Задать</button>
+      <button id="btnFinish">Завершить</button>
+      <button class="danger" id="btnReset">Сбросить старт</button>
+    </div>
+  </div>
+  <div class="card hide" style="margin-top:12px" id="wavesStart">
+    <div class="tbl"><table>
+      <thead><tr><th>Забег</th><th>Участников</th><th>Время забега</th><th>Старт · финиш</th><th></th></tr></thead>
+      <tbody id="wavesBody"></tbody>
+    </table></div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="btnNextHeat">+ Следующий забег</button>
+      <span class="small muted" id="seqInfo"></span>
+      <span style="flex:1"></span>
+      <button id="btnFinish2">Завершить соревнование</button></div>
+  </div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card stat"><b id="tFin">0</b><span>финишировали</span></div>
+    <div class="card stat"><b id="tCourse">0</b><span>на трассе</span></div>
+    <div class="card stat"><b id="tNot">0</b><span>не отмечены</span></div>
+    <div class="card stat"><b id="tPend">0</b><span>отсечек без номера</span></div>
+  </div>
+
+  <h3>Ручная отметка</h3>
+  <div class="card">
+    <div class="row">
+      <input id="mBib" placeholder="номер" style="width:110px" inputmode="numeric">
+      <select id="mDev" style="width:auto;min-width:140px"></select>
+      <input id="mTime" placeholder="время (пусто = сейчас)" style="width:210px">
+      <button class="primary" id="btnMark">Добавить</button>
+      <span class="small muted">Если чип не считался. В результатах помечается <span class="hand">✋</span>.</span>
+    </div>
+  </div>
+  <div class="tbl scroll" style="margin-top:10px"><table>
+    <thead><tr><th>Время</th><th>Точка</th><th>Номер</th><th>Кто</th><th></th></tr></thead>
+    <tbody id="manualBody"></tbody>
+  </table></div>
+
+  <h3>Лента отметок ридеров</h3>
+  <div class="tbl scroll"><table class="feed">
+    <thead><tr><th>Время</th><th>С начала</th><th>Номер</th><th>Чип</th><th>Точка</th></tr></thead>
+    <tbody id="feedBody"></tbody>
+  </table></div>
+</section>
+
+<!-- РЕЗУЛЬТАТЫ -->
+<section id="tab-results" class="hide">
+  <div class="row between" style="margin-bottom:8px">
+    <div><h2 style="margin:0" id="rName">Результаты</h2><div class="muted small" id="rMeta"></div></div>
+    <div class="row">
+      <select id="rWave" style="width:auto"></select>
+      <input id="rSearch" placeholder="поиск: номер или чип" style="width:190px">
+      <a class="btn" id="rCsv">Скачать CSV</a>
+      <a class="btn" id="rProto" target="_blank">Протокол для печати ↗</a>
+    </div>
+  </div>
+  <div class="alerts" id="rAlerts"></div>
+  <p class="small muted">Результаты по первому прохождению финиша после старта своего забега. «Место» — в забеге, «Общее» — среди всех забегов той же категории и дистанции. <span class="hand">✋</span> — ручная отметка (время округлено вверх до 0,1 с).</p>
+  <div class="tbl"><table><thead id="rHead"></thead><tbody id="rBody"></tbody></table></div>
+  <h3>На трассе</h3>
+  <div class="tbl"><table><thead id="cHead"></thead><tbody id="cBody"></tbody></table></div>
+  <h3>Не отмечены ни на одной точке</h3>
+  <p id="nList" class="mono small"></p>
+</section>
+
+<!-- АРХИВ -->
+<section id="tab-archive" class="hide">
+  <div class="row between" style="margin-bottom:6px">
+    <h2 style="margin:0">Архив соревнований</h2>
+    <div class="row">
+      <select id="aYear" style="width:auto"></select>
+      <input id="aSearch" placeholder="поиск: название или место" style="width:240px">
+    </div>
+  </div>
+  <p class="small muted">Сюда попадают завершённые соревнования, перенесённые в архив. Протоколы и снимки результатов хранятся вместе с ними.</p>
+  <div id="aList"></div>
+</section>
+
+<!-- ЖУРНАЛ -->
+<section id="tab-log" class="hide">
+  <div class="row between" style="margin-bottom:12px">
+    <h2 style="margin:0">Журнал действий</h2>
+    <label style="margin:0;color:var(--ink)"><input type="checkbox" id="logAll" style="width:auto"> все соревнования</label>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Подробности</th></tr></thead>
+    <tbody id="logBody"></tbody>
+  </table></div>
+</section>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let offset = 0, events = [], curId = null, lastId = 0, lastRes = null, devices = [];
+const statusName = {planned:"запланировано", running:"идёт", finished:"завершено"};
+const curEvent = () => events.find(e => e.id === curId);
+
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2800); }
+async function api(path, body){
+  const o = {headers:{"X-Requested-With":"timing-hub"}};
+  if (body !== undefined){ o.method="POST"; o.headers["Content-Type"]="application/json"; o.body=JSON.stringify(body); }
+  const r = await fetch(path, o);
+  const ct = r.headers.get("content-type")||"";
+  const data = ct.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((data && data.error) || r.status);
+  return data;
+}
+const nowMs = () => Date.now() + offset;
+function fmtElapsed(ms){
+  const neg = ms < 0; ms = Math.abs(ms);
+  const t = Math.floor(ms/100), h = Math.floor(t/36000), m = Math.floor(t%36000/600), s = Math.floor(t%600/10), d = t%10;
+  return (neg?"-":"") + h + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0") + "." + d;
+}
+let actx = null;
+function beep(freq=880, dur=0.12){
+  try{ actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=freq; o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.2, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur); o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">${a.level==="bad"?"⛔ ":a.level==="warn"?"⚠️ ":"ℹ️ "}${esc(a.text)}</div>`).join("");
+
+/* ---------- вкладки ---------- */
+function tabName(){ return (location.hash||"#overview").slice(1); }
+function showTab(){
+  const tab = tabName();
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.tab === tab));
+  if (tab === "results" || tab === "timing") loadResults();
+  if (tab === "timing") loadManual();
+  if (tab === "check") loadCheck();
+  if (tab === "log") loadLog();
+  if (tab === "archive") renderArchive();
+  if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); }
+  if (tab === "files") { filesEv = filesEv || curId; renderFilesTab(); }
+  if (tab === "reg") { renderRegHead(true); loadRegs(); }
+}
+window.addEventListener("hashchange", showTab);
+
+/* ---------- обзор ---------- */
+async function loadStatus(){
+  try{
+    const st = await api("/api/status");
+    offset = st.server_epoch_ms - Date.now();
+    $("stReads").textContent = st.totals.reads;
+    const live = st.sources.filter(s => s.mode !== "http");
+    $("stReaders").textContent = live.filter(s=>s.connected).length + " / " + live.length;
+    $("stWiclax").textContent = st.wiclax_clients.length ? "на связи" : "нет";
+    if (tabName()==="hw") loadReaders();
+  }catch(e){ console.warn(e); }
+}
+async function loadLast(){
+  try{
+    const r = await api("/api/live?limit=15");
+    $("lastBody").innerHTML = r.reads.slice().reverse().map(x =>
+      `<tr><td class="mono">${esc(x.time)}</td><td class="mono">${esc(x.chip)}</td><td>${esc(x.device)}</td><td class="muted">${esc(x.source)}</td></tr>`
+    ).join("") || '<tr><td colspan="4" class="empty">Отметок пока нет</td></tr>';
+  }catch(e){}
+}
+
+/* ---------- соревнования ---------- */
+async function loadDevices(){ try{ devices = (await api("/api/devices")).devices; }catch(e){ devices = []; } }
+async function loadEvents(){
+  const r = await api("/api/events");
+  const sig = JSON.stringify(r.events);
+  if (sig === loadEvents._sig && curEvent()) return;
+  loadEvents._sig = sig;
+  events = r.events;
+  if (curId == null || !curEvent()) {
+    const saved = parseInt(store.get("timing.event")||"", 10);
+    curId = events.some(e=>e.id===saved) ? saved : ((events.find(e=>e.status==="running")||events[0]||{}).id ?? null);
+  }
+  renderEvents();
+}
+function renderEvents(){
+  const active = events.filter(e => !e.archived);
+  $("evList").innerHTML = active.map(e => `
+    <div class="card ev ${e.id===curId?"sel":""}" data-id="${e.id}">
+      <div class="row between"><h4>${esc(e.name)}</h4><span class="badge ${e.status}">${statusName[e.status]||e.status}</span></div>
+      <div class="small muted">${esc(e.date||"без даты")}${e.place?" · "+esc(e.place):""}</div>
+      <div class="small" style="margin-top:6px">Финиш: <b>${esc(e.finish_device||"не выбран")}</b> · участников: ${e.entries_count}${e.waves.length?` · забегов: ${e.waves.length}`:""}${e.files_count?` · файлов: ${e.files_count}`:""}</div>
+      ${e.start_time?`<div class="small mono muted">старт ${esc(e.start_time)}</div>`:""}
+      <div class="row" style="margin-top:10px">
+        <button class="sm" data-act="open">Хронометраж</button>
+        <button class="sm" data-act="edit">Изменить</button>
+        ${e.status==="finished"?'<button class="sm" data-act="reopen">Открыть снова</button><button class="sm" data-act="arch">В архив</button>':""}
+        <button class="sm danger" data-act="del">Удалить</button>
+      </div>
+    </div>`).join("") || `<div class="card empty">${events.length?"Все соревнования в архиве — смотрите вкладку «Архив».":"Соревнований пока нет — создайте первое."}</div>`;
+  const ev = curEvent();
+  $("stEvent").textContent = ev ? ev.name : "—";
+  $("evDetail").classList.toggle("hide", !ev);
+  document.querySelectorAll(".dName").forEach(x => x.textContent = ev ? ev.name : "");
+  $("tSelect").innerHTML = events.filter(e => !e.archived || e.id===curId).map(e => `<option value="${e.id}" ${e.id===curId?"selected":""}>${esc(e.name)}${e.date?" ("+esc(e.date)+")":""}</option>`).join("") || "<option>нет соревнований</option>";
+  $("lnkJudge").href = ev ? "/judge?event="+ev.id : "/judge";
+  $("lnkAnn").href = ev ? "/announcer?event="+ev.id : "#";
+  $("lnkBoard").href = ev ? "/board?event="+ev.id : "#";
+  $("lnkProto").href = ev ? "/protocol?event="+ev.id : "#";
+  $("stEventMeta").textContent = ev ? [ev.date, statusName[ev.status], `участников: ${ev.entries_count}`].filter(Boolean).join(" · ") : "";
+  const pend = events.reduce((n,e) => n + (e.archived?0:(e.regs_pending||0)), 0);
+  $("stRegs").textContent = pend;
+  if (ev) $("dFilesInfo").textContent = ev.files_count ? `Файлов: ${ev.files_count}. Положение, заявки, документы для судей, протоколы — по папкам.` : "Файлов пока нет. Положение, заявки, документы для судей, протоколы — по папкам.";
+  if (tabName()==="files") renderFilesTab();
+  renderWaves(); renderTimingHead(); renderRegHead();
+  if (tabName()==="archive") renderArchive();
+}
+const heatState = {planned:"ждёт старта", running:"идёт", finished:"завершён"};
+function renderWaves(){
+  const ev = curEvent(); if (!ev) return;
+  $("wavesList").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}">
+      <td><input data-f="name" value="${esc(w.name)}" style="width:130px"></td>
+      <td><input data-f="category" list="catList" value="${esc(w.category||"")}" style="width:140px"></td>
+      <td><input data-f="distance" list="distList" value="${esc(w.distance||"")}" style="width:100px"></td>
+      <td>${w.entries_count}</td>
+      <td class="small">${heatState[w.state]||""}${w.start_time?" · "+esc(w.start_time.slice(11,19)):""}</td>
+      <td><button class="sm danger" data-act="wdel">✕</button></td></tr>`).join("")
+    || '<tr><td colspan="6" class="empty">Забегов нет — общий старт.</td></tr>';
+}
+$("wavesList").addEventListener("change", async (e) => {
+  const f = e.target.dataset.f; if (!f) return;
+  const tr = e.target.closest("tr"), name = tr.dataset.wave, body = {name};
+  tr.querySelectorAll("[data-f]").forEach(i => { if (i.dataset.f==="name") { if (i.value.trim() && i.value.trim()!==name) body.new_name=i.value.trim(); } else body[i.dataset.f]=i.value.trim(); });
+  try{ await api(`/api/events/${curId}/waves`, body); await loadEvents(); if (body.new_name) loadEntries(); toast("Забег сохранён"); }catch(err){ toast("Ошибка: "+err.message); loadEvents(); }
+});
+$("wavesList").addEventListener("click", async (e) => {
+  if (e.target.dataset.act !== "wdel") return;
+  const name = e.target.closest("tr").dataset.wave;
+  if (!confirm(`Удалить забег «${name}»? Участники останутся без забега.`)) return;
+  try{ await api(`/api/events/${curId}/waves`, {name, delete:true}); await loadEvents(); await loadEntries(); }catch(err){ toast("Ошибка: "+err.message); }
+});
+$("btnAddWave").onclick = async () => {
+  const name = $("wName").value.trim(), category = $("wCat").value.trim(), distance = $("wDist").value.trim();
+  try{
+    const r = await api(`/api/events/${curId}/waves`, name ? {name, category, distance} : {next:true, category, distance});
+    $("wName").value=""; await loadEvents(); toast((r.created||name)+" добавлен");
+  }catch(err){ toast("Ошибка: "+err.message); }
+};
+function selectEvent(id){
+  if (id === curId) return;
+  curId = id; store.set("timing.event", String(id)); filesEv = id;
+  lastId = 0; $("feedBody").innerHTML = "";
+  renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") loadCheck();
+  regLoaded = null; renderRegHead(true); if (tabName()==="reg") loadRegs();
+}
+let editId = null;
+async function openForm(ev){
+  editId = ev ? ev.id : null;
+  $("evFormTitle").textContent = ev ? "Изменить соревнование" : "Новое соревнование";
+  await loadDevices();
+  const devs = devices.slice(); ["JUDGE"].forEach(d => devs.includes(d) || devs.push(d));
+  if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.push(ev.finish_device);
+  $("fFinish").innerHTML = '<option value="">— выберите —</option>' + devs.map(x=>`<option>${esc(x)}</option>`).join("") + '<option value="__other">другая… (ввести)</option>';
+  $("fName").value = ev?.name||""; $("fDate").value = ev?.date||new Date(nowMs()).toISOString().slice(0,10);
+  $("fPlace").value = ev?.place||""; $("fFinish").value = ev?.finish_device||(devs.includes("FINISH")?"FINISH":"");
+  $("fMin").value = ev?.min_time_sec||0; $("fSilence").value = ev?.alert_silence_min ?? 10;
+  $("fPush").checked = ev ? !!ev.push_wiclax : true; $("fNotes").value = ev?.notes||"";
+  $("fStartClock").value = ev?.start_clock||""; $("fOrg").value = ev?.organizer||(events.find(x=>x.organizer)||{}).organizer||"";
+  $("fJudge").value = ev?.chief_judge||""; $("fSecr").value = ev?.chief_secretary||"";
+  $("fSeq").checked = ev ? !!ev.heats_sequential : false;
+  $("evForm").classList.remove("hide"); $("fName").focus();
+}
+$("fFinish").onchange = () => {
+  if (!editId) $("fSeq").checked = $("fFinish").value === "JUDGE";
+  if ($("fFinish").value !== "__other") return;
+  const v = (prompt("Код точки финиша (латиницей, как device в настройках):")||"").trim();
+  if (v) { const o=document.createElement("option"); o.textContent=v; $("fFinish").insertBefore(o, $("fFinish").lastChild); $("fFinish").value=v; }
+  else $("fFinish").value="";
+};
+$("btnNew").onclick = () => openForm(null);
+$("btnCancel").onclick = () => $("evForm").classList.add("hide");
+$("btnSave").onclick = async () => {
+  const body = {name:$("fName").value.trim(), date:$("fDate").value||null, place:$("fPlace").value.trim(),
+    finish_device:$("fFinish").value||null, min_time_sec:Number($("fMin").value||0), alert_silence_min:Number($("fSilence").value||0),
+    push_wiclax:$("fPush").checked, notes:$("fNotes").value.trim(),
+    start_clock:$("fStartClock").value.trim(), organizer:$("fOrg").value.trim(),
+    chief_judge:$("fJudge").value.trim(), chief_secretary:$("fSecr").value.trim(), heats_sequential:$("fSeq").checked};
+  if (!body.name) return toast("Укажите название");
+  try{
+    const ev = await api(editId ? `/api/events/${editId}` : "/api/events", body);
+    $("evForm").classList.add("hide"); await loadEvents(); selectEvent(ev.id); toast("Сохранено");
+  }catch(e){ toast("Ошибка: "+e.message); }
+};
+$("evList").onclick = async (e) => {
+  const card = e.target.closest(".ev"); if (!card) return;
+  const id = +card.dataset.id, ev = events.find(x=>x.id===id), act = e.target.dataset.act;
+  if (act === "edit") return openForm(ev);
+  if (act === "reopen") { await api(`/api/events/${id}/reopen`, {}); return loadEvents(); }
+  if (act === "arch") { await api(`/api/events/${id}/archive`, {}); toast("Перенесено в архив"); return loadEvents(); }
+  if (act === "del") {
+    if (!confirm(`Удалить «${ev.name}»? Отметки ридеров в архиве останутся; удалятся карточка, забеги, список участников и ручные отметки.`)) return;
+    await api(`/api/events/${id}/delete`, {}); if (curId===id) curId=null; await loadEvents(); return toast("Удалено");
+  }
+  selectEvent(id);
+  if (act === "open") location.hash = "#timing";
+};
+async function loadEntries(){
+  if (curId == null) return;
+  try{ const r = await api(`/api/events/${curId}/entries`); $("dEntries").value = r.text; $("dEntriesInfo").textContent = `в списке: ${r.count}`; }catch(e){}
+}
+$("btnClax").onclick = () => {
+  const ev = curEvent(); if (!ev) return;
+  const i = document.createElement("input"); i.type = "file"; i.accept = ".clax,.xml";
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    const blob = await f.arrayBuffer();
+    const post = async (q) => { const r = await fetch(`/api/events/${ev.id}/clax${q}`, {method:"POST",
+      headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}, body:blob});
+      const d = await r.json().catch(()=>({})); if (!r.ok) throw new Error(d.error||r.status); return d; };
+    try{
+      const c = await post("?check=1");
+      if (!confirm(`Файл Wiclax «${c.source}» (${c.dates}):\n• участников: ${c.entries}\n• с чипами: ${c.with_chip}\n• дистанций: ${c.parcours.length}\n\nТекущий список участников и забеги «${ev.name}» будут заменены. Продолжить?`)) return;
+      const d = await post("");
+      toast(`Загружено: ${d.entries} участников, чипов ${d.with_chip}, дистанций ${d.parcours}`);
+      await loadEvents(); loadEntries();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  };
+  i.click();
+};
+$("btnEntries").onclick = async () => {
+  try{
+    const r = await api(`/api/events/${curId}/entries`, {text:$("dEntries").value});
+    $("dEntriesInfo").textContent = `сохранено: ${r.count}` + (r.bad_lines.length ? ` · пропущены строки: ${r.bad_lines.join(", ")}` : "");
+    await loadEvents(); toast("Список сохранён");
+  }catch(e){ toast("Ошибка: "+e.message); }
+};
+/* загрузка файла: CSV/TXT сразу, Excel — через SheetJS */
+const drop = $("drop");
+["dragover","dragenter"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+drop.addEventListener("click", () => { const i=document.createElement("input"); i.type="file"; i.accept=".csv,.txt,.xlsx,.xls"; i.onchange=()=>i.files[0]&&readFile(i.files[0]); i.click(); });
+function loadScript(src){ return new Promise((ok,fail)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=fail; document.head.appendChild(s); }); }
+async function readFile(f){
+  try{
+    let text;
+    if (/\.xlsx?$/i.test(f.name)) {
+      if (!window.XLSX) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const wb = XLSX.read(await f.arrayBuffer(), {type:"array"});
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
+      text = rows.filter(r => r && r.some(c => String(c??"").trim())).map(r => Array.from(r, c => String(c??"").replace(/;/g,",").trim()).join(";").replace(/;+$/,"")).join("\n");
+    } else {
+      const buf = await f.arrayBuffer();
+      text = new TextDecoder("utf-8").decode(buf);
+      if (text.includes("�")) text = new TextDecoder("windows-1251").decode(buf);
+    }
+    // строку заголовков оставляем — сервер сам поймёт колонки по названиям
+    const lines = text.split(/\r?\n/);
+    $("dEntries").value = lines.join("\n").trim();
+    toast(`Загружено строк: ${lines.filter(Boolean).length}. Проверьте и нажмите «Сохранить список»`);
+  }catch(e){ toast("Не удалось прочитать файл: " + e.message + (/xls/i.test(f.name)?" (сохраните Excel как CSV)":"")); }
+}
+
+/* ---------- регистрация ---------- */
+let regData = null, regLoaded = null, regDefaults = "";
+const stName = {pending:"на рассмотрении", approved:"подтверждена", rejected:"отклонена"};
+function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
+function renderRegHead(force){
+  const ev = curEvent();
+  $("gSelect").innerHTML = events.filter(e => !e.archived || e.id===curId).map(e => `<option value="${e.id}" ${e.id===curId?"selected":""}>${esc(e.name)}${e.date?" ("+esc(e.date)+")":""}</option>`).join("") || "<option>нет соревнований</option>";
+  const pend = events.reduce((n,e) => n + (e.archived?0:(e.regs_pending||0)), 0);
+  $("regBadge").textContent = pend; $("regBadge").classList.toggle("hide", !pend);
+  if (!ev) return;
+  if (!force && regLoaded === ev.id && regBusy()) return;
+  if (force || regLoaded !== ev.id) {
+    $("gOpen").checked = !!ev.reg_open; $("gDeadline").value = (ev.reg_deadline||"").slice(0,16);
+    $("gLanes").value = ev.reg_lanes || 8; $("gDist").value = ev.reg_distances||""; $("gRules").value = ev.reg_rules||"";
+    $("gInfo").value = ev.reg_info||""; $("gConsent").value = ev.reg_consent||"";
+  }
+  const url = ev.reg_url || (ev.reg_path ? location.origin + ev.reg_path : "");
+  $("gUrl").value = url;
+  $("gPreview").href = ev.reg_path || "#"; $("gPreview").classList.toggle("hide", !ev.reg_path);
+  $("gUrlNote").innerHTML = !ev.reg_path ? "" : ev.reg_url ? (ev.reg_open ? "Форма открыта — ссылку можно рассылать." : "Приём закрыт — по ссылке увидят «Регистрация закрыта».")
+    : "⚠️ Публичный адрес не настроен: эта ссылка работает только через VPN. Настройка домена — <span class=\"mono\">reg-setup.sh</span> в README.";
+  drawQr(ev.reg_url || "");
+  $("gCsv").href = `/api/events/${ev.id}/regs.csv`;
+  $("gTpl").href = `/api/events/${ev.id}/template.xlsx`;
+  $("lnkWiclax").href = `/api/events/${ev.id}/wiclax.csv`;
+  $("lnkClax").href = `/api/events/${ev.id}/event.clax`;
+  $("gStartList").href = `/protocol?event=${ev.id}&kind=start`;
+  const dists = (ev.reg_distances||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  $("mDist").innerHTML = dists.map(d => `<option>${esc(d)}</option>`).join("") || "<option value=\"\">сначала задайте дистанции</option>";
+}
+let qrFor = null;
+async function drawQr(url){
+  if (qrFor === url) return; qrFor = url;
+  const box = $("gQr"); $("gQrDl").classList.add("hide");
+  if (!url) { box.innerHTML = '<span class="small muted" style="padding:50px 0;text-align:center">QR появится,<br>когда будет публичный адрес</span>'; return; }
+  const ev = curEvent(), src = `/api/events/${ev.id}/qr.png?u=${encodeURIComponent(url)}`;
+  const ok = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  if (ok) { box.innerHTML = ""; box.appendChild(ok); $("gQrDl").href = src; $("gQrDl").classList.remove("hide"); return; }
+  try{
+    if (!window.QRCode) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js");
+    box.innerHTML = ""; new QRCode(box, {text:url, width:512, height:512, correctLevel:QRCode.CorrectLevel.M});
+    setTimeout(() => { const c = box.querySelector("canvas"); if (c) { $("gQrDl").href = c.toDataURL("image/png"); $("gQrDl").classList.remove("hide"); } }, 100);
+  }catch(e){ box.innerHTML = '<span class="small muted" style="padding:50px 0">QR не загрузился</span>'; }
+}
+$("gSelect").onchange = (e) => selectEvent(+e.target.value);
+$("gRulesDefault").onclick = (e) => { e.preventDefault(); if ($("gRules").value.trim() && !confirm("Заменить правила образцом?")) return; $("gRules").value = regDefaults; toast("Образец подставлен — поправьте годы рождения по положению"); };
+$("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select(); try{ document.execCommand("copy"); toast("Ссылка скопирована"); }catch(e){ toast("Скопируйте вручную: Ctrl+C"); } };
+$("gSave").onclick = async () => {
+  const ev = curEvent(); if (!ev) return;
+  const body = {reg_open:$("gOpen").checked, reg_deadline:$("gDeadline").value||null, reg_lanes:+$("gLanes").value||8,
+    reg_distances:$("gDist").value.trim(), reg_rules:$("gRules").value.trim(), reg_info:$("gInfo").value.trim(), reg_consent:$("gConsent").value.trim()};
+  if (body.reg_open && !body.reg_distances) return toast("Укажите хотя бы одну дистанцию");
+  try{ await api(`/api/events/${ev.id}`, body); await loadEvents(); renderRegHead(true); $("gSaved").textContent = "сохранено " + new Date().toLocaleTimeString("ru-RU",{hour12:false}); toast("Сохранено"); }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
+async function loadRegs(){
+  const ev = curEvent(); if (!ev) { $("gBody").innerHTML = '<tr><td colspan="10" class="empty">Выберите соревнование</td></tr>'; return; }
+  if (regBusy() && regLoaded === ev.id) return;
+  try{
+    const [r, sl] = await Promise.all([api(`/api/events/${ev.id}/regs`), api(`/api/events/${ev.id}/startlist`)]);
+    regData = r; regDefaults = r.default_rules; $("gConsent").placeholder = r.consent; regLoaded = ev.id;
+    renderRegs(); renderHeats(sl);
+  }catch(e){ console.warn(e); }
+}
+function renderRegs(){
+  const r = regData, ev = curEvent(); if (!r || !ev) return;
+  const c = r.counts;
+  $("gCounts").innerHTML = `<span class="p">на рассмотрении: ${c.pending}</span><span>подтверждено: ${c.approved}</span><span>отклонено: ${c.rejected}</span>`
+    + (r.no_category ? `<span style="color:var(--warn)">без категории: ${r.no_category}</span>` : "")
+    + (r.unassigned ? `<span style="color:var(--warn)">не в забеге: ${r.unassigned}</span>` : "");
+  const dists = (ev.reg_distances||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const cats = [...new Set(((ev.reg_rules||"").split("\n").map(l=>l.split(";")[0].trim()).filter(Boolean)).concat(r.regs.map(x=>x.category).filter(Boolean)))];
+  $("gCats").innerHTML = cats.map(x => `<option>${esc(x)}</option>`).join("");
+  const f = $("gFilter").value, q = $("gSearch").value.trim().toLowerCase();
+  const list = r.regs.filter(x => (!f || x.status===f) && (!q || (x.last_name+" "+x.first_name+" "+(x.team||"")+" "+(x.coach||"")).toLowerCase().includes(q)));
+  $("gBody").innerHTML = list.slice().reverse().map(x => `<tr data-id="${x.id}" class="${x.status==="rejected"?"rej":""}">
+    <td class="mono small">${x.id}</td>
+    <td><b>${esc(x.last_name)} ${esc(x.first_name)}</b> <span class="small muted">${esc(x.middle_name||"")}</span>
+      <div class="small muted">${esc(x.birth_date.split("-").reverse().join("."))}${x.representative?" · предст.: "+esc(x.representative):""}${x.contact?" · "+esc(x.contact):""}</div>
+      ${x.dup_of?`<div class="dupe">повтор заявки №${x.dup_of}</div>`:""}${x.note?`<div class="small muted">${esc(x.note)}</div>`:""}</td>
+    <td>${esc(x.sex)}</td>
+    <td><input class="cell" data-f="category" list="gCats" value="${esc(x.category||"")}" style="width:110px;${x.category?"":"border-color:var(--warn)"}"></td>
+    <td><select class="cell" data-f="distance">${[...new Set(dists.concat([x.distance]))].map(d => `<option ${d===x.distance?"selected":""}>${esc(d)}</option>`).join("")}</select></td>
+    <td><input class="cell mono" data-f="best" value="${esc(x.best||"")}" style="width:72px"></td>
+    <td class="small">${esc(x.team||"")}<div class="muted">${esc(x.coach||"")}</div></td>
+    <td><span class="st ${x.status}">${stName[x.status]}</span></td>
+    <td style="white-space:nowrap">${x.status!=="approved"?'<button class="sm" data-st="approved" title="Подтвердить">✓</button>':""}${x.status!=="rejected"?' <button class="sm danger" data-st="rejected" title="Отклонить">✕</button>':""}${x.status!=="pending"?' <button class="sm" data-st="pending" title="Вернуть на рассмотрение">↺</button>':""}</td>
+    <td class="small">${x.entry_bib?`<b>${esc(x.entry_bib)}</b><div class="muted">${esc(x.entry_wave||"")}${x.entry_lane?" · дор. "+x.entry_lane:""}</div>`:"—"}</td>
+  </tr>`).join("") || `<tr><td colspan="10" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
+}
+$("gFilter").onchange = renderRegs; $("gSearch").oninput = renderRegs;
+$("gBody").addEventListener("click", async (e) => {
+  const st = e.target.dataset.st; if (!st) return;
+  const id = e.target.closest("tr").dataset.id;
+  if (st === "rejected" && !confirm("Отклонить заявку? Если участник уже в забеге — он будет убран из стартового списка.")) return;
+  try{ await api(`/api/events/${curId}/regs/${id}`, {status:st}); regLoaded = null; await loadRegs(); loadEvents(); }catch(err){ toast("Ошибка: "+err.message); }
+});
+$("gBody").addEventListener("change", async (e) => {
+  const f = e.target.dataset.f; if (!f) return;
+  const id = e.target.closest("tr").dataset.id;
+  try{ await api(`/api/events/${curId}/regs/${id}`, {[f]: e.target.value}); toast("Сохранено"); e.target.blur(); await loadRegs(); }catch(err){ toast("Ошибка: "+err.message); }
+});
+$("gApproveAll").onclick = async () => {
+  const n = regData ? regData.counts.pending : 0; if (!n) return toast("Нет заявок на рассмотрении");
+  const d = regData.regs.filter(x => x.status==="pending" && x.dup_of).length;
+  if (!confirm(`Подтвердить ${n} заявок?` + (d ? `\n\nСреди них ${d} похожи на повторы — их лучше сначала проверить.` : ""))) return;
+  try{ await api(`/api/events/${curId}/regs`, {approve_all:true}); await loadRegs(); loadEvents(); toast("Подтверждено"); }catch(err){ toast("Ошибка: "+err.message); }
+};
+$("gRecat").onclick = async () => {
+  if (!confirm("Пересчитать категории всех заявок по текущим правилам? Ручные правки категорий заменятся.")) return;
+  try{ await api(`/api/events/${curId}/regs`, {recategorize:true}); await loadRegs(); toast("Категории пересчитаны"); }catch(err){ toast("Ошибка: "+err.message); }
+};
+$("mAdd").onclick = async () => {
+  const body = {last_name:$("mLast").value, first_name:$("mFirst").value, birth_date:$("mBirth").value, sex:$("mSex").value,
+    team:$("mTeam").value, coach:$("mCoach").value, representative:$("mRep").value, distances:[{distance:$("mDist").value, best:$("mBest").value}]};
+  try{ const r = await api(`/api/events/${curId}/regs`, body); ["mLast","mFirst","mBirth","mBest","mRep"].forEach(i => $(i).value=""); $("mLast").focus();
+    toast(`${r.name} добавлен(а)${r.category?" · "+r.category:""}`); regLoaded = null; await loadRegs(); }
+  catch(err){ toast("Ошибка: "+err.message); }
+};
+$("gImport").onclick = () => {
+  const ev = curEvent(); if (!ev) return;
+  if (!(ev.reg_distances||"").trim()) return toast("Сначала задайте дистанции и сохраните настройки");
+  const i = document.createElement("input"); i.type = "file"; i.accept = ".xlsx,.csv";
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    const team = prompt("Команда — для строк, где она не указана в файле (можно оставить пустым):", "") ;
+    if (team === null) return;
+    const q = `?team=${encodeURIComponent(team.trim())}`, blob = await f.arrayBuffer();
+    const post = async (extra) => { const r = await fetch(`/api/events/${ev.id}/import${q}${extra}`, {method:"POST",
+      headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}, body:blob});
+      const d = await r.json().catch(()=>({})); if (!r.ok && !d.check) throw new Error(d.error||r.status); return d; };
+    try{
+      const c = await post("&check=1");
+      if (c.bad) {
+        const lines = c.rows.filter(x => Object.keys(x.errors).length).slice(0,15).map(x => `строка ${x.row}: ${x.name||"—"} — ${Object.values(x.errors).join("; ")}`);
+        alert(`В файле ${c.bad} строк с ошибками, ничего не загружено. Исправьте и загрузите снова:\n\n` + lines.join("\n") + (c.bad>15?"\n…":""));
+        return;
+      }
+      if (!confirm(`Загрузить ${c.ok} заявок из «${f.name}»? Они будут сразу подтверждены.`)) return;
+      const d = await post("");
+      toast(`Загружено заявок: ${d.added}` + (d.duplicates && d.duplicates.length ? `, повторов пропущено: ${d.duplicates.length}` : ""));
+      regLoaded = null; await loadRegs(); loadEvents();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  };
+  i.click();
+};
+$("gHeats").onclick = async () => {
+  const ev = curEvent(); if (!ev) return;
+  const lanes = +$("gLanes").value || 8;
+  if (regData && regData.counts.pending && !confirm(`${regData.counts.pending} заявок ещё на рассмотрении — они не попадут в забеги. Продолжить?`)) return;
+  if (ev.waves.length && !confirm("Забеги уже есть. Сформировать заново? Текущие забеги и стартовый список будут заменены (номера участников сохранятся).")) return;
+  try{ const r = await api(`/api/events/${ev.id}/heats`, {lanes}); toast(`Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
+  catch(err){ toast("Ошибка: "+err.message); }
+};
+function renderHeats(sl){
+  const names = sl.heats.map(h => h.name);
+  const opt = (cur) => `<option value="">— без забега</option>` + names.map(n => `<option ${n===cur?"selected":""}>${esc(n)}</option>`).join("");
+  $("gHeatsBox").innerHTML = sl.heats.map(h => `<div class="heat"><div class="hh"><b>${esc(h.name)}</b><span class="small muted">${esc([h.category,h.distance].filter(Boolean).join(" · "))} · ${h.entries.length} чел.${h.state!=="planned"?" · "+({running:"идёт",finished:"завершён"})[h.state]:""}</span></div>
+    <table><thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Заявл.</th><th>Перенести</th></tr></thead><tbody>
+    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td><input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}></td><td><b>${esc(e.bib)}</b></td>
+      <td>${esc(e.name||"")}<div class="small muted">${esc([e.birth_year,e.team].filter(Boolean).join(" · "))}</div></td><td class="mono">${esc(e.seed||"")}</td>
+      <td><select class="mv" ${h.state!=="planned"?"disabled":""}>${opt(h.name)}</select></td></tr>`).join("") || '<tr><td colspan="5" class="empty">пусто</td></tr>'}
+    </tbody></table></div>`).join("") || '<div class="card empty">Забегов пока нет — подтвердите заявки и нажмите «Сформировать забеги».</div>';
+  const loose = regData ? regData.regs.filter(x => x.status==="approved" && !x.entry_bib) : [];
+  const noHeat = sl.no_heat || [];
+  $("gLoose").innerHTML = (loose.length || noHeat.length) ? `<h3>Не распределены</h3><div class="tbl"><table><tbody>
+    ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><b>${esc(e.bib)}</b></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
+    ${loose.map(x => `<tr data-reg="${x.id}"><td class="muted">—</td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
+    </tbody></table></div>` : "";
+}
+async function moveEntry(tr, body){
+  try{
+    if (tr.dataset.reg) await api(`/api/events/${curId}/entry`, Object.assign({reg_id:+tr.dataset.reg}, body));
+    else await api(`/api/events/${curId}/entry`, Object.assign({bib:tr.dataset.bib}, body));
+    toast("Готово"); document.activeElement && document.activeElement.blur(); regLoaded = null; await loadRegs(); loadEvents();
+  }catch(err){ toast("Ошибка: "+err.message); }
+}
+["gHeatsBox","gLoose"].forEach(id => $(id).addEventListener("change", (e) => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  if (e.target.classList.contains("mv")) return moveEntry(tr, {wave:e.target.value});
+  if (e.target.classList.contains("lane")) return moveEntry(tr, {lane:e.target.value});
+}));
+
+/* ---------- проверка чипов ---------- */
+let chkSeen = 0;
+async function loadCheck(){
+  if (curId == null) return;
+  try{
+    const c = await api(`/api/events/${curId}/check`);
+    const on = !!c.since;
+    $("btnCheckStart").textContent = on ? "Начать заново" : "Начать проверку";
+    $("btnCheckStop").disabled = !on;
+    $("chkDone").textContent = `${c.checked} / ${c.total}`;
+    $("chkUnknown").textContent = c.unknown.length;
+    $("chkLeft").innerHTML = c.total === 0 ? '<span class="muted" style="background:none">в списке участников нет чипов</span>'
+      : (c.unchecked.map(b => `<span>${esc(b)}</span>`).join("") || '<span class="muted" style="background:none">все проверены ✓</span>');
+    $("chkUnk").innerHTML = c.unknown.map(x => `<span>${esc(x)}</span>`).join("") || '<span class="muted" style="background:none">нет</span>';
+    const last = c.last[0];
+    if (!on) { $("chkBig").innerHTML = '<div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div>'; return; }
+    if (!last) { $("chkBig").innerHTML = '<div class="num muted">…</div><div class="sub">Ждём чип на коврике</div>'; return; }
+    $("chkBig").innerHTML = last.known
+      ? `<div class="num">${esc(last.bib)}</div><div class="sub">✓ ${esc(last.device)} · ${esc(last.time)} · <span class="mono">${esc(last.chip)}</span></div>`
+      : `<div class="num unknown">НЕТ В СПИСКЕ</div><div class="sub mono">${esc(last.chip)} · ${esc(last.device)} · ${esc(last.time)}</div>`;
+    if (last.id !== chkSeen) { if (chkSeen && $("chkSound").checked) beep(last.known?1200:300, last.known?.1:.4); chkSeen = last.id; }
+  }catch(e){}
+}
+$("btnCheckStart").onclick = async () => { chkSeen = 0; await api(`/api/events/${curId}/check`, {}); loadCheck(); };
+$("btnCheckStop").onclick = async () => { await api(`/api/events/${curId}/check`, {stop:true}); loadCheck(); };
+
+/* ---------- хронометраж ---------- */
+function renderTimingHead(){
+  const ev = curEvent();
+  document.querySelectorAll(".tName").forEach(x => x.textContent = ev ? ev.name : "Выберите соревнование");
+  $("tMeta").textContent = ev ? [ev.date, ev.place, "финиш: "+(ev.finish_device||"не выбран"), statusName[ev.status]].filter(Boolean).join(" · ") : "";
+  const hasWaves = ev && ev.waves.length > 0;
+  $("singleStart").classList.toggle("hide", !!hasWaves);
+  $("wavesStart").classList.toggle("hide", !hasWaves);
+  $("tStartInfo").textContent = ev && ev.start_time ? "старт дан в " + ev.start_time.slice(11) + (ev.push_wiclax?" · отправлено в Wiclax":"") : "";
+  ["btnStart","btnManual","btnReset","btnFinish","btnMark"].forEach(b => $(b).disabled = !ev);
+  if (ev && ev.start_time) $("btnStart").disabled = true;
+  if (ev && !ev.start_time) { $("btnReset").disabled = true; $("btnFinish").disabled = true; }
+  if (hasWaves) {
+    $("wavesBody").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}" class="${w.state==="running"?"fin":""}">
+      <td><b>${esc(w.name)}</b><div class="small muted">${esc([w.category,w.distance].filter(Boolean).join(" · ")||"—")}</div></td><td>${w.entries_count}</td>
+      <td class="wclock" data-start="${w.start_epoch_ms||""}" data-fin="${w.finish_epoch_ms||""}">${w.start_epoch_ms?"":'<span class="muted" style="font-size:16px">ждёт старта</span>'}</td>
+      <td class="mono small">${w.start_time?esc(w.start_time.slice(11)):"—"}${w.finished_at?"<br>"+esc(w.finished_at.slice(11)):""}</td>
+      <td><div class="row">
+        ${w.state==="planned"?'<button class="primary" data-act="start">СТАРТ</button><input data-act="time" placeholder="ЧЧ:ММ:СС" style="width:110px"><button data-act="set">Задать</button>':''}
+        ${w.state==="running"?'<button data-act="wfin">■ ФИНИШ забега</button>':''}
+        ${w.state==="finished"?'<button class="sm" data-act="wreopen">Открыть снова</button>':''}
+        ${w.start_time?'<button class="danger sm" data-act="reset">Сбросить</button>':''}
+      </div></td></tr>`).join("");
+    $("seqInfo").textContent = ev.heats_sequential ? "старт забега автоматически завершает предыдущий" : "забеги могут идти одновременно";
+  }
+  const dsel = $("mDev"), prev = dsel.value;
+  const devs = devices.slice(); if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.unshift(ev.finish_device);
+  dsel.innerHTML = devs.map(d => `<option ${ev && d===ev.finish_device?"selected":""}>${esc(d)}</option>`).join("");
+  if (prev && devs.includes(prev)) dsel.value = prev;
+  $("rName").textContent = ev ? "Результаты — " + ev.name : "Результаты";
+  $("rCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
+  const ws = $("rWave"), wprev = ws.value;
+  ws.innerHTML = '<option value="">все забеги</option>' + (ev ? ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("") : "");
+  $("rProto").href = ev ? `/protocol?event=${ev.id}` : "#";
+  ws.classList.toggle("hide", !hasWaves); ws.value = wprev;
+}
+$("tSelect").onchange = (e) => selectEvent(+e.target.value);
+async function doStart(time, wave){
+  const ev = curEvent(); if (!ev) return;
+  if (!ev.finish_device && !confirm("Точка финиша не выбрана — результаты не посчитаются. Всё равно дать старт?")) return;
+  const others = wave && ev.heats_sequential ? ev.waves.filter(w => w.state==="running" && w.name!==wave).map(w=>w.name) : [];
+  if (others.length && !confirm(`Старт «${wave}». ${others.join(", ")} будет автоматически завершён в момент старта. Продолжить?`)) return;
+  try{ await api(`/api/events/${ev.id}/start`, Object.assign(time?{time}:{}, wave?{wave}:{})); await loadEvents(); beep(660,.25); toast("Старт!" + (wave?" — "+wave:"")); loadResults(); }
+  catch(e){ toast("Ошибка: "+e.message); }
+}
+$("btnStart").onclick = () => doStart(null);
+$("btnManual").onclick = () => { const t=$("tManual").value.trim(); if(!t) return toast("Введите время ЧЧ:ММ:СС"); doStart(t); };
+$("btnReset").onclick = async () => { if (!confirm("Сбросить время старта?")) return; await api(`/api/events/${curId}/reset`, {}); await loadEvents(); loadResults(); };
+const finishEv = async () => { if (!confirm("Завершить соревнование?")) return; await api(`/api/events/${curId}/finish`, {}); await loadEvents(); toast("Соревнование завершено"); };
+$("btnFinish").onclick = finishEv; $("btnFinish2").onclick = finishEv;
+$("wavesBody").onclick = async (e) => {
+  const tr = e.target.closest("tr"); const act = e.target.dataset.act; if (!tr || !act || act==="time") return;
+  const wave = tr.dataset.wave;
+  if (act === "start") return doStart(null, wave);
+  if (act === "set") { const t = tr.querySelector('[data-act="time"]').value.trim(); if (!t) return toast("Введите время"); return doStart(t, wave); }
+  if (act === "reset") { if (!confirm(`Сбросить старт забега «${wave}»?`)) return; await api(`/api/events/${curId}/reset`, {wave}); await loadEvents(); loadResults(); }
+  if (act === "wfin") { if (!confirm(`ФИНИШ забега «${wave}»? Отметки после этого момента не учитываются.`)) return;
+    try{ await api(`/api/events/${curId}/waves`, {name:wave, finish:true, epoch_ms:nowMs()}); beep(440,.3); await loadEvents(); loadResults(); toast(wave+" завершён"); }catch(err){ toast("Ошибка: "+err.message); } }
+  if (act === "wreopen") { await api(`/api/events/${curId}/waves`, {name:wave, reopen:true}); await loadEvents(); loadResults(); }
+};
+$("btnNextHeat").onclick = async () => {
+  try{ const r = await api(`/api/events/${curId}/waves`, {next:true}); await loadEvents(); toast(r.created+" создан — категория и дистанция как у предыдущего (поменять — во вкладке «Соревнования»)"); }
+  catch(err){ toast("Ошибка: "+err.message); }
+};
+/* ручные отметки */
+$("btnMark").onclick = async () => {
+  const body = {bib:$("mBib").value.trim(), device:$("mDev").value};
+  if ($("mTime").value.trim()) body.time = $("mTime").value.trim();
+  try{ await api(`/api/events/${curId}/manual`, body); $("mBib").value=""; $("mTime").value=""; $("mBib").focus(); toast("Отметка добавлена"); loadManual(); loadResults(); }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
+$("mBib").addEventListener("keydown", e => { if (e.key === "Enter") $("btnMark").click(); });
+async function loadManual(){
+  if (curId == null) return;
+  try{
+    const r = await api(`/api/events/${curId}/manual`);
+    $("manualBody").innerHTML = r.marks.slice().reverse().map(m => `<tr data-id="${m.id}">
+      <td class="mono">${esc(m.ts.slice(11,21))}</td><td>${esc(m.device)}</td>
+      <td><input class="bibedit" value="${esc(m.bib)}" placeholder="—" inputmode="numeric"></td>
+      <td class="small muted">${esc(m.judge||"")}</td>
+      <td><button class="sm danger" data-act="del">Удалить</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">Ручных отметок нет</td></tr>';
+  }catch(e){}
+}
+$("manualBody").addEventListener("change", async (e) => {
+  if (!e.target.classList.contains("bibedit")) return;
+  const id = e.target.closest("tr").dataset.id;
+  try{ await api(`/api/events/${curId}/manual/${id}`, {bib:e.target.value.trim()}); toast("Номер сохранён"); loadResults(); }catch(err){ toast("Ошибка: "+err.message); }
+});
+$("manualBody").addEventListener("click", async (e) => {
+  if (e.target.dataset.act !== "del") return;
+  if (!confirm("Удалить ручную отметку?")) return;
+  const id = e.target.closest("tr").dataset.id;
+  await api(`/api/events/${curId}/manual/${id}`, {delete:true}); loadManual(); loadResults();
+});
+
+function tick(){
+  $("hdrClock").textContent = new Date(nowMs()).toLocaleTimeString("ru-RU",{hour12:false});
+  const ev = curEvent(), c = $("tClock");
+  if (ev && ev.start_epoch_ms) { c.classList.remove("idle"); c.textContent = fmtElapsed(nowMs() - ev.start_epoch_ms); }
+  else { c.classList.add("idle"); c.textContent = ev ? "Старт не дан" : "—"; }
+  document.querySelectorAll(".wclock[data-start]").forEach(td => { const s = +td.dataset.start, f = +td.dataset.fin; if (s) td.textContent = fmtElapsed((f||nowMs()) - s); });
+}
+async function pollFeed(){
+  try{
+    const r = await api(`/api/live?since=${lastId}&limit=100${curId?"&event="+curId:""}`);
+    const fresh = lastId > 0;
+    lastId = r.last_id;
+    if (r.reads.length){
+      const html = r.reads.slice().reverse().map(x =>
+        `<tr class="${x.finish?"fin":""} ${fresh?"new":""}"><td class="mono">${esc(x.time)}</td><td class="mono">${esc(x.elapsed||"")}</td>
+         <td><b>${esc(x.bib||"")}</b></td><td class="mono small">${esc(x.chip)}</td><td>${esc(x.device)}</td></tr>`).join("");
+      const body = $("feedBody");
+      body.insertAdjacentHTML("afterbegin", html);
+      while (body.rows.length > 300) body.deleteRow(-1);
+      if (fresh) { loadResults(); if (tabName()==="check") loadCheck(); }
+    }
+  }catch(e){}
+}
+
+/* ---------- результаты ---------- */
+async function loadResults(){
+  if (curId == null) { $("rBody").innerHTML = '<tr><td class="empty">Выберите соревнование</td></tr>'; return; }
+  try{ renderResults(await api(`/api/events/${curId}/results`)); }catch(e){}
+}
+function renderResults(r){
+  lastRes = r;
+  $("tFin").textContent = r.finished.length; $("tCourse").textContent = r.on_course.length;
+  $("tNot").textContent = r.not_seen.length; $("tPend").textContent = r.manual_pending;
+  $("tAlerts").innerHTML = alertsHtml(r.alerts); $("rAlerts").innerHTML = alertsHtml(r.alerts);
+  const ev = r.event, fin = ev.finish_device, splits = r.devices.filter(d => d !== fin), hasW = ev.waves.length > 0;
+  $("rMeta").textContent = r.started ? `старт ${ev.start_time||""} · финишировали ${r.finished.length} · на трассе ${r.on_course.length}` : "старт ещё не дан";
+  const q = $("rSearch").value.trim().toUpperCase(), wf = $("rWave").value;
+  const match = x => (!q || String(x.bib).toUpperCase().includes(q) || (x.chip||"").includes(q)) && (!wf || x.wave === wf);
+  const hand = (x, d) => x.manual.includes(d) ? ' <span class="hand" title="ручная отметка">✋</span>' : "";
+  const hasCat = r.finished.some(x => x.category || x.distance), hasName = r.finished.some(x => x.name);
+  $("rHead").innerHTML = `<tr>${hasCat?"<th>Категория · дист.</th>":""}${hasW?"<th>Забег</th><th>Место</th><th>Общее</th>":"<th>Место</th>"}<th>Номер</th>${hasName?"<th>Участник</th>":""}<th>Результат</th>${splits.map(d=>`<th>${esc(d)}</th>`).join("")}<th>Чип</th></tr>`;
+  const ncol = 4 + (hasCat?1:0) + (hasW?2:0) + (hasName?1:0) + splits.length;
+  $("rBody").innerHTML = r.finished.filter(match).map(x =>
+    `<tr>${hasCat?`<td class="small">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td>`:""}${hasW?`<td class="small">${esc(x.wave)}</td><td class="mono"><b>${x.place}</b></td><td class="mono">${x.place_overall??""}</td>`:`<td class="mono"><b>${x.place}</b></td>`}
+     <td><b>${esc(x.bib)}</b></td>${hasName?`<td>${esc(x.name||"")}<div class="small muted">${esc([x.birth_year,x.team].filter(Boolean).join(" · "))}</div></td>`:""}
+     <td class="mono"><b>${esc(x.result||x.time)}</b>${hand(x, fin)}</td>
+     ${splits.map(d=>`<td class="mono">${esc(x.splits[d]||"")}${hand(x,d)}</td>`).join("")}<td class="mono small muted">${esc(x.chip.startsWith("#")?"":x.chip)}</td></tr>`
+  ).join("") || `<tr><td colspan="${ncol}" class="empty">${r.started?"Финишировавших пока нет":"Старт ещё не дан"}</td></tr>`;
+  $("cHead").innerHTML = `<tr>${hasW?"<th>Забег</th>":""}<th>Номер</th><th>Последняя точка</th><th>Время там</th><th>Чип</th></tr>`;
+  $("cBody").innerHTML = r.on_course.filter(match).map(x =>
+    `<tr>${hasW?`<td class="small">${esc(x.wave)}</td>`:""}<td><b>${esc(x.bib)}</b></td><td>${esc(x.last_point)}</td><td class="mono">${esc(x.last_time)}</td><td class="mono small muted">${esc(x.chip)}</td></tr>`
+  ).join("") || `<tr><td colspan="5" class="empty">Никого</td></tr>`;
+  $("nList").textContent = r.not_seen.filter(x => !wf || x.wave===wf).map(x => x.bib).join(", ") || "—";
+}
+$("rSearch").oninput = () => lastRes && renderResults(lastRes);
+$("rWave").onchange = () => lastRes && renderResults(lastRes);
+
+/* ---------- файлы соревнования: папки ---------- */
+const fmtSize = (n) => n > 1048576 ? (n/1048576).toFixed(1)+" МБ" : Math.max(1, Math.round(n/1024))+" КБ";
+const FOLDER_ICONS = {"Положение и документы":"📜","Заявки":"📝","Для судей":"⏱","Протоколы":"🏁","Результаты":"📊","Фото и прочее":"🗂"};
+let filesEv = null, filesFolder = "", filesData = {files:[], folders:Object.keys(FOLDER_ICONS)};
+function loadFiles(){ if (tabName()==="files") renderFilesTab(); }
+async function renderFilesTab(){
+  const sel = $("fEvent");
+  const opts = []; let lastY = null;
+  const evs = events.slice().sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id-a.id);
+  for (const e of evs) { const y = (e.date||"").slice(0,4) || "без даты";
+    if (y !== lastY) { if (lastY !== null) opts.push("</optgroup>"); opts.push(`<optgroup label="${esc(y)}">`); lastY = y; }
+    opts.push(`<option value="${e.id}" ${e.id===filesEv?"selected":""}>${esc(e.name)}${e.archived?" (архив)":""}${e.files_count?` · ${e.files_count}`:""}</option>`); }
+  sel.innerHTML = opts.join("") + (lastY!==null?"</optgroup>":"") || "<option>нет соревнований</option>";
+  if (!filesEv) return;
+  try{ filesData = await api(`/api/events/${filesEv}/files`); }catch(e){ return; }
+  const cnt = {}; filesData.files.forEach(f => cnt[f.folder] = (cnt[f.folder]||0)+1);
+  $("fFolders").innerHTML = `<div class="folder ${filesFolder===""?"on":""}" data-f=""><span class="ic">🗃</span><div><b>Все файлы</b><small>${filesData.files.length}</small></div></div>` +
+    filesData.folders.map(n => `<div class="folder ${filesFolder===n?"on":""}" data-f="${esc(n)}"><span class="ic">${FOLDER_ICONS[n]||"📁"}</span><div><b>${esc(n)}</b><small>${cnt[n]||0}</small></div></div>`).join("");
+  $("fTitle").textContent = filesFolder || "Все файлы";
+  $("btnSnap").classList.toggle("hide", !(filesFolder==="" || filesFolder==="Результаты"));
+  const list = filesData.files.filter(f => !filesFolder || f.folder===filesFolder).slice().reverse();
+  const move = (f) => `<select class="fmove" style="width:auto;padding:3px 6px;font-size:12px">${filesData.folders.map(n => `<option ${n===f.folder?"selected":""}>${esc(n)}</option>`).join("")}</select>`;
+  $("fList").innerHTML = list.map(f => `<div class="frow" data-id="${f.id}">
+      <div><a href="/files/${f.id}" target="_blank">${esc(f.name)}</a>
+        <div class="small muted">${filesFolder?"":esc(f.folder)+" · "}${fmtSize(f.size)} · ${esc(f.created_at.slice(0,16))}${f.author?" · "+esc(String(f.author).split("@")[0]):""}</div></div>
+      <div class="row">${move(f)}<a class="btn" href="/files/${f.id}?dl=1" style="padding:4px 9px;font-size:13px">Скачать</a><button class="sm danger" data-act="fdel">Удалить</button></div>
+    </div>`).join("") || `<div class="small muted">${filesFolder?"В этой папке пока пусто.":"Файлов пока нет."}${filesFolder==="Для судей"?" Стартовый список попадает сюда сам при «Сформировать забеги».":filesFolder==="Результаты"?" Снимок результатов сохраняется сам при «Завершить».":""}</div>`;
+}
+$("fEvent").onchange = (e) => { filesEv = +e.target.value; renderFilesTab(); };
+$("fFolders").addEventListener("click", (e) => { const d = e.target.closest(".folder"); if (!d) return; filesFolder = d.dataset.f; renderFilesTab(); });
+async function uploadFiles(list){
+  if (!filesEv) return toast("Выберите соревнование");
+  const folder = filesFolder || "Фото и прочее";
+  for (const f of list) {
+    if (f.size > 25*1024*1024) { toast(`«${f.name}» больше 25 МБ`); continue; }
+    try{
+      const r = await fetch(`/api/events/${filesEv}/files`, {method:"POST", body:f,
+        headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream","X-File-Name":encodeURIComponent(f.name),"X-Folder":encodeURIComponent(folder)}});
+      if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || r.status);
+      toast(`Загружено в «${folder}»: ${f.name}`);
+    }catch(e){ toast("Ошибка загрузки: "+e.message); }
+  }
+  loadEvents._sig = null; await loadEvents(); renderFilesTab();
+}
+const fdrop = $("fdrop");
+["dragover","dragenter"].forEach(t => fdrop.addEventListener(t, e => { e.preventDefault(); fdrop.classList.add("over"); }));
+["dragleave","drop"].forEach(t => fdrop.addEventListener(t, e => { e.preventDefault(); fdrop.classList.remove("over"); }));
+fdrop.addEventListener("drop", e => uploadFiles(e.dataTransfer.files));
+fdrop.addEventListener("click", () => { const i=document.createElement("input"); i.type="file"; i.multiple=true; i.onchange=()=>uploadFiles(i.files); i.click(); });
+$("fList").addEventListener("click", async e => {
+  if (e.target.dataset.act !== "fdel") return;
+  if (!confirm("Удалить файл?")) return;
+  await api(`/api/events/${filesEv}/files/${e.target.closest(".frow").dataset.id}`, {delete:true}); loadEvents._sig=null; await loadEvents(); renderFilesTab();
+});
+$("fList").addEventListener("change", async e => {
+  if (!e.target.classList.contains("fmove")) return;
+  try{ await api(`/api/events/${filesEv}/files/${e.target.closest(".frow").dataset.id}`, {folder:e.target.value}); toast("Перенесено в «"+e.target.value+"»"); renderFilesTab(); }
+  catch(err){ toast("Ошибка: "+err.message); }
+});
+$("btnSnap").onclick = async () => {
+  try{ const r = await api(`/api/events/${filesEv}/snapshot`, {}); toast(r.file ? "Снимок сохранён в «Результаты»" : "Старт ещё не дан — сохранять нечего"); loadEvents._sig=null; await loadEvents(); renderFilesTab(); }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
+
+/* ---------- оборудование ---------- */
+const fmtBytes = (n) => n == null ? "—" : n >= 1e9 ? (n/1e9).toFixed(1)+" ГБ" : n >= 1e6 ? (n/1e6).toFixed(1)+" МБ" : Math.max(0, Math.round(n/1e3))+" КБ";
+const fmtAgo = (s) => s == null ? "—" : s < 60 ? `${s} с назад` : s < 3600 ? `${Math.floor(s/60)} мин назад` : s < 86400 ? `${Math.floor(s/3600)} ч назад` : `${Math.floor(s/86400)} дн назад`;
+const fmtUp = (s) => { if (s == null) return "—"; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d?d+" дн ":"")+h+" ч "+m+" мин"; };
+const svcState = {active:'<span class="dot ok"></span>работает', inactive:'<span class="dot bad"></span>остановлена', failed:'<span class="dot bad"></span>ошибка', activating:'<span class="dot"></span>запускается'};
+let hwData = null;
+async function loadHw(){
+  try{ hwData = await api("/api/system"); }catch(e){ return; }
+  const d = hwData, sv = d.server;
+  const vpnOn = d.vpn.filter(v => v.online).length + d.wireguard.filter(w => w.handshake_ago != null && w.handshake_ago < 180).length;
+  const svcBad = d.services.filter(x => x.state !== "active").length;
+  $("stVpn").textContent = vpnOn;
+  $("stSvc").innerHTML = d.services.length ? (svcBad ? `<span style="color:var(--bad)">${svcBad} с ошибкой</span>` : "все работают") : "—";
+  $("stDisk").textContent = fmtBytes(sv.disk_free);
+  const readersOff = d.readers.filter(r => r.mode !== "http" && !r.connected).length;
+  $("hwDot").className = "dot " + (svcBad ? "bad" : readersOff ? "" : "ok"); $("hwDot").classList.toggle("hide", !svcBad && !readersOff);
+  if (tabName() !== "hw") return;
+  $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о VPN и службах не собираются — обновите сервер (install.sh)." :
+    sv.collector_age_sec > 120 ? `Сведения о VPN и службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Обновляется каждые 10 секунд";
+  const cert = d.certs[0];
+  $("hwServer").innerHTML = [
+    ["Имя", esc(sv.hostname)], ["Время сервера", esc(sv.time)], ["Часовой пояс", esc(sv.timezone)],
+    ["Точное время", sv.ntp_synced == null ? "—" : sv.ntp_synced ? '<span class="dot ok"></span>синхронизировано' : '<span class="dot bad"></span>нет синхронизации'],
+    ["Работает", fmtUp(sv.uptime_sec)], ["Сервер хронометража", "v" + esc(sv.version) + (sv.hub_started ? " · с " + esc(sv.hub_started.slice(5,16)) : "")],
+    ["Брандмауэр", sv.firewall ? (sv.firewall==="active" ? '<span class="dot ok"></span>включён' : '<span class="dot bad"></span>' + esc(sv.firewall)) : "—"],
+    ["Форма регистрации", sv.public_url ? `<a href="${esc(sv.public_url)}/r/" target="_blank">${esc(sv.public_url.replace("https://",""))}</a>` : "не опубликована"],
+    ["Сертификат HTTPS", cert ? `до ${esc(cert.until)}` + (cert.days < 20 ? ` <b style="color:var(--bad)">(${cert.days} дн)</b>` : "") : "—"],
+  ].map(([k,v]) => `<span>${k}</span><span>${v}</span>`).join("");
+  const memUsed = sv.mem_total ? 1 - sv.mem_avail/sv.mem_total : null, diskUsed = sv.disk_total ? 1 - sv.disk_free/sv.disk_total : null;
+  const bar = (x) => x == null ? "" : `<div class="bar"><i class="${x>.9?"bad":x>.75?"warn":""}" style="width:${Math.round(x*100)}%"></i></div>`;
+  $("hwRes").innerHTML = `
+    <div class="small muted">Процессор: ${sv.cpus||"?"} ядр. · нагрузка ${(sv.load||[]).join(" / ")}</div>
+    <div style="margin-top:8px">Память: ${fmtBytes(sv.mem_total && sv.mem_total - sv.mem_avail)} из ${fmtBytes(sv.mem_total)}${bar(memUsed)}</div>
+    <div style="margin-top:8px">Диск: свободно ${fmtBytes(sv.disk_free)} из ${fmtBytes(sv.disk_total)}${bar(diskUsed)}</div>
+    <div class="kv" style="margin-top:10px"><span>База отметок</span><span>${fmtBytes(sv.db_size)}</span><span>Файлы</span><span>${fmtBytes(sv.files_size)}</span>
+    <span>Резервные копии</span><span>${sv.backups ? `${sv.backups} шт., последняя ${esc(sv.backup_last.at)}` : '<span style="color:var(--warn)">ещё не было</span>'}</span></div>`;
+  $("hwSvc").innerHTML = d.services.map(x => `<div class="svc">${svcState[x.state] || esc(x.state)}<span style="flex:1"></span><b>${esc(x.name)}</b></div>`).join("") || '<div class="small muted">Нет данных — после обновления сервера появятся через минуту.</div>';
+  $("hwWiclax").innerHTML = d.wiclax.map(c => `<tr><td class="mono">${esc(c.peer)}</td><td class="mono">${c.port||""}${c.devices?` <span class="small muted">(${esc(c.devices.join(", "))})</span>`:""}</td><td class="mono small">${esc((c.since||"").slice(5,19))}</td><td>${c.sent}</td><td>${c.live?"передача включена":"пауза"}</td></tr>`).join("")
+    || '<tr><td colspan="5" class="empty">Wiclax не подключён. В Wiclax: устройство «Общий», 10.66.0.1, порт 9854.</td></tr>';
+  $("hwVpn").innerHTML = d.vpn.map(v => `<tr><td><b>${esc(v.name)}</b></td><td>${v.online?'<span class="dot ok"></span>на связи':'<span class="dot"></span>не подключён'}</td>
+      <td class="mono">${esc(v.vpn_ip||"")}</td><td class="mono small">${esc(v.real||"")}</td><td class="small">${esc((v.since||"").replace("T"," ").slice(5,16))}</td>
+      <td class="small">${v.online ? "↓"+fmtBytes(v.rx)+" ↑"+fmtBytes(v.tx) : ""}</td></tr>`).join("")
+    || '<tr><td colspan="6" class="empty">Профилей нет или сведения ещё не собраны.</td></tr>';
+  $("hwWgBox").classList.toggle("hide", !d.wireguard.length);
+  $("hwWg").innerHTML = d.wireguard.map(w => { const on = w.handshake_ago != null && w.handshake_ago < 180;
+    return `<tr><td><b>${esc(w.name)}</b></td><td>${on?'<span class="dot ok"></span>на связи':'<span class="dot"></span>'+(w.handshake_ago==null?"не подключался":fmtAgo(w.handshake_ago))}</td>
+      <td class="mono">${esc(w.vpn_ip)}</td><td class="mono small">${esc(w.endpoint)}</td><td class="small">↓${fmtBytes(w.rx)} ↑${fmtBytes(w.tx)}</td></tr>`; }).join("");
+  $("hwClients").innerHTML = d.clients.map(c => `<tr><td class="mono">${esc(c.ip)}</td><td>${c.profile?`<b>${esc(c.profile)}</b>`:'<span class="muted">—</span>'}</td>
+      <td class="small">${esc(c.device)}</td><td>${esc(c.page||"")}</td><td class="small">${c.ago < 30 ? '<span class="dot ok"></span>сейчас' : fmtAgo(c.ago)}</td></tr>`).join("")
+    || '<tr><td colspan="5" class="empty">—</td></tr>';
+}
+$("hwRefresh").onclick = () => { loadHw(); loadReaders(); loadUpdate(); };
+
+/* ---------- ридеры: добавить / подключить из браузера ---------- */
+let rdData = null;
+function rdConn(live, enabled){
+  if (!enabled) return '<span class="dot"></span><span class="muted">отключён</span>';
+  if (!live) return '<span class="dot"></span>…';
+  return live.connected ? '<span class="dot ok"></span>на связи' :
+    `<span class="dot bad"></span>нет связи${live.last_error?`<div class="small muted">${esc(rdErr(live.last_error))}</div>`:""}`;
+}
+function rdErr(e){
+  if (/Timeout/i.test(e)) return "не отвечает: ящик выключен или нет VPN";
+  if (/refused|111/i.test(e)) return "адрес есть, но порт закрыт";
+  if (/unreachable|113|101/i.test(e)) return "нет маршрута до сети ящика";
+  if (/закрыл/.test(e)) return "ридер закрыл соединение";
+  return e;
+}
+function rdWx(w){
+  if (!w || !w.port) return '<span class="muted">—</span>';
+  const st = w.error ? `<span class="dot bad"></span><span class="small">${esc(w.error)}</span>` : w.clients ? '<span class="dot ok"></span><span class="small">Wiclax подключён</span>' : '<span class="dot"></span><span class="small muted">ждёт Wiclax</span>';
+  return `<b class="mono" style="font-size:15px">${w.port}</b><div>${st}</div>`;
+}
+function rdClock(live){
+  const off = live && live.clock_offset_sec;
+  if (off == null) return "—";
+  return `<span class="mono" style="${Math.abs(off)>2?"color:var(--bad);font-weight:700":""}">${off>0?"+":""}${off.toFixed(2)} с</span>`;
+}
+const RD_POINTS = ["START","FINISH","KM1","KM2","KM3","KM5","KM10","KM15","KM21","LAP","CP1","CP2","CP3"];
+function rdPointOpts(cur){
+  const all = [...new Set([...RD_POINTS, ...((rdData&&rdData.devices)||[]), cur])];
+  return all.map(x => `<option${x===cur?" selected":""}>${esc(x)}</option>`).join("") + '<option value="__new">другая…</option>';
+}
+let upTimer = null;
+async function loadUpdate(){
+  let u; try{ u = await api("/api/system/update"); }catch(e){ return; }
+  $("upVer").textContent = "v" + u.version;
+  const st = u.status || {};
+  const names = {ok:"✅ Готово", running:"⏳ Устанавливаю…", failed:"❌ Ошибка", rolledback:"↩ Откат"};
+  let html = "";
+  if (!u.helper) html = '<span class="muted">Обновление из браузера включится после одной установки этой версии через WinSCP.</span>';
+  else if (u.pending) html = "⏳ Архив принят, установка начнётся через несколько секунд…";
+  else if (st.state) html = `${names[st.state]||st.state}: ${esc(st.message||"")} <span class="muted">(${esc(st.at||"")})</span>`;
+  $("upState").innerHTML = html; $("upLog").textContent = u.log || "";
+  $("upBtn").disabled = !u.helper || u.pending || st.state === "running";
+  clearTimeout(upTimer);
+  if (u.pending || st.state === "running") upTimer = setTimeout(loadUpdate, 3000);
+}
+$("upBtn").onclick = () => $("upFile").click();
+$("upFile").onchange = async () => {
+  const f = $("upFile").files[0]; $("upFile").value = ""; if (!f) return;
+  if (!confirm(`Установить обновление из «${f.name}»?\n\nСервер перезапустится (около минуты). Прежняя версия сохранится, при сбое вернётся сама.`)) return;
+  try{
+    const r = await fetch("/api/system/update", {method:"POST", body:f, headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    toast(`Принято: v${j.from} → v${j.to}. Устанавливаю…`);
+  }catch(err){ toast("Ошибка: " + err.message); }
+  setTimeout(loadUpdate, 1000);
+};
+async function loadReaders(){
+  try{ rdData = await api("/api/readers"); }catch(e){ return; }
+  const d = rdData;
+  $("rdDevList").innerHTML = d.devices.map(x => `<option value="${esc(x)}">`).join("");
+  let html = "", box = null;
+  for (const r of d.readers) {
+    if ((r.box||"") !== box) { box = r.box||""; html += `<tr><td colspan="8" class="small muted" style="background:var(--bg2,#f4f4f4)"><b>${esc(box||"Без ящика")}</b></td></tr>`; }
+    const L = r.live;
+    html += `<tr data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b>${r.parser==="sim"?' <span class="small" style="color:var(--warn,#b26b00)">симулятор</span>':r.parser!=="ipico"?` <span class="small muted">${esc(r.parser)}</span>`:""}</td>
+      <td class="mono small">${esc(r.host)}:${r.port}</td><td>${rdWx(r.wiclax)}</td><td><select class="rdPoint" data-id="${esc(r.id)}" title="Точка на этом старте — меняется сразу, без переподключения">${rdPointOpts(r.device)}</select></td>
+      <td>${rdConn(L, r.enabled)}</td>
+      <td class="mono">${L?L.reads:"—"}${L&&L.parse_errors?`<div class="small muted">не разобрано ${L.parse_errors}</div>`:""}</td>
+      <td>${rdClock(L)}</td>
+      <td class="row" style="gap:4px;flex-wrap:nowrap">${r.parser==="sim" && r.enabled ? (r.sim && r.sim.running
+          ? `<span class="small">идёт: ${r.sim.sent}/${r.sim.total}</span><button class="sm" data-act="simstop">■ Стоп</button>`
+          : '<button class="sm primary" data-act="sim">▶ Прогнать гонку</button>') + '<button class="sm" data-act="simclear" title="Стереть отметки симулятора">🧹</button>' : ""}
+        ${r.enabled?'<button class="sm" data-act="off">Отключить</button>':'<button class="sm primary" data-act="on">Подключить</button>'}
+        <button class="sm" data-act="edit">Изменить</button><a class="small" href="/raw?source=${encodeURIComponent(r.id)}" target="_blank">строки</a>
+        <button class="sm danger" data-act="del">✕</button></td></tr>`;
+  }
+  for (const s of d.static) {
+    html += `<tr><td><b>${esc(s.id)}</b><div class="small muted">файл настроек</div></td><td class="mono small">${esc(s.peer||s.mode)}</td><td class="small muted">через 9854</td><td><b>${esc(s.device)}</b></td>
+      <td>${s.mode==="http"?'<span class="muted">HTTP</span>':s.connected?'<span class="dot ok"></span>на связи':'<span class="dot bad"></span>нет связи'}</td>
+      <td class="mono">${s.reads}</td><td>${rdClock(s)}</td><td><a class="small" href="/raw?source=${encodeURIComponent(s.id)}" target="_blank">строки</a></td></tr>`;
+  }
+  $("readersBody").innerHTML = html || '<tr><td colspan="8" class="empty">Ридеров пока нет — нажмите «🔍 Найти ридеры», «+ Добавить ридер» или «Загрузить список».</td></tr>';
+  $("wxMain").textContent = `порт ${d.wiclax_main.port}`;
+  $("wxPorts").innerHTML = d.wiclax_ports.map(p => `<tr><td class="mono"><b>${p.port}</b></td><td>${esc(p.devices)}</td><td>${esc(p.name||"")}</td>
+    <td>${p.error?`<span class="dot bad"></span>${esc(p.error)}`:p.clients?'<span class="dot ok"></span>Wiclax подключён':p.listening?'<span class="dot"></span>ждёт Wiclax':"…"}</td>
+    <td><button class="sm danger" data-port="${p.port}">✕</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">Дополнительных портов нет — всё идёт через основной.</td></tr>';
+}
+function rdOpen(r){
+  $("rdBulk").classList.add("hide"); $("rdForm").classList.remove("hide");
+  $("rdOrig").value = r ? r.id : "";
+  $("rdId").value = r ? r.id : ""; $("rdHost").value = r ? r.host : ""; $("rdPort").value = r ? r.port : 10000;
+  $("rdDev").value = r ? r.device : "FINISH"; $("rdBox").value = r ? (r.box||"") : ""; $("rdParser").value = r ? r.parser : "ipico";
+  $("rdId").focus();
+}
+async function rdSave(connect){
+  const body = {id:$("rdId").value.trim(), host:$("rdHost").value.trim(), port:+$("rdPort").value||10000,
+    device:$("rdDev").value.trim(), box:$("rdBox").value.trim(), parser:$("rdParser").value, orig_id:$("rdOrig").value||undefined};
+  if (connect) body.enabled = true;
+  try{ await api("/api/readers", body); toast(connect ? "Сохранено, подключаюсь…" : "Сохранено"); $("rdForm").classList.add("hide"); setTimeout(loadReaders, 300); setTimeout(loadReaders, 3000); }
+  catch(e){ toast(e.message); }
+}
+$("rdAddBtn").onclick = () => rdOpen(null);
+$("rdCancel").onclick = () => $("rdForm").classList.add("hide");
+$("rdSave").onclick = () => rdSave(false);
+$("rdSaveOn").onclick = () => rdSave(true);
+$("rdBulkBtn").onclick = () => { $("rdForm").classList.add("hide"); $("rdBulk").classList.remove("hide"); $("rdBulkText").focus(); };
+$("rdBulkCancel").onclick = () => $("rdBulk").classList.add("hide");
+$("rdBulkSave").onclick = async () => {
+  try{ const r = await api("/api/readers/bulk", {text:$("rdBulkText").value}); toast(`Загружено: новых ${r.added}, обновлено ${r.updated}`);
+    $("rdBulk").classList.add("hide"); $("rdBulkText").value = ""; loadReaders(); }
+  catch(e){ toast(e.message); }
+};
+$("rdSimBtn").onclick = () => {
+  if (rdData && rdData.readers.some(r => r.parser === "sim")) { toast("Симулятор уже есть в таблице — нажмите у него «▶ Прогнать гонку»"); return; }
+  rdOpen(null); $("rdId").value = "SIM"; $("rdParser").value = "sim"; $("rdHost").value = "simulator"; $("rdBox").value = "Тренировка"; $("rdDev").value = "FINISH";
+};
+$("rdScanBtn").onclick = () => { $("rdForm").classList.add("hide"); $("rdBulk").classList.add("hide"); $("rdScan").classList.remove("hide"); $("scNet").focus(); };
+$("scClose").onclick = () => $("rdScan").classList.add("hide");
+$("scGo").onclick = async () => {
+  const net = $("scNet").value.trim(); if (!net) { toast("Укажите сеть ящика, например 10.19.1"); return; }
+  $("scRes").innerHTML = '<span class="small muted">Ищу… (до 10 секунд)</span>'; $("scGo").disabled = true;
+  try{
+    const r = await api("/api/readers/scan", {subnet: net, port: +$("scPort").value || 10000});
+    $("scRes").innerHTML = r.found.length ? `<div class="tbl"><table><thead><tr><th>Адрес</th><th>Порт</th><th></th></tr></thead><tbody>${
+      r.found.map(f => `<tr><td class="mono"><b>${esc(f.host)}</b></td><td class="mono">${f.port}</td><td>${f.known ? `<span class="small muted">уже есть: ${esc(f.known)}</span>` :
+        `<button class="sm primary" data-host="${esc(f.host)}" data-port="${f.port}">Добавить</button>`}</td></tr>`).join("")}</tbody></table></div>`
+      : `<span class="small">В сети ${esc(r.subnet)}.x на порту ${r.port} никто не ответил. Проверьте, что ящик включён и на связи (VPN), а сеть указана верно.</span>`;
+  }catch(err){ $("scRes").innerHTML = `<span class="small" style="color:var(--bad)">${esc(err.message)}</span>`; }
+  $("scGo").disabled = false;
+};
+$("scRes").addEventListener("click", e => {
+  const b = e.target.closest("button[data-host]"); if (!b) return;
+  rdOpen(null);
+  const last = b.dataset.host.split(".").pop();
+  $("rdHost").value = b.dataset.host; $("rdPort").value = b.dataset.port; $("rdBox").value = $("scBox").value.trim();
+  $("rdId").value = "R" + last; $("rdId").select();
+});
+$("readersBody").addEventListener("change", async e => {
+  const sel = e.target.closest(".rdPoint"); if (!sel) return;
+  let dev = sel.value;
+  if (dev === "__new") { dev = (prompt("Название точки латиницей, например KM7 или CP4:") || "").trim().toUpperCase(); if (!dev) { loadReaders(); return; } }
+  try{ await api(`/api/readers/${encodeURIComponent(sel.dataset.id)}/point`, {device: dev}); toast(`${sel.dataset.id} → ${dev}`); }
+  catch(err){ toast(err.message); }
+  loadReaders();
+});
+$("readersBody").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.closest("tr").dataset.id, act = b.dataset.act, r = rdData.readers.find(x => x.id === id);
+  try{
+    if (act === "sim") {
+      const ev = curEvent();
+      const min = prompt(`Прогнать финиш участников соревнования «${ev ? ev.name : "—"}» (у кого есть чипы).\nЕсли чипов нет — 30 выдуманных.\n\nЗа сколько минут?`, "3");
+      if (min === null) return;
+      const r = await api(`/api/readers/${encodeURIComponent(id)}/simulate`, {event_id: ev ? ev.id : null, minutes: +min || 3});
+      toast(r.from_event ? `Симуляция: ${r.total} участников` : `Чипов в соревновании нет — гоню ${r.total} выдуманных`);
+      setTimeout(loadReaders, 1500); return;
+    }
+    if (act === "simstop") { await api(`/api/readers/${encodeURIComponent(id)}/sim-stop`, {}); setTimeout(loadReaders, 500); return; }
+    if (act === "simclear") { if (!confirm(`Стереть все отметки симулятора ${id}? Настоящие отметки не затрагиваются.`)) return;
+      const r = await api(`/api/readers/${encodeURIComponent(id)}/clear-reads`, {}); toast(`Стёрто отметок: ${r.deleted}`); loadReaders(); return; }
+    if (act === "on") { await api(`/api/readers/${encodeURIComponent(id)}/connect`, {}); toast(`${id}: подключаюсь…`); setTimeout(loadReaders, 3000); }
+    if (act === "off") { if (!confirm(`Отключить ${id}? Отметки с него перестанут поступать.`)) return; await api(`/api/readers/${encodeURIComponent(id)}/disconnect`, {}); }
+    if (act === "edit") return rdOpen(r);
+    if (act === "del") { if (!confirm(`Удалить ридер ${id} из списка? Уже полученные отметки останутся.`)) return; await api(`/api/readers/${encodeURIComponent(id)}/delete`, {}); }
+    loadReaders();
+  }catch(err){ toast(err.message); }
+});
+$("wxAdd").onclick = async () => {
+  try{ await api("/api/wiclax-ports", {port:+$("wxPort").value, devices:$("wxDevs").value, name:$("wxName").value});
+    toast("Порт добавлен"); $("wxPort").value = $("wxDevs").value = $("wxName").value = ""; setTimeout(loadReaders, 500); }
+  catch(e){ toast(e.message); }
+};
+$("wxPorts").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-port]"); if (!b) return;
+  if (!confirm(`Закрыть порт ${b.dataset.port}? Wiclax на этом порту отключится.`)) return;
+  try{ await api(`/api/wiclax-ports/${b.dataset.port}/delete`, {}); loadReaders(); }catch(err){ toast(err.message); }
+});
+
+/* ---------- архив ---------- */
+const MONTHS = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+let archFiles = {};
+async function renderArchive(){
+  const arch = events.filter(e => e.archived);
+  const years = [...new Set(arch.map(e => (e.date||"").slice(0,4) || "без даты"))].sort().reverse();
+  const ysel = $("aYear"), prev = ysel.value;
+  ysel.innerHTML = '<option value="">все годы</option>' + years.map(y => `<option>${esc(y)}</option>`).join("");
+  ysel.value = years.includes(prev) ? prev : "";
+  const q = $("aSearch").value.trim().toLowerCase(), y = ysel.value;
+  const list = arch.filter(e => (!y || ((e.date||"").slice(0,4)||"без даты")===y) &&
+    (!q || (e.name+" "+(e.place||"")).toLowerCase().includes(q)))
+    .sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id-a.id);
+  if (!list.length) { $("aList").innerHTML = `<div class="card empty">${arch.length?"Ничего не найдено":"В архиве пока пусто. Завершённое соревнование переносится кнопкой «В архив» на его карточке."}</div>`; return; }
+  const need = list.filter(e => e.files_count && !archFiles[e.id]);
+  await Promise.all(need.map(async e => { try{ archFiles[e.id] = (await api(`/api/events/${e.id}/files`)).files; }catch(_){ archFiles[e.id]=[]; } }));
+  let html = "", curY = null, curM = null;
+  const byYear = {};
+  list.forEach(e => { const k=(e.date||"").slice(0,4)||"без даты"; byYear[k]=(byYear[k]||0)+1; });
+  for (const e of list) {
+    const yy = (e.date||"").slice(0,4) || "без даты", mm = e.date ? MONTHS[+e.date.slice(5,7)-1] : "";
+    if (yy !== curY) { if (curY!==null) html += "</div>"; html += `<div class="year">${esc(yy)} <span>${byYear[yy]} соревн.</span></div>`; curY = yy; curM = null; html += '<div>'; }
+    if (mm !== curM) { if (curM!==null) html += "</div>"; html += `<div class="month">${esc(mm)}</div><div class="tbl" style="margin-bottom:6px">`; curM = mm; }
+    const files = (archFiles[e.id]||[]).map(f => `<a href="/files/${f.id}" target="_blank">📄 ${esc(f.name)}</a>`).join("");
+    html += `<div class="arow" data-id="${e.id}">
+      <div class="mono small">${esc(e.date||"—")}</div>
+      <div><div class="t">${esc(e.name)}</div><div class="small muted">${esc(e.place||"")}${e.place?" · ":""}участников: ${e.entries_count}</div>
+        ${files?`<div class="files">${files}</div>`:""}</div>
+      <div class="row"><button class="sm" data-act="aopen">Результаты</button><button class="sm" data-act="arestore">Вернуть</button></div>
+    </div>`;
+  }
+  html += "</div></div>";
+  $("aList").innerHTML = html;
+}
+$("aYear").onchange = renderArchive; $("aSearch").oninput = renderArchive;
+$("aList").addEventListener("click", async e => {
+  const row = e.target.closest(".arow"); const act = e.target.dataset.act; if (!row || !act) return;
+  const id = +row.dataset.id;
+  if (act === "aopen") { selectEvent(id); location.hash = "#results"; }
+  if (act === "arestore") { await api(`/api/events/${id}/archive`, {restore:true}); toast("Возвращено в соревнования"); loadEvents._sig=null; await loadEvents(); }
+});
+
+/* ---------- журнал ---------- */
+async function loadLog(){
+  try{
+    const r = await api($("logAll").checked || curId == null ? "/api/log" : `/api/events/${curId}/log`);
+    $("logBody").innerHTML = r.log.map(x => `<tr><td class="mono small">${esc(x.ts.slice(0,19))}</td><td class="small">${esc(x.actor)}</td><td><b>${esc(x.action)}</b></td><td class="small">${esc(x.details||"")}</td></tr>`).join("")
+      || '<tr><td colspan="4" class="empty">Записей нет</td></tr>';
+  }catch(e){}
+}
+$("logAll").onchange = loadLog;
+
+/* ---------- запуск ---------- */
+(async function init(){
+  await loadStatus(); await loadDevices();
+  try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
+  showTab();
+  setInterval(tick, 100);
+  setInterval(loadStatus, 4000);
+  setInterval(() => { if (tabName()==="overview") loadLast(); }, 2000);
+  setInterval(() => { if (tabName()==="reg") loadRegs(); }, 10000);
+  setInterval(() => { const t=tabName(); if (t==="hw" || t==="overview") loadHw(); }, 10000);
+  loadHw();
+  setInterval(pollFeed, 1000);
+  setInterval(() => { const t=tabName(); if (t==="check") loadCheck(); if (t==="timing") loadManual(); if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
+  setInterval(async () => { try{ const id=curId; await loadEvents(); if (id!==curId) loadEntries(); }catch(e){} }, 15000);
+  loadLast(); pollFeed();
+})();
+</script>
+</body>
+</html>

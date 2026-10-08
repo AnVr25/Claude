@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#16181a">
+<title>Судья — хронометраж</title>
+<style>
+:root{--bg:#f3f4f1;--panel:#fff;--ink:#16181a;--muted:#646b72;--line:#e2e4e0;--accent:#c8462b;--ok:#1f8a4c;--warn:#b54708;--bad:#b42318;--soft:#f7f1ee;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#101214;--panel:#1b1e21;--ink:#eceeef;--muted:#9aa2a9;--line:#2b3035;--accent:#e8603f;--soft:#2a1f1b;--ok:#3fbf73;--warn:#f0a03a;--bad:#ff6b5b}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:520px;margin:0 auto;padding:10px 12px 40px}
+.top{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.top b{font-size:16px;line-height:1.2}
+.net{font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--ok);color:#fff;white-space:nowrap}
+.net.off{background:var(--bad)}
+.sel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+select,input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%}
+.clockbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-top:10px;padding:10px;text-align:center}
+.clock{font:800 clamp(44px,15vw,72px)/1.05 var(--mono);letter-spacing:-1px}
+.clock.idle{color:var(--muted);font-size:28px;padding:10px 0}
+.small{font-size:13px;color:var(--muted)}
+button{font:inherit;font-weight:700;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:12px;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.97)}
+.startbtn{width:100%;margin-top:8px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:22px;padding:16px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.modes button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.display{display:flex;align-items:baseline;justify-content:space-between;background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:8px 14px;margin-top:10px;min-height:72px}
+.display .num{font:800 46px var(--mono)}
+.display .num:empty::before{content:"номер";color:var(--muted);font:600 22px system-ui}
+.display .t{font:600 16px var(--mono);color:var(--muted)}
+.display.armed{border-color:var(--accent)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.pad button{font:800 30px var(--mono);padding:16px 0}
+.pad .ok{background:var(--ok);border-color:var(--ok);color:#fff;font-size:26px}
+.pad .del{color:var(--bad)}
+.big{width:100%;margin-top:10px;background:var(--accent);border-color:var(--accent);color:#fff;font-size:30px;padding:34px 0;border-radius:18px}
+h3{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px;display:flex;justify-content:space-between}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.item{display:grid;grid-template-columns:2.2em 1fr 6.5em 2em;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .n{color:var(--muted);font:600 14px var(--mono)}
+.item .tm{font:700 18px var(--mono)}
+.item input{padding:7px 8px;font:700 18px var(--mono);text-align:center}
+.item input.need{border-color:var(--warn);background:var(--soft)}
+.item .st{font-size:16px;text-align:center}
+.item .x{background:none;border:0;color:var(--bad);padding:4px;font-size:18px}
+.empty{padding:16px;text-align:center;color:var(--muted)}
+.hide{display:none!important}
+.docs{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:8px;padding:8px 12px;font-size:14px}
+.docs summary{cursor:pointer;font-weight:700}
+.docs a{display:block;padding:8px 0;border-bottom:1px solid var(--line);color:var(--accent);text-decoration:none}
+.docs a:last-child{border-bottom:0}
+.heatinfo{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:4px;font-size:14px}
+.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--ink)}
+.badge.run{background:var(--ok);color:#fff}.badge.fin{background:var(--ink);color:var(--bg)}
+.clock.done{color:var(--ok)}
+.finbtn{width:100%;margin-top:8px;background:var(--ink);border-color:var(--ink);color:var(--bg);font-size:20px;padding:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.nextbox{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:10px;margin-top:10px}
+.nextbox .go{width:100%;margin-top:8px;background:var(--accent);border-color:var(--accent);color:#fff}
+.link{background:none;border:0;color:var(--muted);text-decoration:underline;font-weight:600;padding:6px;font-size:14px}
+.blocked{opacity:.45}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><b id="evName">Судья</b><span class="net" id="net">на связи</span></div>
+  <div class="sel">
+    <select id="evSel"></select>
+    <select id="waveSel"></select>
+    <select id="devSel"></select>
+    <input id="judge" placeholder="Ваше имя (судья)">
+  </div>
+
+  <details class="docs hide" id="docs"><summary>📁 Документы для судей <span id="docsN"></span></summary><div id="docsList"></div></details>
+
+  <div class="clockbox">
+    <div class="heatinfo" id="heatInfo"></div>
+    <div class="clock idle" id="clock">Старт не дан</div>
+    <div class="small" id="clockInfo"></div>
+    <button class="startbtn hide" id="btnStart">СТАРТ</button>
+    <button class="finbtn hide" id="btnFinish">■ ФИНИШ ЗАБЕГА</button>
+    <button class="link hide" id="btnReopen">открыть забег снова</button>
+  </div>
+
+  <div class="nextbox" id="nextBox">
+    <div class="small" id="nextTitle">Следующий забег</div>
+    <div class="row2">
+      <input id="nextCat" list="cats" placeholder="Категория">
+      <input id="nextDist" list="dists" placeholder="Дистанция">
+    </div>
+    <button class="go" id="btnNext">+ Создать следующий забег</button>
+  </div>
+  <datalist id="cats"><option>Мальчики до 12 лет<option>Девочки до 12 лет<option>Мальчики до 14 лет<option>Девочки до 14 лет<option>Юноши до 16 лет<option>Девушки до 16 лет<option>Юноши до 18 лет<option>Девушки до 18 лет<option>Юниоры до 20 лет<option>Юниорки до 20 лет<option>Мужчины до 23 лет<option>Женщины до 23 лет<option>Мужчины<option>Женщины<option>Ветераны</datalist>
+  <datalist id="dists"><option>60 м<option>100 м<option>200 м<option>400 м<option>800 м<option>1000 м<option>1500 м<option>3000 м<option>5 км<option>10 км</datalist>
+
+  <div class="modes">
+    <button id="modeNum" class="on">Ввод номера</button>
+    <button id="modeTap">Отсечки</button>
+  </div>
+
+  <div id="paneNum">
+    <div class="display" id="disp"><span class="num" id="dispNum"></span><span class="t" id="dispTime"></span></div>
+    <div class="pad" id="pad">
+      <button>1</button><button>2</button><button>3</button>
+      <button>4</button><button>5</button><button>6</button>
+      <button>7</button><button>8</button><button>9</button>
+      <button class="del" data-k="del">⌫</button><button>0</button><button class="ok" data-k="ok">✓</button>
+    </div>
+    <div class="small" style="margin-top:6px">Время фиксируется в момент первого нажатия цифры. ✓ без номера — отсечка без номера.</div>
+  </div>
+
+  <div id="paneTap" class="hide">
+    <button class="big" id="btnTap">⏱ ФИНИШ</button>
+    <div class="small" style="margin-top:6px">Нажимайте на каждого финишировавшего по порядку, номера впишите ниже, когда будет время.</div>
+  </div>
+
+  <h3><span id="listTitle">Отметки</span><span id="cnt"></span></h3>
+  <div class="list" id="list"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const qs=new URLSearchParams(location.search);
+let offset=LS.get("judge.offset",0), events=[], ev=null, online=true;
+let queue=LS.get("judge.queue",[]);      // ещё не отправленные отметки
+let marks=[];                              // отметки с сервера
+let armedAt=null, typed="";
+
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1800);}
+function vibe(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+const nowMs=()=>Date.now()+offset;
+function fmt(ms){const n=ms<0;ms=Math.abs(ms);const t=Math.floor(ms/100),h=Math.floor(t/36000),m=Math.floor(t%36000/600),s=Math.floor(t%600/10),d=t%10;
+  return (n?"-":"")+h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"."+d;}
+function clockOf(ms){const d=new Date(ms);return d.toLocaleTimeString("ru-RU",{hour12:false})+"."+Math.floor(d.getMilliseconds()/100);}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
+async function api(path,body){
+  const o={headers:{"X-Requested-With":"timing-hub"}};
+  if(body!==undefined){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(Object.assign({judge:$("judge").value.trim()},body));}
+  const r=await fetch(path,o); const d=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error(d.error||r.status);e.http=r.status;throw e;}
+  return d;
+}
+function setNet(ok){online=ok;$("net").textContent=ok?(queue.length?`отправка… ${queue.length}`:"на связи"):`нет связи · в очереди ${queue.length}`;$("net").classList.toggle("off",!ok);}
+
+/* ---- выбор забега ---- */
+function heat(){ if(!ev) return null; const w=$("waveSel").value; return w?ev.waves.find(x=>x.name===w)||null:null; }
+function startMs(){ if(!ev) return null; const h=heat(); return h?h.start_epoch_ms:(ev.waves.length?null:ev.start_epoch_ms); }
+function finishMs(){ const h=heat(); return h?h.finish_epoch_ms:null; }
+function heatState(){ const h=heat(); if(h) return h.state; if(!ev||ev.waves.length) return "none"; return ev.start_epoch_ms?"running":"planned"; }
+function pickDefaultHeat(prev){
+  if(!ev||!ev.waves.length) return "";
+  if(prev&&ev.waves.some(w=>w.name===prev)) return prev;
+  const run=ev.waves.filter(w=>w.state==="running"); if(run.length) return run[run.length-1].name;
+  const plan=ev.waves.find(w=>w.state==="planned"); if(plan) return plan.name;
+  return ev.waves[ev.waves.length-1].name;
+}
+async function loadEvents(){
+  try{
+    const c=await api("/api/clock"); offset=c.server_epoch_ms-Date.now(); LS.set("judge.offset",offset);
+    const r=await api("/api/events"); events=r.events.filter(e=>!e.archived); setNet(true);
+    LS.set("judge.events",events);
+  }catch(e){ events=LS.get("judge.events",[]); setNet(false); }
+  const want=+((ev&&ev.id)||qs.get("event")||LS.get("judge.event",0));
+  ev=events.find(e=>e.id===want)||events.find(e=>e.status==="running")||events[0]||null;
+  $("evSel").innerHTML=events.map(e=>`<option value="${e.id}" ${ev&&e.id===ev.id?"selected":""}>${esc(e.name)}</option>`).join("")||"<option>нет соревнований</option>";
+  renderEv();
+}
+function heatLabel(w){return w.name+(w.category||w.distance?" — "+[w.category,w.distance].filter(Boolean).join(", "):"")+(w.state==="running"?" ▶":w.state==="finished"?" ✓":"");}
+function renderEv(keep){
+  $("evName").textContent=ev?ev.name:"Нет соревнований";
+  const wPrev=keep!==undefined?keep:($("waveSel").value||LS.get("judge.wave",""));
+  const hs=ev?ev.waves:[];
+  $("waveSel").innerHTML=hs.length?hs.map(w=>`<option value="${esc(w.name)}">${esc(heatLabel(w))}</option>`).join(""):'<option value="">общий старт</option>';
+  $("waveSel").value=pickDefaultHeat(wPrev); LS.set("judge.wave",$("waveSel").value);
+  const devs=[]; if(ev&&ev.finish_device) devs.push(ev.finish_device); ["JUDGE"].forEach(d=>devs.includes(d)||devs.push(d));
+  const dPrev=LS.get("judge.dev","");
+  if(dPrev&&!devs.includes(dPrev)) devs.push(dPrev);
+  $("devSel").innerHTML=devs.map(d=>`<option>${esc(d)}</option>`).join("");
+  if(dPrev) $("devSel").value=dPrev;
+  renderHeat(); loadMarks(); loadDocs();
+}
+async function loadDocs(){
+  if(!ev){$("docs").classList.add("hide");return;}
+  try{
+    const r=await api(`/api/events/${ev.id}/files?folder=${encodeURIComponent("Для судей")}`);
+    const fl=r.files.slice().reverse();
+    $("docs").classList.remove("hide");
+    $("docsN").textContent=fl.length?`(${fl.length})`:"";
+    $("docsList").innerHTML=fl.map(f=>`<a href="/files/${f.id}" target="_blank">${esc(f.name)}</a>`).join("")+
+      `<a href="/protocol?event=${ev.id}&kind=start" target="_blank">Стартовый протокол (для печати) ↗</a>`;
+  }catch(e){}
+}
+function renderHeat(){
+  const h=heat(), st=heatState();
+  const lbl={planned:"ожидает старта",running:"идёт",finished:"завершён",none:"",}[st]||"";
+  $("heatInfo").innerHTML=h?`<b>${esc(h.name)}</b>${h.category?" · "+esc(h.category):""}${h.distance?" · "+esc(h.distance):""} <span class="badge ${st==="running"?"run":st==="finished"?"fin":""}">${lbl}</span>`:(ev&&!ev.waves.length?'<span class="small">Забегов нет — общий старт или создайте забег ниже</span>':"");
+  $("btnStart").classList.toggle("hide",!ev||!(st==="planned"));
+  $("btnStart").textContent=h?`СТАРТ · ${h.name}`:"СТАРТ";
+  $("btnFinish").classList.toggle("hide",!h||st!=="running");
+  $("btnReopen").classList.toggle("hide",!h||st!=="finished");
+  // форма следующего забега: категория/дистанция по умолчанию — как у текущего
+  const last=ev&&ev.waves.length?ev.waves[ev.waves.length-1]:null;
+  $("nextBox").classList.toggle("hide",!ev||st==="running"||st==="planned");   // во время забега не мешает клавиатуре
+  const n=ev?ev.waves.length+1:1;
+  $("nextTitle").textContent=ev&&ev.waves.length?`Следующий забег (Забег ${n})`:"Создать забег";
+  if(!$("nextCat").matches(":focus")&&!$("nextCat").dataset.touched) $("nextCat").value=(last&&last.category)||"";
+  if(!$("nextDist").matches(":focus")&&!$("nextDist").dataset.touched) $("nextDist").value=(last&&last.distance)||"";
+  const blocked=!ev||st==="finished"||st==="planned";
+  $("paneNum").classList.toggle("blocked",blocked); $("paneTap").classList.toggle("blocked",blocked);
+}
+$("evSel").onchange=e=>{ev=events.find(x=>x.id===+e.target.value);LS.set("judge.event",ev?ev.id:0);$("nextCat").dataset.touched=$("nextDist").dataset.touched="";renderEv("");};
+$("waveSel").onchange=e=>{LS.set("judge.wave",e.target.value);typed="";armedAt=null;$("dispNum").textContent="";renderHeat();render();};
+$("devSel").onchange=e=>LS.set("judge.dev",e.target.value);
+["nextCat","nextDist"].forEach(id=>$(id).oninput=e=>e.target.dataset.touched="1");
+$("judge").value=LS.get("judge.name","");
+$("judge").onchange=e=>LS.set("judge.name",e.target.value.trim());
+
+/* ---- часы, старт, финиш ---- */
+function tick(){
+  const s=startMs(), f=finishMs(), c=$("clock");
+  if(s&&f){c.classList.remove("idle");c.classList.add("done");c.textContent=fmt(f-s);$("clockInfo").textContent="забег завершён · время остановлено";}
+  else if(s){c.classList.remove("idle","done");c.textContent=fmt(nowMs()-s);$("clockInfo").textContent="время с начала забега";}
+  else{c.classList.add("idle");c.classList.remove("done");c.textContent=ev?"Старт не дан":"—";$("clockInfo").textContent=ev?"секундомер запустится по старту":"";}
+  if(armedAt){$("dispTime").textContent=s?fmt(armedAt-s):clockOf(armedAt);}
+}
+async function refreshAfter(name){await loadEvents();if(name!==undefined){$("waveSel").value=name;LS.set("judge.wave",name);renderHeat();render();}}
+$("btnStart").onclick=async()=>{
+  if(!ev)return; const h=heat(), t=nowMs();
+  const others=ev.heats_sequential&&h?ev.waves.filter(w=>w.state==="running"&&w.name!==h.name).map(w=>w.name):[];
+  if(!confirm(`Дать СТАРТ${h?" «"+h.name+"»":""}?`+(others.length?`\n\n${others.join(", ")} будет автоматически завершён.`:"")))return;
+  try{await api(`/api/events/${ev.id}/start`,h?{wave:h.name,epoch_ms:t}:{epoch_ms:t});vibe(200);await refreshAfter(h?h.name:undefined);toast("Старт!");}
+  catch(e){toast("Ошибка старта: "+e.message);}
+};
+$("btnFinish").onclick=async()=>{
+  const h=heat(); if(!h)return; const t=nowMs();
+  const pend=queue.filter(q=>q.event_id===ev.id&&q.wave===h.name).length;
+  if(!confirm(`ФИНИШ забега «${h.name}»?\nСекундомер остановится, отметки после этого момента не учитываются.`+(pend?`\n\nВ очереди ещё ${pend} отметок — они отправятся.`:"")))return;
+  try{await api(`/api/events/${ev.id}/waves`,{name:h.name,finish:true,epoch_ms:t});vibe([60,60,200]);await refreshAfter(h.name);toast("Забег завершён");}
+  catch(e){toast("Ошибка: "+e.message);}
+};
+$("btnReopen").onclick=async()=>{
+  const h=heat(); if(!h||!confirm(`Открыть «${h.name}» снова? Секундомер продолжит идти.`))return;
+  try{await api(`/api/events/${ev.id}/waves`,{name:h.name,reopen:true});await refreshAfter(h.name);}catch(e){toast("Ошибка: "+e.message);}
+};
+$("btnNext").onclick=async()=>{
+  if(!ev)return;
+  try{const r=await api(`/api/events/${ev.id}/waves`,{next:true,category:$("nextCat").value.trim(),distance:$("nextDist").value.trim()});
+    $("nextCat").dataset.touched=$("nextDist").dataset.touched="";
+    await refreshAfter(r.created);toast(`${r.created} создан — можно давать старт`);}
+  catch(e){toast("Ошибка: "+e.message);}
+};
+
+/* ---- режимы ---- */
+function mode(m){LS.set("judge.mode",m);$("modeNum").classList.toggle("on",m==="num");$("modeTap").classList.toggle("on",m==="tap");
+  $("paneNum").classList.toggle("hide",m!=="num");$("paneTap").classList.toggle("hide",m!=="tap");}
+$("modeNum").onclick=()=>mode("num"); $("modeTap").onclick=()=>mode("tap"); mode(LS.get("judge.mode","num"));
+
+/* ---- создание отметок (сначала в очередь, потом на сервер) ---- */
+function addMark(bib,epoch){
+  if(!ev)return toast("Нет соревнования");
+  const st=heatState();
+  if(st==="planned")return toast("Сначала дайте СТАРТ");
+  if(st==="finished")return toast("Забег завершён — создайте или выберите следующий");
+  const m={client_id:uid(),event_id:ev.id,bib:bib||"",device:$("devSel").value,epoch_ms:epoch,wave:$("waveSel").value||""};
+  queue.push(m);LS.set("judge.queue",queue);vibe(bib?40:80);
+  render();flush();
+}
+$("pad").onclick=e=>{
+  const b=e.target.closest("button");if(!b)return;
+  const k=b.dataset.k||b.textContent.trim();
+  if(k==="del"){typed=typed.slice(0,-1);if(!typed)armedAt=null;}
+  else if(k==="ok"){addMark(typed,armedAt||nowMs());typed="";armedAt=null;$("dispTime").textContent="";}
+  else{if(!typed&&!armedAt)armedAt=nowMs();if(typed.length<6)typed+=k;}
+  $("dispNum").textContent=typed;$("disp").classList.toggle("armed",!!armedAt);
+  if(!armedAt)$("dispTime").textContent="";
+};
+$("btnTap").onclick=()=>addMark("",nowMs());
+
+let flushing=false;
+async function flush(){
+  if(flushing||!queue.length)return; flushing=true;
+  try{
+    while(queue.length){
+      const m=queue[0];
+      try{await api(`/api/events/${m.event_id}/manual`,{bib:m.bib,device:m.device,epoch_ms:m.epoch_ms,client_id:m.client_id,wave:m.wave||""});}
+      catch(e){if(e.http&&e.http>=400&&e.http<500&&e.http!==401){toast("Отклонено: "+e.message);}else throw e;}
+      queue.shift();LS.set("judge.queue",queue);
+    }
+    setNet(true);await loadMarks();
+  }catch(e){setNet(false);}
+  finally{flushing=false;render();}
+}
+async function loadMarks(){
+  if(!ev)return;
+  try{const r=await api(`/api/events/${ev.id}/manual`);marks=r.marks;setNet(true);}catch(e){setNet(false);}
+  render();
+}
+
+/* ---- список ---- */
+function render(){
+  if(!ev){$("list").innerHTML='<div class="empty">—</div>';return;}
+  const s0=startMs(), h=heat(), hn=h?h.name:"";
+  const mine=x=>!hn||(x.wave?x.wave===hn:(h.start_epoch_ms&&x.ms>=h.start_epoch_ms&&(!h.finish_epoch_ms||x.ms<=h.finish_epoch_ms+2000)));
+  $("listTitle").textContent=hn?`Отметки · ${hn}`:"Отметки";
+  const srv=marks.map(m=>({id:m.id,bib:m.bib,device:m.device,ms:m.epoch_ms,sent:true,judge:m.judge,wave:m.wave})).filter(mine);
+  const loc=queue.filter(q=>q.event_id===ev.id).map(q=>({cid:q.client_id,bib:q.bib,device:q.device,ms:q.epoch_ms,sent:false,wave:q.wave})).filter(mine);
+  const all=srv.concat(loc).sort((a,b)=>a.ms-b.ms);
+  const pend=all.filter(x=>!x.bib).length;
+  $("cnt").textContent=`${all.length}${pend?` · без номера ${pend}`:""}`;
+  $("list").innerHTML=all.slice().reverse().map((x,i)=>`
+    <div class="item" data-id="${x.id||""}" data-cid="${x.cid||""}">
+      <span class="n">${all.length-i}</span>
+      <span class="tm">${s0?fmt(x.ms-s0):clockOf(x.ms)}<div class="small">${esc(x.device)}${x.judge?" · "+esc(x.judge):""}</div></span>
+      <input value="${esc(x.bib)}" placeholder="№" inputmode="numeric" class="${x.bib?"":"need"}">
+      <span class="st">${x.sent?'<button class="x" data-del="1">✕</button>':"⏳"}</span>
+    </div>`).join("")||'<div class="empty">Отметок пока нет</div>';
+}
+$("list").addEventListener("change",async e=>{
+  const it=e.target.closest(".item");if(!it||e.target.tagName!=="INPUT")return;
+  const bib=e.target.value.trim();
+  if(it.dataset.cid){const q=queue.find(q=>q.client_id===it.dataset.cid);if(q){q.bib=bib;LS.set("judge.queue",queue);}render();return;}
+  try{await api(`/api/events/${ev.id}/manual/${it.dataset.id}`,{bib});vibe(30);await loadMarks();}catch(err){toast("Не сохранено: "+err.message);}
+});
+$("list").addEventListener("click",async e=>{
+  if(!e.target.dataset.del)return;
+  const it=e.target.closest(".item");if(!confirm("Удалить отметку?"))return;
+  try{await api(`/api/events/${ev.id}/manual/${it.dataset.id}`,{delete:true});await loadMarks();}catch(err){toast("Ошибка: "+err.message);}
+});
+
+loadEvents();
+setInterval(tick,100);
+setInterval(flush,2000);
+setInterval(()=>{if(!queue.length)loadMarks();},5000);
+setInterval(()=>loadEvents(),10000);
+</script>
+</body>
+</html>

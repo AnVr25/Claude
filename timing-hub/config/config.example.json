@@ -1,0 +1,54 @@
+{
+  "db_path": "/var/lib/timing-hub/reads.db",
+  "log_level": "INFO",
+  "store_raw": true,
+  "raw_memory_lines": 200,
+  "clock_warn_sec": 2.0,
+
+  "wiclax": {
+    "listen_host": "10.66.0.1",
+    "listen_port": 9854,
+    "heartbeat_sec": 5,
+    "forward_filter_sec": 3.0,
+    "live_on_connect": true
+  },
+
+  "web": {
+    "listen_host": "10.66.0.1",
+    "listen_port": 8080,
+    "user": "admin",
+    "password": "ЗАПОЛНИТСЯ_ПРИ_УСТАНОВКЕ",
+    "api_key": "ЗАПОЛНИТСЯ_ПРИ_УСТАНОВКЕ"
+  },
+
+  "sources": [
+    {
+      "id": "FINISH",
+      "name": "Финиш — F800 №1 (ридер сам шлёт на сервер)",
+      "enabled": true,
+      "mode": "listen",
+      "listen_host": "10.66.0.1",
+      "listen_port": 7001,
+      "parser": "auto",
+      "device": "FINISH"
+    },
+    {
+      "id": "KM5",
+      "name": "Отсечка 5 км — F800 №2 (сервер сам подключается к ридеру)",
+      "enabled": false,
+      "mode": "connect",
+      "host": "10.66.0.12",
+      "port": 10000,
+      "parser": "auto",
+      "device": "KM5"
+    },
+    {
+      "id": "OTHER",
+      "name": "Любые другие системы через HTTP (например, IPICO через свою программу)",
+      "enabled": true,
+      "mode": "http",
+      "parser": "auto",
+      "device": "OTHER"
+    }
+  ]
+}

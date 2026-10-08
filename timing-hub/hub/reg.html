@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Регистрация участников</title>
+<style>
+:root{--bg:#f3f4f1;--panel:#fff;--ink:#16181a;--muted:#646b72;--line:#dfe2dd;--accent:#c8462b;--accent-ink:#fff;--ok:#1f8a4c;--bad:#b42318;--soft:#f7f1ee;--focus:#c8462b55}
+@media (prefers-color-scheme:dark){:root{--bg:#101214;--panel:#1b1e21;--ink:#eceeef;--muted:#9aa2a9;--line:#2f353a;--accent:#e8603f;--soft:#2a1f1b;--ok:#3fbf73;--bad:#ff6b5b;--focus:#e8603f55}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:620px;margin:0 auto;padding:20px 16px 48px}
+.head{padding:6px 0 14px}
+.org{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+h1{font-size:26px;line-height:1.2;margin:6px 0 8px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:14px}
+.meta b{color:var(--ink);font-weight:600}
+.notice{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--soft);font-size:14px}
+.info{margin-top:10px;font-size:14px;white-space:pre-line;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:14px}
+.card h2{font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.full{grid-column:1/-1}
+@media (max-width:520px){.grid{grid-template-columns:1fr}}
+label.f{display:block;font-size:14px;font-weight:600;margin-bottom:5px}
+label.f i{font-style:normal;color:var(--accent)}
+label.f small{font-weight:400;color:var(--muted)}
+input[type=text],input[type=date],input[type=tel],input:not([type]){font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+input:focus{outline:3px solid var(--focus);outline-offset:0;border-color:var(--accent)}
+.err{color:var(--bad);font-size:13px;margin-top:4px;min-height:0}
+.bad input{border-color:var(--bad)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg label{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:11px;cursor:pointer;font-weight:600;background:var(--bg)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){border-color:var(--accent);background:var(--soft);color:var(--accent)}
+.seg label:has(input:focus-visible){outline:3px solid var(--focus)}
+.dist{display:flex;flex-direction:column;gap:8px}
+.drow{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.drow:has(input[type=checkbox]:checked){border-color:var(--accent);background:var(--soft)}
+.drow input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.drow .best{grid-column:2;display:none}
+.drow:has(input[type=checkbox]:checked) .best{display:block}
+.drow .best input{padding:8px 10px;font-size:15px}
+.dname{font-weight:700}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.consent input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--accent)}
+details{margin-top:10px;font-size:13px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--ink)}
+details p{white-space:pre-line;margin:8px 0 0}
+button{font:inherit;font-weight:700;border-radius:12px;padding:15px;width:100%;border:0;cursor:pointer;background:var(--accent);color:var(--accent-ink);font-size:18px;margin-top:16px}
+button:disabled{opacity:.6;cursor:wait}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-size:16px}
+.hp{position:absolute;left:-5000px;width:1px;height:1px;overflow:hidden}
+.done{text-align:center;padding:28px 18px}
+.done .big{font-size:44px;line-height:1}
+.done h2{font-size:22px;color:var(--ink);text-transform:none;letter-spacing:0;margin:12px 0 6px}
+.list a{display:block;color:inherit;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px;background:var(--panel)}
+.list a:hover{border-color:var(--accent)}
+.list b{display:block;font-size:17px}
+.muted{color:var(--muted)}
+.foot{margin-top:22px;font-size:12px;color:var(--muted);text-align:center}
+.hide{display:none!important}
+.formerr{margin-top:12px;color:var(--bad);font-weight:600;text-align:center}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:5px;margin-top:6px}
+.modes button{margin:0;font-size:15px;padding:11px 8px;background:transparent;color:var(--ink);border-radius:10px}
+.modes button.on{background:var(--accent);color:var(--accent-ink)}
+.step{display:flex;gap:12px;align-items:flex-start;margin-top:12px}
+.step .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--accent);font-weight:800;display:flex;align-items:center;justify-content:center}
+.btnlink{display:inline-block;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;text-decoration:none;margin-top:6px}
+.filebox{display:block;border:2px dashed var(--line);border-radius:12px;padding:16px;text-align:center;cursor:pointer;margin-top:6px;color:var(--muted)}
+.filebox:hover{border-color:var(--accent);color:var(--accent)}
+.filebox input{display:none}
+.tw{overflow-x:auto;margin-top:12px;border:1px solid var(--line);border-radius:10px}
+.tw table{border-collapse:collapse;width:100%;font-size:13px}
+.tw th,.tw td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.tw th{color:var(--muted);font-weight:600;background:var(--bg)}
+.tw tr.rowbad td{background:var(--soft)}
+.tw td.e{color:var(--bad);white-space:normal;min-width:180px}
+.sum{margin-top:10px;font-weight:600}
+.sum .ok{color:var(--ok)} .sum .no{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="root"><div class="card muted">Загрузка…</div></div>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const dRu=d=>{if(!d)return"";const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d);return m?`${+m[3]} ${months[+m[2]-1]} ${m[1]}`:d;};
+const dtRu=d=>{if(!d)return"";const t=d.slice(11,16);return dRu(d)+(t?" до "+t:"");};
+const parts=location.pathname.replace(/\/+$/,"").split("/");
+const slug=parts[2]||"";
+let INFO=null;
+
+async function main(){
+  if(!slug) return listOpen();
+  try{
+    const r=await fetch(`/r/${slug}/info`); const d=await r.json();
+    if(!r.ok) throw new Error(d.error||"ошибка");
+    INFO=d; document.title="Регистрация — "+d.name; render();
+  }catch(e){ $("root").innerHTML=`<div class="card"><b>Регистрация не найдена.</b><div class="muted">Проверьте ссылку у организатора.</div></div>`; }
+}
+async function listOpen(){
+  let ev=[]; try{ev=(await (await fetch("/r/api/open")).json()).events||[];}catch(e){}
+  $("root").innerHTML=`<div class="head"><h1>Регистрация на соревнования</h1></div>
+    <div class="list">${ev.map(e=>`<a href="/r/${esc(e.slug)}"><b>${esc(e.name)}</b><span class="muted">${esc([dRu(e.date),e.place].filter(Boolean).join(" · "))}</span>${e.deadline?`<div class="muted" style="font-size:13px">приём заявок ${esc(dtRu(e.deadline))}</div>`:""}</a>`).join("")||'<div class="card muted">Сейчас нет открытых регистраций.</div>'}</div>`;
+}
+function header(){
+  const d=INFO;
+  return `<div class="head">
+    ${d.organizer?`<div class="org">${esc(d.organizer)}</div>`:""}
+    <h1>${esc(d.name)}</h1>
+    <div class="meta">${d.date?`<span>Дата: <b>${esc(dRu(d.date))}</b></span>`:""}${d.place?`<span>Место: <b>${esc(d.place)}</b></span>`:""}${d.start_clock?`<span>Начало: <b>${esc(d.start_clock)}</b></span>`:""}</div>
+    ${d.open&&d.deadline?`<div class="notice">Приём заявок ${esc(dtRu(d.deadline))}</div>`:""}
+    ${d.info?`<div class="info">${esc(d.info)}</div>`:""}
+  </div>`;
+}
+function field(id,label,req,attrs="",hint=""){
+  return `<div id="w_${id}"><label class="f" for="${id}">${label}${req?" <i>*</i>":""}${hint?` <small>${hint}</small>`:""}</label><input id="${id}" ${attrs}><div class="err" id="e_${id}"></div></div>`;
+}
+function render(keep){
+  const d=INFO;
+  if(!d.open){ $("root").innerHTML=header()+`<div class="card"><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div>`; return; }
+  const one=d.distances.length===1;
+  $("root").innerHTML=header()+modeSwitch("one")+`
+  <form id="f" novalidate>
+    <div class="card"><h2>Участник</h2>
+      <div class="grid">
+        ${field("last_name","Фамилия",1,'autocomplete="family-name" maxlength="50"')}
+        ${field("first_name","Имя",1,'autocomplete="given-name" maxlength="50"')}
+        ${field("middle_name","Отчество",0,'autocomplete="additional-name" maxlength="50"')}
+        ${field("birth_date","Дата рождения",1,'type="date" min="1920-01-01"')}
+        <div class="full" id="w_sex"><label class="f">Пол <i>*</i></label>
+          <div class="seg"><label><input type="radio" name="sex" value="М">Мужской</label><label><input type="radio" name="sex" value="Ж">Женский</label></div>
+          <div class="err" id="e_sex"></div></div>
+        <div class="full hide" id="repBox">${field("representative","ФИО родителя (законного представителя)",1,'maxlength="80"',"— участнику нет 18 лет")}</div>
+      </div>
+    </div>
+    <div class="card"><h2>Команда</h2>
+      <div class="grid">
+        ${field("team","Команда / школа / город",1,'maxlength="80" placeholder="СШОР им. Комнацкого"')}
+        ${field("coach","Тренер",0,'maxlength="80" placeholder="Фамилия И. О."')}
+        <div class="full">${field("contact","Телефон или e-mail",0,'maxlength="80" autocomplete="tel"',"— для связи по заявке")}</div>
+      </div>
+    </div>
+    <div class="card"><h2>Дистанция</h2>
+      <div class="dist" id="w_distances">${(d.distances.length?d.distances:["—"]).map((x,i)=>`
+        <label class="drow"><input type="checkbox" name="dist" value="${esc(x)}" ${one?"checked":""}><span class="dname">${esc(x)}</span>
+          <span class="best"><input data-best="${i}" placeholder="лучший результат, напр. 12.8 или 2:35.4 (необязательно)" maxlength="12" inputmode="decimal"></span></label>`).join("")}
+      </div>
+      <div class="err" id="e_distances"></div>
+      <div class="muted" style="font-size:13px;margin-top:8px">Лучший результат нужен, чтобы поставить вас в забег с соперниками вашего уровня.</div>
+    </div>
+    <div class="card">
+      <label class="consent" id="w_consent"><input type="checkbox" id="consent"><span>Даю согласие на обработку персональных данных<span id="consentWho"></span> <i style="color:var(--accent);font-style:normal">*</i></span></label>
+      <div class="err" id="e_consent"></div>
+      <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
+    </div>
+    <div class="hp" aria-hidden="true"><input id="website" tabindex="-1" autocomplete="off"></div>
+    <button id="send" type="submit">Отправить заявку</button>
+    <div class="formerr" id="formErr"></div>
+  </form>
+  <div class="foot">Заявку проверит секретарь соревнований. Стартовый номер и забег будут в стартовом протоколе.</div>`;
+  if(keep){ ["team","coach","contact"].forEach(k=>$(k).value=keep[k]||""); }
+  $("birth_date").max=new Date().toISOString().slice(0,10);
+  $("birth_date").addEventListener("change",minorCheck);
+  $("f").addEventListener("submit",submit);
+}
+function modeSwitch(m){
+  return `<div class="modes"><button type="button" class="${m==="one"?"on":""}" onclick="render()">Один участник</button><button type="button" class="${m==="team"?"on":""}" onclick="renderTeam()">Команда списком (Excel)</button></div>`;
+}
+let TEAM={check:null,keep:{}};
+function renderTeam(){
+  const d=INFO, k=TEAM.keep;
+  if(!d.open) return render();
+  $("root").innerHTML=header()+modeSwitch("team")+`
+  <form id="tf" novalidate>
+    <div class="card"><h2>Команда</h2>
+      <div class="grid">
+        <div class="full">${field("t_team","Команда / школа / город",1,'maxlength="80"')}</div>
+        ${field("t_coach","Тренер / представитель команды",1,'maxlength="80" placeholder="Фамилия Имя Отчество"')}
+        ${field("t_contact","Телефон или e-mail",1,'maxlength="80"')}
+      </div>
+    </div>
+    <div class="card"><h2>Список участников</h2>
+      <div class="step"><span class="n">1</span><div><b>Скачайте шаблон</b><div class="muted" style="font-size:14px">Excel-файл с нужными колонками и списком дистанций этих соревнований.</div>
+        <a class="btnlink" href="/r/${esc(slug)}/template.xlsx">⬇ Скачать шаблон Excel</a></div></div>
+      <div class="step"><span class="n">2</span><div><b>Заполните</b><div class="muted" style="font-size:14px">Одна строка — один участник на одну дистанцию. Дату рождения — как 14.05.2011. Пол — М или Ж.</div></div></div>
+      <div class="step"><span class="n">3</span><div style="flex:1"><b>Загрузите заполненный файл</b>
+        <label class="filebox" id="w_file"><input type="file" id="t_file" accept=".xlsx,.csv"><span id="t_fname">Нажмите, чтобы выбрать файл (.xlsx или .csv)</span></label>
+        <div class="err" id="e_file"></div></div></div>
+      <div id="t_preview"></div>
+    </div>
+    <div class="card">
+      <label class="consent" id="w_t_consent"><input type="checkbox" id="t_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных <i style="color:var(--accent);font-style:normal">*</i></span></label>
+      <div class="err" id="e_t_consent"></div>
+      <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
+    </div>
+    <div class="hp" aria-hidden="true"><input id="t_website" tabindex="-1" autocomplete="off"></div>
+    <button id="t_send" type="submit" disabled>Отправить заявку команды</button>
+    <div class="formerr" id="formErr"></div>
+  </form>
+  <div class="foot">Заявки проверит секретарь соревнований. Стартовые номера и забеги будут в стартовом протоколе.</div>`;
+  ["team","coach","contact"].forEach(x=>{ if(k[x]) $("t_"+x).value=k[x]; });
+  $("t_file").addEventListener("change",teamFile);
+  $("tf").addEventListener("submit",teamSubmit);
+  TEAM.check=null;
+}
+function tKeep(){TEAM.keep={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value};}
+async function teamFile(){
+  const f=$("t_file").files[0]; if(!f) return;
+  $("e_file").textContent=""; $("t_fname").textContent=f.name+" — проверяем…"; $("t_send").disabled=true; $("t_preview").innerHTML="";
+  if(f.size>3*1024*1024){ $("e_file").textContent="Файл больше 3 МБ"; return; }
+  try{
+    const r=await fetch(`/r/${slug}/team-check`,{method:"POST",headers:{"Content-Type":"application/octet-stream",
+      "X-Team":encodeURIComponent($("t_team").value.trim()),"X-Coach":encodeURIComponent($("t_coach").value.trim())},body:await f.arrayBuffer()});
+    const d=await r.json().catch(()=>({}));
+    $("t_fname").textContent=f.name;
+    if(!r.ok){ $("e_file").textContent=d.error||"Не удалось проверить файл"; TEAM.check=null; return; }
+    TEAM.check=d; showCheck(d);
+  }catch(e){ $("e_file").textContent="Нет связи с сервером. Попробуйте ещё раз."; }
+  $("t_file").value="";
+}
+function showCheck(d){
+  const errTxt=e=>Object.values(e||{}).join("; ");
+  $("t_preview").innerHTML=`<div class="sum"><span class="ok">Готово к отправке: ${d.ok}</span>${d.bad?` · <span class="no">с ошибками: ${d.bad} — исправьте в файле и загрузите снова</span>`:""}</div>
+    <div class="tw"><table><thead><tr><th>Стр.</th><th>Участник</th><th>Д.р.</th><th>Пол</th><th>Категория</th><th>Дистанция</th><th>Результат</th><th></th></tr></thead><tbody>
+    ${d.rows.map(x=>`<tr class="${Object.keys(x.errors).length?"rowbad":""}"><td>${x.row}</td><td>${esc(x.name)||"—"}${Object.keys(x.errors).length?`<div class="e" style="color:var(--bad);white-space:normal;font-size:12px;max-width:240px">${esc(errTxt(x.errors))}</div>`:""}</td><td>${esc((x.birth_date||"").split("-").reverse().join("."))}</td><td>${esc(x.sex)}</td><td>${esc(x.category)}</td><td>${esc(x.distance)}</td><td>${esc(x.best)}</td>
+      ${Object.keys(x.errors).length?`<td style='color:var(--bad)'>✕</td>`:"<td style='color:var(--ok)'>✓</td>"}</tr>`).join("")}
+    </tbody></table></div>`;
+  $("t_send").disabled=!!d.bad||!d.ok;
+  $("t_send").textContent=`Отправить заявку команды (${d.ok})`;
+}
+async function teamSubmit(ev){
+  ev.preventDefault(); clearErr();
+  const loc={};
+  if(!$("t_team").value.trim())loc.t_team="обязательное поле";
+  if(!$("t_coach").value.trim())loc.t_coach="обязательное поле";
+  if(!$("t_contact").value.trim())loc.t_contact="обязательное поле";
+  if(!$("t_consent").checked)loc.t_consent="нужно подтвердить";
+  if(!TEAM.check)loc.file="загрузите файл";
+  if(Object.keys(loc).length){showErr(loc);return;}
+  tKeep();
+  $("t_send").disabled=true; $("t_send").textContent="Отправляем…";
+  try{
+    const body={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value,consent:true,website:$("t_website").value,
+      rows:TEAM.check.rows.map(x=>Object.assign({_row:x.row},x.raw))};
+    const r=await fetch(`/r/${slug}/team`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===201) return teamDone(d);
+    if(d.fields) showErr(Object.fromEntries(Object.entries(d.fields).map(([k,v])=>["t_"+k,v])));
+    if(d.check){TEAM.check=d.check; showCheck(d.check);}
+    $("formErr").textContent=d.error||"Не удалось отправить, попробуйте ещё раз";
+  }catch(e){ $("formErr").textContent="Нет связи с сервером. Проверьте интернет и попробуйте ещё раз."; }
+  $("t_send").disabled=false; $("t_send").textContent=`Отправить заявку команды (${TEAM.check?TEAM.check.ok:0})`;
+}
+function teamDone(d){
+  window.scrollTo(0,0);
+  $("root").innerHTML=header()+`<div class="card done">
+    <div class="big">✓</div>
+    <h2>Заявка команды принята</h2>
+    <div><b>${esc(d.team||"")}</b></div>
+    <div class="muted">Принято заявок: ${d.added}</div>
+    ${d.duplicates&&d.duplicates.length?`<div class="muted" style="margin-top:6px">Уже были зарегистрированы (пропущены): ${esc(d.duplicates.join("; "))}</div>`:""}
+    <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовые номера и забеги появятся в стартовом протоколе.</div>
+    <button class="ghost" id="more">Загрузить ещё один файл</button>
+  </div>`;
+  $("more").onclick=()=>{renderTeam();window.scrollTo(0,0);};
+}
+function age(bd){
+  const ref=INFO.date?new Date(INFO.date+"T12:00"):new Date(); const b=new Date(bd+"T12:00");
+  let a=ref.getFullYear()-b.getFullYear(); if(ref.getMonth()<b.getMonth()||(ref.getMonth()===b.getMonth()&&ref.getDate()<b.getDate()))a--; return a;
+}
+function minorCheck(){
+  const v=$("birth_date").value, minor=v&&age(v)<18;
+  $("repBox").classList.toggle("hide",!minor);
+  $("consentWho").textContent=minor?" участника (как его родитель / законный представитель)":"";
+}
+function clearErr(){document.querySelectorAll(".err").forEach(e=>e.textContent="");document.querySelectorAll(".bad").forEach(e=>e.classList.remove("bad"));$("formErr").textContent="";}
+function showErr(fields){
+  let first=null;
+  for(const [k,msg] of Object.entries(fields||{})){
+    const e=$("e_"+k); if(e)e.textContent=msg; const w=$("w_"+k); if(w){w.classList.add("bad"); first=first||w;}
+  }
+  if(first) first.scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function submit(ev){
+  ev.preventDefault(); clearErr();
+  const body={last_name:$("last_name").value,first_name:$("first_name").value,middle_name:$("middle_name").value,
+    birth_date:$("birth_date").value,sex:(document.querySelector('input[name=sex]:checked')||{}).value||"",
+    team:$("team").value,coach:$("coach").value,contact:$("contact").value,representative:$("representative").value,
+    consent:$("consent").checked,website:$("website").value,
+    distances:[...document.querySelectorAll('input[name=dist]:checked')].map(c=>({distance:c.value,best:c.closest(".drow").querySelector("[data-best]").value}))};
+  const loc={};
+  if(!body.last_name.trim())loc.last_name="обязательное поле";
+  if(!body.first_name.trim())loc.first_name="обязательное поле";
+  if(!body.birth_date)loc.birth_date="укажите дату рождения";
+  if(!body.sex)loc.sex="выберите пол";
+  if(!body.team.trim())loc.team="обязательное поле";
+  if(!body.distances.length)loc.distances="выберите дистанцию";
+  if(body.birth_date&&age(body.birth_date)<18&&!body.representative.trim())loc.representative="укажите ФИО родителя";
+  if(!body.consent)loc.consent="нужно согласие";
+  if(Object.keys(loc).length){showErr(loc);return;}
+  $("send").disabled=true; $("send").textContent="Отправляем…";
+  try{
+    const r=await fetch(`/r/${slug}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===201||(r.ok&&d.ok)) return done(d,body);
+    if(d.fields) showErr(d.fields);
+    $("formErr").textContent=d.error||"Не удалось отправить, попробуйте ещё раз";
+  }catch(e){ $("formErr").textContent="Нет связи с сервером. Проверьте интернет и попробуйте ещё раз."; }
+  $("send").disabled=false; $("send").textContent="Отправить заявку";
+}
+function done(d,body){
+  window.scrollTo(0,0);
+  $("root").innerHTML=header()+`<div class="card done">
+    <div class="big">✓</div>
+    <h2>Заявка принята</h2>
+    <div><b>${esc(d.name||"")}</b></div>
+    <div class="muted">${esc([(d.distances||[]).join(", "),d.category].filter(Boolean).join(" · "))}</div>
+    ${d.already&&d.already.length?`<div class="muted" style="margin-top:6px">Уже были зарегистрированы: ${esc(d.already.join(", "))}</div>`:""}
+    <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовый номер и забег появятся в стартовом протоколе.</div>
+    <button class="ghost" id="more">Зарегистрировать ещё одного участника</button>
+    <div class="muted" style="font-size:13px;margin-top:8px">Команда и тренер подставятся сами — удобно тренеру, который регистрирует группу.</div>
+  </div>`;
+  $("more").onclick=()=>{render({team:body.team,coach:body.coach,contact:body.contact});window.scrollTo(0,0);};
+}
+main();
+</script>
+</body>
+</html>
