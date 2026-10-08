@@ -1,0 +1,15 @@
+{
+  "name": "fla65-gto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Учёт результатов сдачи нормативов ГТО (ступени V–IX)",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js",
+    "user": "node --no-warnings=ExperimentalWarning cli.js"
+  }
+}

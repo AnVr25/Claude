@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Результаты ГТО</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=PT+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Вход -->
+<main id="login-view" class="login" hidden>
+  <form id="login-form" class="login-card" autocomplete="on">
+    <div class="brand brand-lg"><span class="brand-mark"></span><span>ГТО</span></div>
+    <h1>Результаты нормативов</h1>
+    <p class="muted">Федерация лёгкой атлетики Сахалинской области</p>
+    <label>Логин
+      <input name="login" autocomplete="username" required autofocus>
+    </label>
+    <label>Пароль
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <p id="login-error" class="form-error" role="alert"></p>
+    <button class="btn btn-primary btn-block" type="submit">Войти</button>
+  </form>
+</main>
+
+<!-- Приложение -->
+<div id="app-view" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"></span><span>ГТО</span><span class="brand-sub">ступени V–IX</span></div>
+    <nav class="topbar-right">
+      <span id="me-name" class="me"></span>
+      <span id="me-role" class="role-chip"></span>
+      <button id="btn-users" class="btn btn-ghost-light" hidden>Пользователи</button>
+      <button id="btn-password" class="btn btn-ghost-light">Пароль</button>
+      <button id="btn-logout" class="btn btn-ghost-light">Выйти</button>
+    </nav>
+  </header>
+
+  <section class="toolbar">
+    <div class="search">
+      <input id="f-q" type="search" placeholder="Поиск по фамилии, имени…" aria-label="Поиск по ФИО">
+    </div>
+    <select id="f-inst" aria-label="Институт"><option value="">Все институты</option></select>
+    <select id="f-grp" aria-label="Группа"><option value="">Все группы</option></select>
+    <select id="f-stage" aria-label="Ступень">
+      <option value="">Все ступени</option>
+      <option value="5">V ступень · 14–15</option>
+      <option value="6">VI ступень · 16–17</option>
+      <option value="7">VII ступень · 18–19</option>
+      <option value="8">VIII ступень · 20–24</option>
+      <option value="9">IX ступень · 25–29</option>
+    </select>
+    <select id="f-sex" aria-label="Пол">
+      <option value="">Юноши и девушки</option>
+      <option value="M">Юноши</option>
+      <option value="F">Девушки</option>
+    </select>
+    <select id="f-badge" aria-label="Знак">
+      <option value="">Любой знак</option>
+      <option value="3">Золото</option>
+      <option value="2">Серебро</option>
+      <option value="1">Бронза</option>
+      <option value="0">Знак не выполнен</option>
+    </select>
+    <button id="btn-reset" class="btn btn-link">Сбросить</button>
+    <div class="toolbar-spacer"></div>
+    <div class="edit-only toolbar-actions">
+      <button id="btn-add" class="btn btn-primary">+ Студент</button>
+      <button id="btn-import" class="btn btn-secondary">Импорт</button>
+    </div>
+    <a id="btn-export" class="btn btn-secondary" href="/api/export.csv">Экспорт CSV</a>
+  </section>
+
+  <div class="summary">
+    <span id="count"></span>
+    <span class="legend">
+      <span class="chip lvl-3">Золото</span>
+      <span class="chip lvl-2">Серебро</span>
+      <span class="chip lvl-1">Бронза</span>
+      <span class="chip lvl-0">Не выполнено</span>
+      <span class="chip na-chip">Не входит в ступень</span>
+    </span>
+  </div>
+
+  <main class="table-wrap" id="table-wrap">
+    <table class="grid" id="grid"></table>
+    <div id="empty" class="empty" hidden></div>
+  </main>
+</div>
+
+<!-- Карточка студента -->
+<aside id="drawer" class="drawer" hidden aria-modal="true" role="dialog">
+  <div class="drawer-panel">
+    <button class="drawer-close" data-close aria-label="Закрыть">×</button>
+    <div id="drawer-body"></div>
+  </div>
+</aside>
+
+<!-- Модальное окно -->
+<div id="modal" class="modal" hidden role="dialog" aria-modal="true">
+  <div class="modal-panel" id="modal-panel"></div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="norms.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
