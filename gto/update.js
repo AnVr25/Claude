@@ -99,7 +99,13 @@ function makeUpdater({
     if (fs.existsSync(path.join(dir, 'request')) || (job && job.state === 'running')) {
       throw new Error('Обновление уже выполняется');
     }
-    fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify({ state: 'queued', message: 'Заявка принята', sha, at: new Date().toISOString() }));
+    // status.json пишет и служба обновления (другой пользователь) — если файл её, пересоздаём его:
+    // в общей папке у приложения есть право удалять файлы.
+    const st = path.join(dir, 'status.json');
+    const body = JSON.stringify({ state: 'queued', message: 'Заявка принята', sha, at: new Date().toISOString() });
+    try { fs.writeFileSync(st, body); } catch {
+      try { fs.rmSync(st, { force: true }); fs.writeFileSync(st, body); } catch { /* не страшно: заявка — это файл request */ }
+    }
     fs.writeFileSync(path.join(dir, 'request'), sha + '\n');
     return { queued: true, sha };
   }

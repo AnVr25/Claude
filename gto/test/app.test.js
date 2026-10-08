@@ -1,4 +1,8 @@
 'use strict';
+// Тесты гоняет и служба обновления на сервере — с настройками рабочего приложения (/etc/gto.env).
+// Сбрасываем их до подключения модулей: тестам нужен «чистый» сервер на http и база в памяти,
+// а рабочая база и папка заявок не должны затрагиваться.
+for (const k of Object.keys(process.env)) if (k.startsWith('GTO_') || k === 'PORT' || k === 'HOST') delete process.env[k];
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');

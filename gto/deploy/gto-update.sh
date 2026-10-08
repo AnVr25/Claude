@@ -21,6 +21,7 @@ SHA=""
 status() { # state message
   local msg=${2//\"/\'}
   printf '{"state":"%s","message":"%s","sha":"%s","at":"%s"}\n' "$1" "$msg" "$SHA" "$(date -Is)" > "$QUEUE/status.json.tmp"
+  chmod 664 "$QUEUE/status.json.tmp" 2>/dev/null || true     # приложение (группа gto) тоже пишет сюда «заявка принята»
   mv -f "$QUEUE/status.json.tmp" "$QUEUE/status.json"
   echo "[$1] $2"
 }
@@ -40,7 +41,8 @@ curl -fsSL --max-time 120 "https://codeload.github.com/$REPO/tar.gz/$SHA" \
 [[ -f "$WORK/new/server.js" ]] || { trap - ERR; status error "В архиве нет приложения — обновление отменено"; exit 1; }
 
 status running "Проверяю новую версию (автотесты)"
-if ! (cd "$WORK/new" && timeout 300 "$NODE" --no-warnings=ExperimentalWarning --test test/*.test.js) > "$WORK/test.log" 2>&1; then
+# тесты — в чистом окружении: без настроек рабочего приложения (база, https-cookie, папка заявок)
+if ! (cd "$WORK/new" && timeout 300 env -i PATH=/usr/bin:/bin HOME="$WORK" "$NODE" --no-warnings=ExperimentalWarning --test test/*.test.js) > "$WORK/test.log" 2>&1; then
   trap - ERR
   status error "Автотесты не прошли — обновление отменено, работает прежняя версия"
   exit 1
