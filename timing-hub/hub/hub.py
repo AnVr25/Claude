@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.4"
+VERSION = "2.5"
 log = logging.getLogger("timing-hub")
 
 
@@ -777,6 +777,15 @@ class Store:
                        ("pub_results", "INTEGER NOT NULL DEFAULT 0")))
         add("files", (("public", "INTEGER NOT NULL DEFAULT 0"),))
         add("entries", (("result", "TEXT"), ("status", "TEXT")))
+        # Таблицы users/sessions могли остаться от старых сборок сервера с другим устройством —
+        # тогда CREATE TABLE IF NOT EXISTS их не трогает и вход/пользователи ломаются. Откладываем старые в сторону.
+        for table, need in (("users", {"login", "role", "pwd"}), ("sessions", {"token", "login", "expires_at"})):
+            have = cols(table)
+            if have and not need <= have:
+                old = f"{table}_old_{int(time.time())}"
+                self.con.execute(f"ALTER TABLE {table} RENAME TO {old}")
+                log.warning("Таблица %s была старого вида (%s) — сохранена как %s, создаётся новая",
+                            table, ", ".join(sorted(have)), old)
         self.con.executescript(
             """
             CREATE TABLE IF NOT EXISTS registrations(
