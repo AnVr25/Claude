@@ -56,20 +56,37 @@ function makeUpdater({
     return commitInfo(await github(`commits/${encodeURIComponent(branch)}`));
   }
 
-  // Что изменилось между установленной версией и вершиной ветки.
+  // В репозитории живут и ГТО, и сервер хронометража SakhStart. Обновлением ГТО считаются
+  // только изменения в папке gto/ — правки SakhStart сюда не попадают.
+  const APP_PATH = 'gto';
+
+  async function ownCommits() {
+    const list = await github(`commits?sha=${encodeURIComponent(branch)}&path=${APP_PATH}&per_page=30`);
+    return Array.isArray(list) ? list.map(commitInfo) : [];
+  }
+
+  // Что изменилось в ГТО между установленной версией и вершиной ветки.
   async function check() {
     const head = await latest();
     const cur = current();
-    let changes = [];
-    if (cur.sha && cur.sha !== head.sha) {
+    const own = await ownCommits();
+    const newest = own[0] || head;
+    const asLatest = (sha) => ({ sha, label: newest.sha, date: newest.date, message: newest.message });
+    if (cur.sha && cur.sha === head.sha) return { latest: asLatest(head.sha), current: cur, upToDate: true, changes: [] };
+    let changes = own.slice(0, 1);
+    let touched = true;
+    if (cur.sha) {
       try {
         const cmp = await github(`compare/${cur.sha}...${head.sha}`);
-        changes = (cmp.commits || []).map(commitInfo).reverse();
-      } catch { changes = [head]; }
-    } else if (!cur.sha) {
-      changes = [head];
+        const inRange = new Set((cmp.commits || []).map((c) => c.sha));
+        changes = own.filter((c) => inRange.has(c.sha));
+        touched = Array.isArray(cmp.files)
+          ? cmp.files.some((f) => String(f.filename || '').startsWith(APP_PATH + '/'))
+          : changes.length > 0;
+      } catch { /* установленной версии нет на GitHub — предлагаем текущую */ }
     }
-    return { latest: head, current: cur, upToDate: cur.sha === head.sha, changes };
+    if (!touched) return { latest: asLatest(cur.sha), current: cur, upToDate: true, changes: [] };
+    return { latest: asLatest(head.sha), current: cur, upToDate: false, changes };
   }
 
   // Заявка на установку: только вершина ветки, проверяем по GitHub ещё раз.

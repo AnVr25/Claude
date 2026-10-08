@@ -328,8 +328,11 @@ test('API обновления: только админ, ставится тол
   const fakeFetch = async (url) => ({
     ok: true,
     json: async () => (url.includes('/compare/')
-      ? { commits: [commit('c'.repeat(40), 'Первое изменение'), commit(HEAD, 'Второе изменение')] }
-      : commit(HEAD, 'Второе изменение')),
+      ? { commits: [commit('c'.repeat(40), 'Первое изменение'), commit(HEAD, 'Второе изменение')],
+          files: [{ filename: 'gto/server.js' }, { filename: 'timing-hub/hub/hub.py' }] }
+      : url.includes('commits?')
+        ? [commit(HEAD, 'Второе изменение'), commit('c'.repeat(40), 'Первое изменение'), commit('d'.repeat(40), 'Старое')]
+        : commit(HEAD, 'Второе изменение')),
   });
   const updater = makeUpdater({ dir, appDir, fetchImpl: fakeFetch });
 
@@ -362,6 +365,21 @@ test('API обновления: только админ, ставится тол
   assert.equal(res.status, 202);
   assert.equal(fs.readFileSync(path.join(dir, 'request'), 'utf8').trim(), HEAD);
   assert.equal((await admin('POST', '/api/update/install', { sha: HEAD })).status, 409, 'повторная заявка, пока идёт обновление');
+
+  // на вершине ветки менялся только сервер хронометража (timing-hub/) — ГТО обновлять нечего
+  const OTHER = 'e'.repeat(40);
+  const onlyHub = async (url) => ({
+    ok: true,
+    json: async () => (url.includes('/compare/')
+      ? { commits: [commit(OTHER, 'SakhStart 2.1')], files: [{ filename: 'timing-hub/hub/hub.py' }] }
+      : url.includes('commits?') ? [commit(OLD, 'ГТО: прежняя версия')] : commit(OTHER, 'SakhStart 2.1')),
+  });
+  const appDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gto-app-'));
+  t.after(() => fs.rmSync(appDir2, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(appDir2, 'VERSION.json'), JSON.stringify({ sha: OLD, installed_at: '2026-10-01T10:00:00Z' }));
+  const chk2 = await makeUpdater({ dir, appDir: appDir2, fetchImpl: onlyHub }).check();
+  assert.equal(chk2.upToDate, true, 'изменения SakhStart не считаются обновлением ГТО');
+  assert.deepEqual(chk2.changes, []);
 
   // без папки заявок (сервер не настроен) — кнопка честно говорит об этом
   const off = makeUpdater({ dir: '', appDir, fetchImpl: fakeFetch });

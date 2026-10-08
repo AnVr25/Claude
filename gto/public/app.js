@@ -691,11 +691,11 @@ async function openUpdate() {
       const r = await api('GET', '/api/update/check');
       latestSha = r.latest.sha;
       if (r.upToDate) {
-        $('#upd-body').innerHTML = `<p>Установлена последняя версия (<strong>${esc(shortSha(r.latest.sha))}</strong>).</p>`;
+        $('#upd-body').innerHTML = `<p>Установлена последняя версия ГТО (<strong>${esc(shortSha(r.latest.label || r.latest.sha))}</strong>). Изменения сервера хронометража SakhStart сюда не относятся — он обновляется своей кнопкой.</p>`;
         $('#upd-install').hidden = true;
         return;
       }
-      $('#upd-body').innerHTML = `<p>Доступна версия <strong>${esc(shortSha(r.latest.sha))}</strong> от ${esc(fmtIso(r.latest.date))}. Что изменилось:</p>
+      $('#upd-body').innerHTML = `<p>Доступна новая версия ГТО <strong>${esc(shortSha(r.latest.label || r.latest.sha))}</strong> от ${esc(fmtIso(r.latest.date))}. Что изменилось:</p>
         <ul class="changes">${r.changes.map((c) => `<li>${esc(c.message)} <span class="hint">· ${esc(shortSha(c.sha))}</span></li>`).join('')}</ul>
         <p class="hint">Сервер скачает версию, прогонит автотесты и только потом установит. Если что-то пойдёт не так — вернёт прежнюю. Сайт будет недоступен несколько секунд.</p>`;
       $('#upd-install').hidden = !st.enabled;
