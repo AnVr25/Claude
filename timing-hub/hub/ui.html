@@ -317,6 +317,20 @@ td.res{font:600 18px var(--head)}
 .switches{display:flex;flex-wrap:wrap;gap:12px 26px;margin:6px 0 4px}
 .pagelink{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--ice);border-radius:var(--r);padding:8px 10px;margin-top:10px;font-size:14px}
 .pagelink a{font-weight:700;color:var(--track);word-break:break-all}
+.utbl td{vertical-align:middle}
+.utbl input,.utbl select{font:inherit;font-size:14px;padding:5px 8px;border:1px solid transparent;border-radius:var(--r);background:transparent;color:var(--ink);width:100%;min-width:110px}
+.utbl input:hover,.utbl select:hover{border-color:var(--line)}
+.utbl input:focus,.utbl select:focus{border-color:var(--night);background:var(--panel);outline:3px solid #E71E2533}
+.utbl td.uact{white-space:nowrap;text-align:right}
+.utbl tr.off td{opacity:.5}.utbl tr.off td.uact{opacity:1}
+.utbl .saved{outline:2px solid var(--ok)}
+.secret{font-family:var(--mono);background:#C9A2272a;padding:2px 6px;border-radius:4px;user-select:all}
+.unote{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:var(--r);padding:10px 14px;margin:0 0 12px}
+.form.uadd{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:760px){.form.uadd{grid-template-columns:1fr}
+  .utbl thead{display:none}.utbl tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .utbl td{border:0!important;padding:0!important;min-width:0}.utbl td:first-child,.utbl td:nth-child(4),.utbl td.uact,.utbl td[colspan]{grid-column:1/-1}
+  .utbl input,.utbl select{min-width:0;border-color:var(--line)}.utbl td.uact{text-align:left;white-space:normal;display:flex;flex-wrap:wrap;gap:6px}}
 .tag{font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 8px;background:#17905A1a;color:var(--ok);margin-left:6px;vertical-align:middle;font-family:var(--body)}
 body[data-view=timing][data-mode=entry]{background:var(--ice)}
 body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 70px}
@@ -401,6 +415,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <button class="usr" id="usrBtn" aria-haspopup="true" title="Пользователь">…</button>
     <div class="menu right" id="usrMenu">
       <div class="small muted" id="usrRole" style="padding:6px 10px"></div>
+      <a class="mi adm" href="#users"><b>Пользователи</b></a>
       <button class="mi" id="usrPwd"><b>Сменить пароль</b></button>
       <button class="mi" id="usrOut"><b>Выйти</b></button>
     </div>
@@ -868,20 +883,22 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 <section id="tab-users" class="hide">
   <div class="pagehead"><div><h1>Система</h1><p class="lead">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>. VPN для этого не нужен.</p></div></div>
   <div class="subnav"><a href="#hw">Оборудование</a><a href="#users" class="on">Пользователи</a><a href="#log">Журнал действий</a></div>
-  <div class="tbl"><table>
-    <thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
+  <p class="small muted" style="margin:0 0 10px"><b>Секретарь</b> — всё, кроме «Системы». <b>Судья</b> — телефон судьи, табло, протокол. <b>Администратор</b> — всё, включая пользователей и обновление. Имя, роль и примечание сохраняются сразу.</p>
+  <div id="uNotice"></div>
+  <div class="tbl"><table class="utbl">
+    <thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Примечание</th><th>Последний вход</th><th></th></tr></thead>
     <tbody id="uBody"></tbody>
   </table></div>
   <div class="panel" style="margin-top:14px">
-    <h3>Добавить или изменить</h3>
-    <div class="form">
-      <div><label for="uLogin">Логин</label><input id="uLogin" placeholder="petrova" autocapitalize="none"></div>
+    <h3>Добавить пользователя</h3>
+    <div class="form uadd">
+      <div><label for="uLogin">Логин</label><input id="uLogin" placeholder="petrova" autocapitalize="none" spellcheck="false"></div>
       <div><label for="uName">Имя</label><input id="uName" placeholder="Петрова Анна"></div>
-      <div><label for="uRole">Роль</label><select id="uRole"><option value="secretary">Секретарь — всё, кроме «Системы»</option><option value="judge">Судья — телефон судьи, табло, протокол</option><option value="admin">Администратор — всё</option></select></div>
-      <div><label for="uPwd">Пароль <span class="muted">(не короче 8; пусто — не менять)</span></label><input id="uPwd" type="text" autocomplete="new-password"></div>
+      <div><label for="uRole">Роль</label><select id="uRole"><option value="secretary">Секретарь</option><option value="judge">Судья</option><option value="admin">Администратор</option></select></div>
+      <div><label for="uNote">Примечание</label><input id="uNote" placeholder="судья на финише, до 30.10" maxlength="200"></div>
     </div>
-    <div class="row" style="margin-top:12px"><button class="primary" id="uSave">Сохранить пользователя</button><button id="uGen">Придумать пароль</button></div>
-    <p class="small muted" style="margin-bottom:0">Пароль передайте человеку лично. Сменить свой пароль можно в меню с вашим логином вверху справа.</p>
+    <div class="row" style="margin-top:12px"><button class="primary" id="uSave">Добавить</button></div>
+    <p class="small muted" style="margin-bottom:0">Пароль придумается сам и будет показан один раз — передайте его человеку лично. Сменить свой пароль можно в меню с вашим логином вверху справа.</p>
   </div>
 </section>
 
@@ -2180,24 +2197,49 @@ $("usrPwd").onclick = async () => {
   if (prompt("Повторите новый пароль:") !== nw) return toast("Пароли не совпали");
   try{ await api("/api/me/password", {old, new: nw}); toast("Пароль изменён"); }catch(e){ toast("Ошибка: "+e.message); }
 };
-async function loadUsers(){
+async function loadUsers(notice){
   let d; try{ d = await api("/api/users"); }catch(e){ return; }
-  $("uBody").innerHTML = d.users.map(u => `<tr data-login="${esc(u.login)}" data-name="${esc(u.name||"")}" data-role="${esc(u.role)}">
-      <td><b>${esc(u.login)}</b>${u.login===d.me?' <span class="tag">это вы</span>':""}</td><td>${esc(u.name||"")}</td>
-      <td>${esc(d.roles[u.role]||u.role)}</td><td class="small muted">${esc((u.last_login||"—").slice(0,16))}</td>
-      <td style="text-align:right">${u.builtin ? '<span class="small muted">пароль из настроек сервера — смените через меню с логином</span>' :
-        `<button class="sm" data-act="uedit">Изменить</button>${u.login===d.me?"":' <button class="sm danger" data-act="udel">Удалить</button>'}`}</td></tr>`).join("");
+  if (notice !== undefined) $("uNotice").innerHTML = notice;
+  const roleOpts = (r) => Object.entries(d.roles).map(([k, v]) => `<option value="${k}"${k===r?" selected":""}>${esc(v)}</option>`).join("");
+  $("uBody").innerHTML = d.users.map(u => { const me = u.login === d.me;
+    if (u.builtin) return `<tr><td><b>${esc(u.login)}</b>${me?' <span class="tag">это вы</span>':""}</td><td>${esc(u.name)}</td><td>${esc(d.roles.admin)}</td>
+      <td colspan="3" class="small muted">учётка из настроек сервера; чтобы задать ей примечание и пароль, добавьте пользователя с тем же логином</td></tr>`;
+    return `<tr data-login="${esc(u.login)}" class="${u.active?"":"off"}">
+      <td><b>${esc(u.login)}</b>${me?' <span class="tag">это вы</span>':""}${u.active?"":' <span class="small muted">заблокирован</span>'}</td>
+      <td><input data-f="name" value="${esc(u.name||"")}" aria-label="Имя"></td>
+      <td><select data-f="role" aria-label="Роль"${me?" disabled":""}>${roleOpts(u.role)}</select></td>
+      <td><input data-f="note" value="${esc(u.note||"")}" maxlength="200" placeholder="—" aria-label="Примечание"></td>
+      <td class="small muted">${esc((u.last_login||"не входил").slice(0,16))}</td>
+      <td class="uact">${me?'<span class="small muted">свой пароль — в меню с логином</span>':
+        `<button class="sm" data-act="upwd">Новый пароль</button> <button class="sm" data-act="uact">${u.active?"Заблокировать":"Разблокировать"}</button> <button class="sm danger" data-act="udel">Удалить</button>`}</td></tr>`; }).join("");
 }
+const genPwd = () => { const a = "abcdefghjkmnpqrstuvwxyz23456789"; const r = crypto.getRandomValues(new Uint32Array(12)); return Array.from(r, x => a[x % a.length]).join(""); };
+const pwdNotice = (what, login, pw) => `<div class="unote">${what} <b>${esc(login)}</b>, пароль: <span class="secret">${esc(pw)}</span> — передайте его лично, повторно он показан не будет.</div>`;
+$("uBody").addEventListener("change", async (e) => {
+  const el = e.target, f = el.dataset.f, tr = el.closest("tr"); if (!f || !tr) return;
+  try{ await api(`/api/users/${encodeURIComponent(tr.dataset.login)}/update`, {[f]: el.value});
+    el.classList.add("saved"); setTimeout(() => el.classList.remove("saved"), 900); }
+  catch(err){ toast("Ошибка: "+err.message); loadUsers(); }
+});
+$("uBody").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input[data-f]")) e.target.blur(); });
 $("uBody").addEventListener("click", async (e) => {
   const tr = e.target.closest("tr"), act = e.target.dataset.act; if (!tr || !act) return;
-  if (act === "uedit") { $("uLogin").value = tr.dataset.login; $("uName").value = tr.dataset.name; $("uRole").value = tr.dataset.role; $("uPwd").value = ""; $("uName").focus(); }
-  if (act === "udel") { if (!confirm(`Удалить пользователя ${tr.dataset.login}? Он сразу потеряет доступ.`)) return;
-    try{ await api(`/api/users/${encodeURIComponent(tr.dataset.login)}/delete`, {}); toast("Удалён"); loadUsers(); }catch(err){ toast("Ошибка: "+err.message); } }
+  const login = tr.dataset.login, url = `/api/users/${encodeURIComponent(login)}`;
+  try{
+    if (act === "upwd") { if (!confirm(`Выдать ${login} новый пароль? Старый перестанет работать.`)) return;
+      const pw = genPwd(); await api(url + "/update", {password: pw}); loadUsers(pwdNotice("Новый пароль для", login, pw)); }
+    if (act === "uact") { const on = tr.classList.contains("off");
+      if (!on && !confirm(`Заблокировать ${login}? Он сразу потеряет доступ.`)) return;
+      await api(url + "/update", {active: on}); toast(on ? "Разблокирован" : "Заблокирован"); loadUsers(); }
+    if (act === "udel") { if (!confirm(`Удалить пользователя ${login}? Он сразу потеряет доступ.`)) return;
+      await api(url + "/delete", {}); toast("Удалён"); loadUsers(""); }
+  }catch(err){ toast("Ошибка: "+err.message); }
 });
-$("uGen").onclick = () => { const a = "abcdefghjkmnpqrstuvwxyz23456789"; const r = crypto.getRandomValues(new Uint32Array(12)); $("uPwd").value = Array.from(r, x => a[x % a.length]).join(""); };
 $("uSave").onclick = async () => {
-  try{ await api("/api/users", {login:$("uLogin").value.trim().toLowerCase(), name:$("uName").value.trim(), role:$("uRole").value, password:$("uPwd").value});
-    toast("Пользователь сохранён" + ($("uPwd").value ? ". Передайте пароль лично." : "")); ["uLogin","uName","uPwd"].forEach(i => $(i).value = ""); loadUsers(); }
+  const login = $("uLogin").value.trim().toLowerCase(), pw = genPwd();
+  if (!login) return toast("Введите логин");
+  try{ await api("/api/users", {login, name:$("uName").value.trim(), role:$("uRole").value, note:$("uNote").value.trim(), password: pw, create: true});
+    ["uLogin","uName","uNote"].forEach(i => $(i).value = ""); loadUsers(pwdNotice("Создан", login, pw)); }
   catch(e){ toast("Ошибка: "+e.message); }
 };
 

@@ -326,6 +326,27 @@ def main() -> int:
         check("судья не может удалить соревнование", code == 403, str(code))
         jpost("/api/logout", {}, jck, True)
         check("после выхода сессия не действует", cget("/api/events", jck) == 401)
+        code, d, _ = jpost("/api/users", {"login": "judge1", "role": "judge", "password": "other-pass-2", "create": True}, adm, True)
+        check("пользователи: повторный логин при добавлении — 409", code == 409, str(code))
+        code, d, _ = jpost("/api/users/judge1/update", {"note": "  финиш,   до 30.10 ", "name": "Судья Петров"}, adm, True)
+        req = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/users",
+                                     headers={"Cookie": adm, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            ul = {u["login"]: u for u in json.loads(resp.read())["users"]}
+        j1 = ul.get("judge1", {})
+        check("пользователи: примечание и имя сохранены", code == 200 and j1.get("note") == "финиш, до 30.10"
+              and j1.get("name") == "Судья Петров" and j1.get("active") == 1, str(j1))
+        code, d, ck = jpost("/api/login", {"login": "judge1", "password": "judge-pass-1"}, proxied=True)
+        jck = ck.split(";")[0]
+        code, d, _ = jpost("/api/users/judge1/update", {"active": False}, adm, True)
+        code2, _, _ = jpost("/api/login", {"login": "judge1", "password": "judge-pass-1"}, proxied=True)
+        check("пользователи: заблокированный не входит, его сессии закрыты",
+              code == 200 and code2 == 401 and cget("/api/events", jck) == 401, f"{code} {code2}")
+        code, d, _ = jpost("/api/users/judge1/update", {"active": True, "password": "judge-pass-9"}, adm, True)
+        code2, _, _ = jpost("/api/login", {"login": "judge1", "password": "judge-pass-9"}, proxied=True)
+        check("пользователи: разблокирован, новый пароль работает", code == 200 and code2 == 200, f"{code} {code2}")
+        code, d, _ = jpost("/api/users/admin/update", {"active": False}, adm, True)
+        check("пользователи: нельзя заблокировать того, кого нет в таблице", code == 404, str(code))
         code, txt = http("GET", "/")
         check("страница состояния открывается", code == 200 and "Сервер хронометража" in txt, str(code))
         code, txt = http("GET", "/api/status")

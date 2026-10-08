@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.5"
+VERSION = "2.6"
 log = logging.getLogger("timing-hub")
 
 
@@ -718,6 +718,7 @@ class Store:
                        ("organizer", "TEXT"), ("chief_judge", "TEXT"), ("chief_secretary", "TEXT"),
                        ("start_clock", "TEXT"), ("heats_sequential", "INTEGER")))
         add("readers", (("wiclax_port", "INTEGER"),))
+        add("users", (("note", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1")))
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
         self.con.executescript(
@@ -838,7 +839,9 @@ class Store:
                 role TEXT NOT NULL DEFAULT 'secretary',
                 pwd TEXT NOT NULL,
                 created_at TEXT,
-                last_login TEXT
+                last_login TEXT,
+                note TEXT,
+                active INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS sessions(
                 token TEXT PRIMARY KEY,
@@ -851,21 +854,32 @@ class Store:
 
     # ---- пользователи и сессии (вход через браузер)
     def users(self) -> list:
-        return self._rows(self.con.execute("SELECT login, name, role, created_at, last_login FROM users ORDER BY login"))
+        return self._rows(self.con.execute(
+            "SELECT login, name, role, note, active, created_at, last_login FROM users ORDER BY active DESC, login"))
 
     def get_user(self, login: str) -> Optional[dict]:
         rows = self._rows(self.con.execute("SELECT * FROM users WHERE login = ?", (login,)))
         return rows[0] if rows else None
 
-    def save_user(self, login: str, name: str, role: str, pwd: Optional[str]) -> None:
+    def save_user(self, login: str, name: str, role: str, pwd: Optional[str], note: Optional[str] = None) -> None:
         if self.get_user(login):
             self.con.execute("UPDATE users SET name = ?, role = ? WHERE login = ?", (name, role, login))
+            if note is not None:
+                self.con.execute("UPDATE users SET note = ? WHERE login = ?", (note, login))
             if pwd:
                 self.con.execute("UPDATE users SET pwd = ? WHERE login = ?", (pwd, login))
                 self.con.execute("DELETE FROM sessions WHERE login = ?", (login,))
         else:
-            self.con.execute("INSERT INTO users(login, name, role, pwd, created_at) VALUES (?,?,?,?,?)",
-                             (login, name, role, pwd, fmt_db(now_local())))
+            self.con.execute("INSERT INTO users(login, name, role, pwd, created_at, note) VALUES (?,?,?,?,?,?)",
+                             (login, name, role, pwd, fmt_db(now_local()), note or ""))
+
+    def update_user(self, login: str, **f) -> None:
+        """Частичное изменение: name, role, note, active, pwd. Смена пароля и блокировка закрывают сеансы."""
+        for k in ("name", "role", "note", "active", "pwd"):
+            if k in f:
+                self.con.execute(f"UPDATE users SET {k} = ? WHERE login = ?", (f[k], login))
+        if "pwd" in f or f.get("active") == 0:
+            self.con.execute("DELETE FROM sessions WHERE login = ?", (login,))
 
     def delete_user(self, login: str) -> None:
         self.con.execute("DELETE FROM users WHERE login = ?", (login,))
@@ -4440,8 +4454,8 @@ class Hub:
         """Пользователь из таблицы или учётка из настроек (web.user / web.password) — администратор."""
         u = self.store.get_user(login)
         if u:
-            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]} \
-                if self.verify_password(pwd, u["pwd"]) else None
+            ok = self.verify_password(pwd, u["pwd"]) and u.get("active", 1)
+            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]} if ok else None
         web = self.cfg["web"]
         cfg_pwd = web.get("password") or ""
         if cfg_pwd and hmac.compare_digest(login, web.get("user", "admin")) and hmac.compare_digest(pwd, cfg_pwd):
@@ -4451,6 +4465,8 @@ class Hub:
     def _user_by_login(self, login: str) -> Optional[dict]:
         u = self.store.get_user(login)
         if u:
+            if not u.get("active", 1):
+                return None     # заблокирован
             return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]}
         if login == self.cfg["web"].get("user", "admin"):
             return {"login": login, "name": "Администратор", "role": "admin"}
@@ -4477,6 +4493,9 @@ class Hub:
             return u
         # Basic-авторизация — только напрямую (VPN, скрипты, самопроверка), не через nginx из интернета
         if not proxied and self._auth_ok(headers, allow_api_key=False) and self.cfg["web"].get("password"):
+            blocked = self.store.get_user(self._auth_user(headers))
+            if blocked and not blocked.get("active", 1):
+                return None
             return self._user_by_login(self._auth_user(headers)) or {"login": self._auth_user(headers), "name": "", "role": "admin"}
         if not self.cfg["web"].get("password") and not proxied:
             return {"login": "-", "name": "", "role": "admin"}
@@ -4569,21 +4588,50 @@ class Hub:
             lst = self.store.users()
             if cfg_admin not in have:
                 lst.insert(0, {"login": cfg_admin, "name": "Администратор (из настроек сервера)", "role": "admin",
-                               "created_at": None, "last_login": None, "builtin": True})
+                               "created_at": None, "last_login": None, "note": "", "active": 1, "builtin": True})
             return 200, {"users": lst, "roles": self.ROLES, "me": me["login"]}
-        m = re.fullmatch(r"/api/users(?:/([a-z0-9._-]{1,32})/delete)?", path)
+        m = re.fullmatch(r"/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?", path)
         if not m or method != "POST":
             return 404, {"error": "нет такого адреса"}
-        if m.group(1):
+        if m.group(2) == "delete":
             if m.group(1) == me["login"]:
                 return 400, {"error": "нельзя удалить самого себя"}
             self.store.delete_user(m.group(1))
             self.store.audit(actor, None, "Удалён пользователь", m.group(1))
             return 200, {"deleted": m.group(1)}
+        if m.group(2) == "update":
+            target = m.group(1)
+            if not self.store.get_user(target):
+                return 404, {"error": "пользователь не найден"}
+            f, what = {}, []
+            if "role" in data:
+                if data["role"] not in self.ROLES:
+                    return 400, {"error": "неизвестная роль"}
+                if target == me["login"] and data["role"] != "admin":
+                    return 400, {"error": "нельзя снять права администратора с самого себя"}
+                f["role"] = data["role"]; what.append(f"роль: {self.ROLES[data['role']]}")
+            if "name" in data:
+                f["name"] = re.sub(r"\s+", " ", str(data["name"] or "")).strip()[:80] or target; what.append("имя")
+            if "note" in data:
+                f["note"] = re.sub(r"\s+", " ", str(data["note"] or "")).strip()[:200]; what.append("примечание")
+            if "active" in data:
+                if target == me["login"] and not data["active"]:
+                    return 400, {"error": "нельзя заблокировать самого себя"}
+                f["active"] = 1 if data["active"] else 0; what.append("разблокирован" if data["active"] else "заблокирован")
+            if data.get("password"):
+                if len(str(data["password"])) < 8:
+                    return 400, {"error": "пароль — не короче 8 символов"}
+                f["pwd"] = self.hash_password(str(data["password"])); what.append("новый пароль")
+            if not f:
+                return 400, {"error": "нечего менять"}
+            self.store.update_user(target, **f)
+            self.store.audit(actor, None, "Пользователь изменён", f"{target} · {', '.join(what)}")
+            return 200, {"ok": True}
         login = str(data.get("login") or "").strip().lower()
         role = str(data.get("role") or "")
         name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:80]
         pwd = str(data.get("password") or "")
+        note = re.sub(r"\s+", " ", str(data["note"] or "")).strip()[:200] if "note" in data else None
         if not self.LOGIN_RE.fullmatch(login):
             return 400, {"error": "логин: латиница, цифры, точка, дефис; 2–32 символа"}
         if role not in self.ROLES:
@@ -4591,11 +4639,13 @@ class Hub:
         if login == me["login"] and role != "admin":
             return 400, {"error": "нельзя снять права администратора с самого себя"}
         exists = self.store.get_user(login) is not None
+        if exists and data.get("create"):
+            return 409, {"error": "такой логин уже есть"}
         if (not exists or pwd) and len(pwd) < 8:
             return 400, {"error": "пароль — не короче 8 символов"}
         if not exists and login == self.cfg["web"].get("user", "admin") and login != me["login"]:
             return 400, {"error": "этот логин занят встроенным администратором"}
-        self.store.save_user(login, name or login, role, self.hash_password(pwd) if pwd else None)
+        self.store.save_user(login, name or login, role, self.hash_password(pwd) if pwd else None, note)
         self.store.audit(actor, None, "Пользователь сохранён" if exists else "Добавлен пользователь",
                          f"{login} · {self.ROLES[role]}")
         return 200, {"ok": True, "login": login}
