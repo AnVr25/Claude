@@ -4,34 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Табло финиша</title>
+<link rel="stylesheet" href="/assets/brand.css">
 <style>
-:root{--bg:#0d0f11;--ink:#f2f3f4;--muted:#8b939a;--accent:#e8603f;--line:#23282d;--mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
+/* Табло у финиша: тёмно-синий фон, крупный Oswald, масштаб от размера экрана (TV/проектор). */
+:root{color-scheme:dark;
+  --bd-bg:var(--night);--bd-ink:#fff;--bd-muted:var(--night-muted);--bd-line:var(--night-line);
+  --bd-pad:clamp(16px,2.6vw,56px);
+  /* строка результатов: влезают 10 строк по высоте и ширине экрана */
+  --bd-row:clamp(18px,min(3.5vw,4.55vh),80px)}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.wrap{display:flex;flex-direction:column;height:100%;padding:3vh 4vw}
-.top{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
-.name{font-size:clamp(20px,3.2vw,44px);font-weight:700}
-.meta{color:var(--muted);font-size:clamp(14px,1.6vw,22px)}
-.clock{font:700 clamp(70px,17vw,260px)/1 var(--mono);text-align:center;letter-spacing:-.03em;margin:2vh 0}
-.clock.idle{color:var(--muted);font-size:clamp(36px,7vw,100px)}
-h2{margin:0 0 1vh;font-size:clamp(14px,1.5vw,20px);color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
-.list{flex:1;overflow:hidden}
-.r{display:grid;grid-template-columns:3.2em 1fr auto;align-items:baseline;gap:1em;padding:.5vh 0;border-bottom:1px solid var(--line);font-size:clamp(22px,3.6vw,52px)}
-.r .p{color:var(--muted);font-family:var(--mono)}
-.r .b{font-weight:700}
-.r .t{font-family:var(--mono)}
-.r.new{animation:flash 2s ease-out}
-@keyframes flash{from{background:var(--accent)}to{background:transparent}}
-.foot{color:var(--muted);font-size:13px;text-align:right}
+html,body{margin:0;height:100%;background:var(--bd-bg);color:var(--bd-ink);font-family:var(--body)}
+body{overflow:hidden;-webkit-font-smoothing:antialiased}
+.wrap{display:flex;flex-direction:column;height:100%}
+
+/* Верхняя полоса: логотип SakhStart · название · часы, под ней красная линия 3px */
+.top{display:flex;align-items:center;gap:clamp(14px,2vw,40px);padding:clamp(10px,1.6vh,26px) var(--bd-pad);border-bottom:3px solid var(--track);flex-wrap:wrap}
+.top .lg-ss{display:block;height:clamp(30px,3.4vw,72px);width:auto;flex:none}
+.ttl{flex:1 1 30%;min-width:0}
+.name{font:600 clamp(20px,2.6vw,56px)/1.1 var(--head);letter-spacing:.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{margin-top:.25em;color:var(--bd-muted);font-size:clamp(13px,1.15vw,24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta:empty{display:none}
+.clock{margin-left:auto;min-width:4.1em;text-align:right;font:600 clamp(40px,6.2vw,132px)/1 var(--head);font-variant-numeric:tabular-nums;letter-spacing:-.005em;white-space:nowrap}
+.clock.idle{min-width:0;color:var(--bd-muted);font-weight:500;font-size:clamp(20px,2.4vw,52px)}
+
+/* Список последних финишировавших */
+main{flex:1;min-height:0;display:flex;flex-direction:column;padding:clamp(8px,1.6vh,26px) var(--bd-pad) 0}
+h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em}
+.list{flex:1;min-height:0;overflow:hidden}
+.r{position:relative;display:grid;grid-template-columns:1.6em 2.5em minmax(0,1fr) auto;align-items:center;column-gap:.55em;
+  padding:.11em .3em;border-bottom:1px solid var(--bd-line);font:500 var(--bd-row)/1.2 var(--head);font-variant-numeric:tabular-nums}
+.r>span{position:relative;z-index:1;min-width:0}
+.r .p{color:var(--bd-muted)}
+.r .b{color:var(--start);font-weight:600}
+.r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r .t{text-align:right;font-weight:600;white-space:nowrap}
+/* самый свежий финишёр — верхняя строка: красная растяжка в прозрачность */
+.r:first-child{background:linear-gradient(90deg,rgba(231,30,37,.42),rgba(231,30,37,.12) 45%,transparent 85%);box-shadow:inset 4px 0 0 var(--track)}
+/* вспышка при появлении нового результата */
+.r.new::after{content:"";position:absolute;inset:0;background:var(--track);opacity:0;animation:flash 1.4s ease-out}
+@keyframes flash{from{opacity:.6}to{opacity:0}}
+.list:empty::before{content:"Финишировавших пока нет";display:block;padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
+
+/* Низ: подпись и логотипы Сахалин → ФЛАСО */
+.foot{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:clamp(8px,1.4vh,22px) var(--bd-pad);color:var(--bd-muted);font-size:clamp(12px,1vw,20px)}
+.foot .logos{gap:clamp(12px,1.2vw,26px)}
+.foot .logos .lg-sakh{height:clamp(30px,4.6vh,64px)}
+.foot .logos .lg-flaso{height:clamp(26px,3.9vh,54px)}
+.foot .logos .lg-sep{height:clamp(22px,3vh,42px)}
+
+:focus-visible{outline:3px solid var(--start);outline-offset:3px}
+@media (max-width:640px){.top .lg-ss{display:none}.clock{margin-left:0;width:100%}.foot .txt{display:none}.foot{justify-content:flex-end}}
+@media (prefers-reduced-motion:reduce){.r.new::after{animation:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><div class="name" id="name">Табло</div><div class="meta" id="meta"></div></div>
-  <div class="clock idle" id="clock">ожидание старта</div>
-  <h2>Последние финишировавшие</h2>
-  <div class="list" id="list"></div>
-  <div class="foot">Предварительные результаты · F11 — во весь экран</div>
+  <header class="top">
+    <img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+    <div class="ttl"><div class="name" id="name">Табло</div><div class="meta" id="meta"></div></div>
+    <div class="clock idle" id="clock">ожидание старта</div>
+  </header>
+  <main>
+    <h2>Последние финишировавшие</h2>
+    <div class="list" id="list"></div>
+  </main>
+  <footer class="foot">
+    <span class="txt">Предварительные результаты · F11 — во весь экран</span>
+    <span class="logos"><img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО"></span>
+  </footer>
 </div>
 <script>
 "use strict";
@@ -52,7 +92,7 @@ async function load(){
     $("meta").textContent=[ev.date,ev.place,`финишировали: ${r.finished.length}`].filter(Boolean).join(" · ");
     const last=r.finished.slice(-10).reverse();
     $("list").innerHTML=last.map(x=>{const k=x.chip+x.time,isNew=!first&&!seen.has(k);seen.add(k);
-      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||x.chip.slice(-6))}</span><span class="t">${esc(x.time)}</span></div>`;}).join("");
+      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||x.chip.slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="t">${esc(x.time)}</span></div>`;}).join("");
     first=false;
   }catch(e){$("meta").textContent="нет связи с сервером…";}
 }

@@ -4,46 +4,97 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Протокол результатов</title>
+<link rel="stylesheet" href="/assets/brand.css">
 <style>
-@page{size:A4;margin:14mm 12mm 16mm 12mm}
+/* Протокол — официальный документ: всегда светлый лист, чёрный текст, печать на A4. */
+@page{size:A4;margin:12mm 12mm 14mm 12mm}
+:root{color-scheme:light;
+  --pr-bg:#E4E9F0;--pr-paper:#fff;--pr-ink:#0E1626;--pr-navy:#0B1D37;--pr-muted:#5E6B80;
+  --pr-line:#CDD5E0;--pr-line-2:#B3BFCF;--pr-th:#EDF1F6;--pr-zebra:#F8FAFC}
 *{box-sizing:border-box}
-html,body{margin:0;background:#e9eaec;color:#000}
-body{font:13px/1.35 "Times New Roman",Times,serif}
-.bar{position:sticky;top:0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:#1b1e21;color:#eee;font:14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.bar select,.bar button,.bar a{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid #444;background:#2a2e32;color:#eee;text-decoration:none;cursor:pointer}
-.bar button.primary{background:#e8603f;border-color:#e8603f;color:#fff;font-weight:600}
-.bar label{display:flex;gap:6px;align-items:center}
+html,body{margin:0;background:var(--pr-bg);color:var(--pr-ink)}
+body{font:12.5px/1.38 var(--body);-webkit-font-smoothing:antialiased}
+
+/* Панель управления (только на экране) */
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:#0B1D37;color:#fff;font:14px/1.2 var(--body);border-bottom:3px solid var(--track);color-scheme:dark}
+.bar .lg-ss{display:block;height:28px;width:auto;margin-right:4px}
+.bar #barName{font:500 16px/1.2 var(--head);letter-spacing:.01em;max-width:28ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar select,.bar button,.bar a{font:inherit;min-height:34px;padding:6px 12px;border-radius:var(--r);border:1px solid #2C4166;background:#13284A;color:#fff;text-decoration:none;cursor:pointer}
+.bar select{max-width:100%}
+.bar a:hover,.bar select:hover{border-color:#9FB0C8}
+.bar button.primary{background:var(--track);border-color:var(--track);color:#fff;font-weight:700}
+.bar button.primary:hover{filter:brightness(1.08)}
+.bar label{display:flex;gap:6px;align-items:center;color:#D5DEEA;cursor:pointer}
+.bar input[type=checkbox]{width:16px;height:16px;margin:0;accent-color:var(--start)}
 .bar .sp{flex:1}
-.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm 12mm 16mm;box-shadow:0 2px 14px rgba(0,0,0,.18)}
-.org{text-align:center;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
-h1{text-align:center;font-size:17px;margin:10px 0 2px;letter-spacing:1.5px}
-.ev{text-align:center;font-size:16px;font-weight:700;margin:2px 0 10px}
-.meta{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #000;border-bottom:1px solid #000;padding:5px 0;font-size:13px;margin-bottom:10px}
-h2{font-size:14px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.4px}
-h2 small{text-transform:none;font-weight:400;letter-spacing:0}
-table{width:100%;border-collapse:collapse;margin-bottom:6px}
-th,td{border:1px solid #000;padding:3px 5px;text-align:left;vertical-align:top}
-th{font-size:11.5px;font-weight:700;text-align:center;background:#f1f1f1}
-td.c{text-align:center} td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr{page-break-inside:avoid}
+:focus-visible{outline:2px solid var(--start);outline-offset:2px}
+
+/* Лист A4 */
+.sheet{width:210mm;min-height:297mm;margin:18px auto 28px;background:var(--pr-paper);padding:12mm 12mm 14mm;box-shadow:0 1px 2px rgba(11,29,55,.08),0 8px 28px rgba(11,29,55,.14);
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* Шапка: Сахалин → ФЛАСО → SakhStart */
+.brandrow{position:relative;display:flex;align-items:center;gap:14px;padding-bottom:4mm;border-bottom:1.5px solid var(--pr-navy)}
+.brandrow::after{content:"";position:absolute;left:0;bottom:-1.5px;width:30mm;height:3px;background:var(--track)}
+.brandrow .logos{gap:14px}
+.brandrow .lg-sakh{height:48px}
+.brandrow .lg-flaso{height:40px}
+.brandrow .lg-sep{background:var(--pr-line);height:34px}
+.brandrow .lg-ss{display:block;margin-left:auto;height:40px;width:auto}
+.org{margin-top:5mm;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--pr-muted)}
+h1{margin:3mm 0 1mm;text-align:center;font:600 22px/1.15 var(--head);letter-spacing:.09em;color:var(--pr-navy)}
+.org+h1{margin-top:1.5mm}
+.ev{text-align:center;font:500 17px/1.25 var(--head);margin:0 0 4mm;color:var(--pr-ink)}
+.meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;border-top:1px solid var(--pr-line-2);border-bottom:1px solid var(--pr-line-2);padding:2mm 0;margin-bottom:3mm;font-size:12px;color:var(--pr-muted)}
+.meta b{color:var(--pr-ink);font-weight:700}
+
+/* Группы и таблицы */
+h2{margin:6mm 0 2mm;padding-left:8px;border-left:3px solid var(--track);font:600 15px/1.2 var(--head);letter-spacing:.01em;color:var(--pr-navy);break-after:avoid;page-break-after:avoid}
+h2 small{font:400 12px var(--body);color:var(--pr-muted);letter-spacing:0}
+table{width:100%;border-collapse:collapse;margin-bottom:2mm}
+th,td{border:1px solid var(--pr-line);padding:3px 5px;text-align:left;vertical-align:baseline}
+th{font:500 11px/1.2 var(--head);letter-spacing:.02em;text-align:center;vertical-align:bottom;background:var(--pr-th);color:var(--pr-navy);border-color:var(--pr-line-2);border-bottom:1.5px solid var(--pr-navy)}
+/* стартовый протокол: шире колонка «Фамилия, имя» (ширины команды/тренера заданы в разметке) */
+th[style="width:26%"]{width:21%!important}
+th[style="width:20%"]{width:17%!important}
+tbody tr:nth-child(even) td{background:var(--pr-zebra)}
+td.c{text-align:center}
+td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-family:var(--head);font-size:13px}
+td.r b{font-weight:600}
+td small{color:var(--pr-muted)}
+tbody td:first-child b{font:600 13px/1 var(--head)}
+/* 1–3 места: мягкие золото / серебро / бронза */
+tr[class^="pl"]>td:first-child b{display:inline-block;min-width:22px;padding:3px 4px 2px;border-radius:999px;text-align:center}
+tr.pl1>td:first-child b{background:#C9A22733;box-shadow:inset 0 0 0 1px var(--gold);color:#5C4708}
+tr.pl2>td:first-child b{background:#8E99A830;box-shadow:inset 0 0 0 1px var(--silver);color:#39414C}
+tr.pl3>td:first-child b{background:#B873332E;box-shadow:inset 0 0 0 1px var(--bronze);color:#5B3613}
+tr{break-inside:avoid;page-break-inside:avoid}
 thead{display:table-header-group}
-.note{font-size:11.5px;margin-top:6px}
-.sign{margin-top:30px;display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:26px;align-items:end;font-size:13px;page-break-inside:avoid;max-width:560px}
-.sign .u{border-bottom:1px solid #000;height:1px;min-width:120px}
+.note{margin-top:3mm;font-size:11px;color:var(--pr-muted)}
+
+/* Подписи */
+.sign{margin-top:10mm;display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:9mm;align-items:end;font-size:12.5px;break-inside:avoid;page-break-inside:avoid;max-width:150mm}
+.sign .u{border-bottom:1px solid var(--pr-ink);height:1px;min-width:120px}
 .sign .nm{min-width:150px}
-.foot{margin-top:18px;font-size:10.5px;color:#444;display:flex;justify-content:space-between}
-.empty{padding:30px;text-align:center;color:#666}
+.foot{margin-top:8mm;padding-top:2mm;border-top:1px solid var(--pr-line);font-size:10px;color:var(--pr-muted);display:flex;justify-content:space-between;gap:12px}
+.empty{padding:30px;text-align:center;color:var(--pr-muted)}
+
 @media print{
-  html,body{background:#fff}
+  :root{--pr-ink:#000;--pr-muted:#3B4452;--pr-line:#B9C3D0;--pr-line-2:#9AA7B8}
+  html,body{background:#fff;color:#000}
   .bar{display:none}
   .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
-  th{background:#f1f1f1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet,.meta b,.ev,td,.sign{color:#000}
+  .brandrow,.org,h1,.ev,.meta{break-inside:avoid;page-break-inside:avoid}
+  .brandrow+*{break-before:avoid}
+  a{color:inherit;text-decoration:none}
 }
-@media (max-width:820px){.sheet{width:auto;margin:8px;padding:16px}}
+@media (max-width:820px){.sheet{width:auto;min-height:0;margin:8px;padding:16px;overflow-x:auto}.brandrow,.brandrow .logos{gap:10px}.brandrow .lg-sakh{height:32px}.brandrow .lg-flaso{height:26px}.brandrow .lg-sep{height:24px}.brandrow .lg-ss{height:30px}}
 </style>
 </head>
 <body>
 <div class="bar">
+  <img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart">
   <b id="barName">Протокол</b>
   <select id="mode">
     <option value="overall">Итоговый: общий рейтинг по категориям</option>
@@ -75,6 +126,7 @@ const kind=new URLSearchParams(location.search).get("kind");
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
 });
 const dateRu=d=>{ if(!d) return ""; const [y,m,dd]=d.split("-"); return `${dd}.${m}.${y}`; };
+const BRAND=`<div class="brandrow"><span class="logos"><img class="lg-sakh" src="/assets/sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="/assets/flaso-light.png" alt="ФЛАСО"></span><img class="lg-ss" src="/assets/sakhstart.svg" alt="SakhStart"></div>`;
 const gkey=x=>(x.distance||"")+"|"+(x.category||"");
 const gtitle=(dist,cat)=>[dist,cat].filter(Boolean).join(" · ")||"Все участники";
 
@@ -108,7 +160,7 @@ function signs(ev){
 function headHtml(ev,title){
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
   const startTxt=ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
-  return `${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
+  return `${BRAND}${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
     <h1>${title}</h1>
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>`;
@@ -151,7 +203,7 @@ function render(){
     ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
     ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
     <th style="width:78px">Результат</th>${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
-  const tr=(x,place,withHeat,res,note)=>`<tr><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
+  const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
     ${anyName?`<td>${esc(x.name)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
     ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
@@ -188,7 +240,7 @@ function render(){
   if(dnf&&(R.on_course.length||R.not_seen.length)) notes.push("DNS — не стартовал, DNF — не финишировал.");
 
   $("sheet").innerHTML=`
-    ${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
+    ${BRAND}${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
     <h1>ПРОТОКОЛ РЕЗУЛЬТАТОВ</h1>
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>
