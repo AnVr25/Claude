@@ -5,4 +5,4 @@
 #   sudo bash /opt/gto/app/deploy/gto-user.sh reset-password admin
 set -euo pipefail
 cd /opt/gto/app
-exec sudo -u gto env GTO_DB=/var/lib/gto/gto.sqlite /opt/gto/node/bin/node --no-warnings=ExperimentalWarning cli.js "$@"
+exec runuser -u gto -- env GTO_DB=/var/lib/gto/gto.sqlite /opt/gto/node/bin/node --no-warnings=ExperimentalWarning cli.js "$@"

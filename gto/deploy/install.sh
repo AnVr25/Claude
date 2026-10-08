@@ -28,10 +28,11 @@ die()  { printf '\033[1;31mОшибка: %s\033[0m\n' "$*" >&2; exit 1; }
 [[ -f "$APP_SRC/server.js" ]] || die "не найден server.js рядом со скриптом ($APP_SRC)"
 command -v apt-get >/dev/null || die "нужна Ubuntu/Debian"
 
-say "Пакеты: curl, xz, sqlite3"
+say "Пакеты: curl, xz, sqlite3, cron (на minimized-Ubuntu их может не быть)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl xz-utils sqlite3 ca-certificates >/dev/null
+apt-get install -y -qq curl xz-utils sqlite3 ca-certificates cron iproute2 >/dev/null
+systemctl enable --now cron >/dev/null 2>&1 || warn "не удалось включить cron — резервные копии по расписанию работать не будут"
 
 # ---------- Node.js отдельно от системного ----------
 NODE_BIN="$BASE/node/bin/node"
@@ -197,7 +198,7 @@ CRON
 chmod 755 /etc/cron.daily/gto-backup
 
 # ---------- администратор ----------
-cli() { (cd "$BASE/app" && sudo -u gto env GTO_DB="$DATA/gto.sqlite" "$NODE_BIN" --no-warnings=ExperimentalWarning cli.js "$@"); }
+cli() { (cd "$BASE/app" && runuser -u gto -- env GTO_DB="$DATA/gto.sqlite" "$NODE_BIN" --no-warnings=ExperimentalWarning cli.js "$@"); }
 if [[ -z "$(cli list-users)" ]]; then
   say "Создаю администратора"
   cli add-user admin admin "Администратор"

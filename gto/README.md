@@ -39,6 +39,7 @@
 2. Зайдите на сервер по SSH и выполните:
 
 ```bash
+apt-get update && apt-get install -y git   # на minimized-Ubuntu git нет
 git clone -b claude/greeting-d2g8ji https://github.com/AnVr25/Claude.git /tmp/gto-src
 sudo bash /tmp/gto-src/gto/deploy/install.sh gto.fla65.ru ваш@email.ru
 ```
