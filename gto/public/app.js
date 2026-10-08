@@ -576,21 +576,26 @@ function openPassword() {
 }
 
 // Пользователи (только администратор)
+// SQLite datetime('now') — UTC без зоны: показываем в местном времени
+const fmtUtc = (s) => new Date(s.replace(' ', 'T') + 'Z').toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 async function openUsers(notice = '') {
   let users;
   try { users = await api('GET', '/api/users'); } catch (err) { toast(err.message); return; }
   const roleOpts = (r) => Object.entries(ROLE_NAMES).map(([k, v]) => `<option value="${k}"${k === r ? ' selected' : ''}>${v}</option>`).join('');
   const p = openModal(`
     <h2>Пользователи</h2>
-    <p class="sub"><strong>Ввод результатов</strong> — добавляет студентов и вносит результаты. <strong>Просмотр</strong> — учителя физкультуры: только поиск и просмотр.</p>
+    <p class="sub"><strong>Ввод результатов</strong> — добавляет студентов и вносит результаты. <strong>Просмотр</strong> — учителя физкультуры: только поиск и просмотр. Имя, роль и примечание сохраняются сразу.</p>
     ${notice}
-    <table class="users-table"><thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th></th></tr></thead><tbody>
-    ${users.map((u) => `<tr data-uid="${u.id}" class="${u.active ? '' : 'inactive'}">
-      <td>${esc(u.login)}</td><td>${esc(u.name)}</td>
+    <table class="users-table"><thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Примечание</th><th>Последний вход</th><th></th></tr></thead><tbody>
+    ${users.map((u) => `<tr data-uid="${u.id}" data-login="${esc(u.login)}" class="${u.active ? '' : 'inactive'}">
+      <td>${esc(u.login)}${u.active ? '' : ' <span class="muted">заблокирован</span>'}</td>
+      <td><input data-f="name" value="${esc(u.name)}" maxlength="120" aria-label="Имя"></td>
       <td><select data-role${u.id === state.user.id ? ' disabled' : ''}>${roleOpts(u.role)}</select></td>
+      <td><input data-f="note" value="${esc(u.note || '')}" maxlength="200" placeholder="—" aria-label="Примечание"></td>
+      <td class="u-last">${u.last_login ? fmtUtc(u.last_login) : 'не входил'}</td>
       <td class="u-act">
-        <button class="btn btn-outline btn-sm" data-reset>Новый пароль</button>
-        ${u.id === state.user.id ? '' : `<button class="btn btn-outline btn-sm" data-active="${u.active ? 0 : 1}">${u.active ? 'Заблокировать' : 'Разблокировать'}</button>
+        ${u.id === state.user.id ? '<span class="muted">свой пароль — кнопка «Пароль» вверху</span>' : `<button class="btn btn-outline btn-sm" data-reset>Новый пароль</button>
+        <button class="btn btn-outline btn-sm" data-active="${u.active ? 0 : 1}">${u.active ? 'Заблокировать' : 'Разблокировать'}</button>
         <button class="btn btn-danger btn-sm" data-del>Удалить</button>`}
       </td></tr>`).join('')}
     </tbody></table>
@@ -598,21 +603,32 @@ async function openUsers(notice = '') {
       <label>Логин<input name="login" required pattern="[A-Za-z0-9._@\\-]{3,80}" placeholder="ivanova"></label>
       <label>Имя<input name="name" placeholder="Иванова Мария Петровна"></label>
       <label>Роль<select name="role"><option value="viewer">Просмотр</option><option value="editor">Ввод результатов</option><option value="admin">Администратор</option></select></label>
+      <label>Примечание<input name="note" maxlength="200" placeholder="школа № 5, физрук"></label>
       <button class="btn btn-primary" type="submit">Добавить</button>
     </form>
     <p class="form-error" id="users-error"></p>`, { wide: true });
+  p.classList.add('users');
 
   const err = (e) => { $('#users-error').textContent = e.message; };
   p.querySelectorAll('[data-role]').forEach((sel) => sel.addEventListener('change', async () => {
     const id = Number(sel.closest('tr').dataset.uid);
     try { await api('PUT', `/api/users/${id}`, { role: sel.value }); toast('Роль изменена', true); } catch (e) { err(e); }
   }));
+  p.querySelectorAll('input[data-f]').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    inp.addEventListener('change', async () => {
+      try {
+        await api('PUT', `/api/users/${inp.closest('tr').dataset.uid}`, { [inp.dataset.f]: inp.value });
+        inp.classList.add('saved'); setTimeout(() => inp.classList.remove('saved'), 900);
+      } catch (e) { err(e); }
+    });
+  });
   p.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', async () => {
     const tr = b.closest('tr');
     const pw = genPassword();
     try {
       await api('PUT', `/api/users/${tr.dataset.uid}`, { password: pw });
-      openUsers(`<p class="sub">Новый пароль для <strong>${esc(tr.children[0].textContent)}</strong>: <span class="secret">${pw}</span> — передайте его пользователю, повторно он показан не будет.</p>`);
+      openUsers(`<p class="sub">Новый пароль для <strong>${esc(tr.dataset.login)}</strong>: <span class="secret">${pw}</span> — передайте его пользователю, повторно он показан не будет.</p>`);
     } catch (e) { err(e); }
   }));
   p.querySelectorAll('[data-active]').forEach((b) => b.addEventListener('click', async () => {
@@ -620,7 +636,7 @@ async function openUsers(notice = '') {
   }));
   p.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
     const tr = b.closest('tr');
-    if (!confirm(`Удалить пользователя ${tr.children[0].textContent}?`)) return;
+    if (!confirm(`Удалить пользователя ${tr.dataset.login}?`)) return;
     try { await api('DELETE', `/api/users/${tr.dataset.uid}`); openUsers(); } catch (e) { err(e); }
   }));
   p.querySelector('#add-user').addEventListener('submit', async (e) => {

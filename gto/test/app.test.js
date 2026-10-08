@@ -158,9 +158,14 @@ test('API: администратор управляет пользовател�
   const { server, base } = await startServer();
   t.after(() => server.close());
   const admin = await login(base, 'admin');
-  let res = await admin('POST', '/api/users', { login: 'fizruk', name: 'Учитель', role: 'viewer', password: 'secret-pass' });
+  let res = await admin('POST', '/api/users', { login: 'fizruk', name: 'Учитель', role: 'viewer', note: 'школа № 5', password: 'secret-pass' });
   assert.equal(res.status, 201);
   const { id } = await res.json();
+  let list = await (await admin('GET', '/api/users')).json();
+  assert.equal(list.find((u) => u.id === id).note, 'школа № 5', 'примечание сохранено при создании');
+  await admin('PUT', `/api/users/${id}`, { note: '  до конца сезона ' });
+  list = await (await admin('GET', '/api/users')).json();
+  assert.equal(list.find((u) => u.id === id).note, 'до конца сезона', 'примечание меняется');
   res = await fetch(base + '/api/login', { method: 'POST', body: JSON.stringify({ login: 'fizruk', password: 'secret-pass' }) });
   assert.equal(res.status, 200);
   await admin('PUT', `/api/users/${id}`, { active: false });

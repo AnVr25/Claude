@@ -64,6 +64,9 @@ function open(file = DB_PATH) {
   const cols = new Set(db.prepare('PRAGMA table_info(students)').all().map((c) => c.name));
   if (!cols.has('birth_date')) db.exec("ALTER TABLE students ADD COLUMN birth_date TEXT NOT NULL DEFAULT ''");
   if (!cols.has('uin')) db.exec("ALTER TABLE students ADD COLUMN uin TEXT NOT NULL DEFAULT ''");
+  const ucols = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
+  if (!ucols.has('note')) db.exec("ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+  if (!ucols.has('last_login')) db.exec('ALTER TABLE users ADD COLUMN last_login TEXT');
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS students_uin ON students(uin) WHERE uin <> ''");
   return db;
 }

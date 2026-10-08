@@ -257,6 +257,7 @@ function createApp({
         throw new HttpError(401, 'Неверный логин или пароль');
       }
       loginAttempts.delete(key);
+      db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(u.id);
       const token = crypto.randomBytes(32).toString('hex');
       db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
       db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
@@ -476,7 +477,7 @@ function createApp({
     // --- пользователи (admin) ---
     if (p === '/api/users' && method === 'GET') {
       requireRole(user, 'admin');
-      return send(res, 200, db.prepare('SELECT id, login, name, role, active, created_at FROM users ORDER BY role, login').all());
+      return send(res, 200, db.prepare('SELECT id, login, name, role, note, active, created_at, last_login FROM users ORDER BY active DESC, role, login').all());
     }
 
     if (p === '/api/users' && method === 'POST') {
@@ -488,8 +489,8 @@ function createApp({
       if (!role) throw new HttpError(400, 'Неизвестная роль');
       if (String(b.password || '').length < 8) throw new HttpError(400, 'Пароль — минимум 8 символов');
       if (db.prepare('SELECT 1 FROM users WHERE login = ?').get(login)) throw new HttpError(409, 'Такой логин уже есть');
-      const r = db.prepare('INSERT INTO users (login, name, role, pass_hash) VALUES (?, ?, ?, ?)')
-        .run(login, str(b.name, 120), role, hashPassword(b.password));
+      const r = db.prepare('INSERT INTO users (login, name, role, note, pass_hash) VALUES (?, ?, ?, ?, ?)')
+        .run(login, str(b.name, 120), role, str(b.note, 200), hashPassword(b.password));
       audit(user, 'user.create', { id: Number(r.lastInsertRowid), login, role });
       return send(res, 201, { id: Number(r.lastInsertRowid) });
     }
@@ -508,6 +509,7 @@ function createApp({
           db.prepare('UPDATE users SET role = ? WHERE id = ?').run(b.role, target.id);
         }
         if (b.name !== undefined) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(str(b.name, 120), target.id);
+        if (b.note !== undefined) db.prepare('UPDATE users SET note = ? WHERE id = ?').run(str(b.note, 200), target.id);
         if (b.active !== undefined) {
           db.prepare('UPDATE users SET active = ? WHERE id = ?').run(b.active ? 1 : 0, target.id);
           if (!b.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(target.id);
@@ -517,7 +519,7 @@ function createApp({
           db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(b.password), target.id);
           db.prepare('DELETE FROM sessions WHERE user_id = ?').run(target.id);
         }
-        audit(user, 'user.update', { id: target.id, role: b.role, active: b.active, password: !!b.password });
+        audit(user, 'user.update', { id: target.id, role: b.role, active: b.active, note: b.note, password: !!b.password });
         return send(res, 200, { ok: true });
       }
       if (method === 'DELETE') {
