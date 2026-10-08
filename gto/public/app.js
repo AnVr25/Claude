@@ -666,6 +666,14 @@ function bind() {
     try {
       const u = await api('POST', '/api/login', { login: fd.get('login'), password: fd.get('password') });
       e.target.reset();
+      // Пароль верный, но браузер не сохранил сессию (например, http вместо https)
+      const check = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!check.ok) {
+        $('#login-error').textContent = location.protocol === 'http:'
+          ? `Пароль верный, но браузер не сохранил вход. Откройте https://${location.host}`
+          : 'Пароль верный, но браузер не сохранил вход. Разрешите cookie для этого сайта.';
+        return;
+      }
       await showApp(u);
     } catch (err) { $('#login-error').textContent = err.message; }
   });

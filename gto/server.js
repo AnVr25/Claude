@@ -81,8 +81,15 @@ function createApp({
     return out;
   }
 
-  function sessionCookie(token, maxAge) {
-    return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookie ? '; Secure' : ''}`;
+  // Пришёл ли запрос по HTTPS. За nginx это видно по X-Forwarded-Proto.
+  function isHttps(req) {
+    if (trustProxy) return String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+    return secureCookie;
+  }
+
+  // Флаг Secure ставим только для HTTPS: по http браузер такой cookie выбросил бы и вход «не держался».
+  function sessionCookie(req, token, maxAge) {
+    return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
   }
 
   function currentUser(req) {
@@ -234,6 +241,9 @@ function createApp({
       if (att && att.count >= 10 && att.until > Date.now()) {
         throw new HttpError(429, 'Слишком много попыток. Подождите 15 минут.');
       }
+      if (secureCookie && !isHttps(req)) {
+        throw new HttpError(400, `Вход только по защищённому адресу: https://${str(req.headers.host, 100)}`);
+      }
       const b = await readBody(req);
       const u = db.prepare('SELECT * FROM users WHERE login = ? AND active = 1').get(str(b.login, 80));
       if (!u || !verifyPassword(String(b.password || ''), u.pass_hash)) {
@@ -248,13 +258,13 @@ function createApp({
       db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
         .run(sha256(token), u.id, Date.now() + SESSION_DAYS * 864e5);
       return send(res, 200, { id: u.id, login: u.login, name: u.name, role: u.role },
-        { 'Set-Cookie': sessionCookie(token, SESSION_DAYS * 86400) });
+        { 'Set-Cookie': sessionCookie(req, token, SESSION_DAYS * 86400) });
     }
 
     if (method === 'POST' && p === '/api/logout') {
       const token = parseCookies(req)[COOKIE];
       if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
-      return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', 0) });
+      return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
     }
 
     const user = currentUser(req);

@@ -274,3 +274,28 @@ test('за nginx блокировка подбора пароля — по на�
   assert.equal((await tryLogin('10.0.0.1', 'password123')).status, 429, 'злоумышленник заблокирован');
   assert.equal((await tryLogin('10.0.0.2', 'password123')).status, 200, 'остальные входят');
 });
+
+test('за nginx: cookie Secure только по https, при обязательном https вход по http отклоняется', async (t) => {
+  const mk = async (secureCookie) => {
+    const db = open(':memory:');
+    db.prepare('INSERT INTO users (login, name, role, pass_hash) VALUES (?, ?, ?, ?)').run('ed', 'ed', 'editor', hashPassword('password123'));
+    const server = http.createServer(createApp({ db, trustProxy: true, secureCookie }));
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    t.after(() => server.close());
+    const base = `http://127.0.0.1:${server.address().port}`;
+    return (proto) => fetch(base + '/api/login', {
+      method: 'POST', headers: { 'X-Forwarded-Proto': proto }, body: JSON.stringify({ login: 'ed', password: 'password123' }),
+    });
+  };
+  const relaxed = await mk(false);
+  let res = await relaxed('http');
+  assert.equal(res.status, 200);
+  assert.ok(!/Secure/.test(res.headers.get('set-cookie')), 'по http без Secure');
+  res = await relaxed('https');
+  assert.match(res.headers.get('set-cookie'), /Secure/);
+  const strict = await mk(true);
+  res = await strict('http');
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /https:\/\//);
+  assert.equal((await strict('https')).status, 200);
+});
