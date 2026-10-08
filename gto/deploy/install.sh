@@ -132,8 +132,14 @@ NGINX
   systemctl reload nginx || systemctl restart nginx
 
   # ---------- HTTPS ----------
-  server_ip=$(curl -fsS4 --max-time 5 https://api.ipify.org || true)
+  # Домен должен указывать на этот сервер: сверяем с адресами интерфейсов, внешний сервис — запасной вариант
   dns_ip=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}' || true)
+  server_ip=""
+  if [[ -n "$dns_ip" ]] && hostname -I | tr ' ' '\n' | grep -qx "$dns_ip"; then
+    server_ip=$dns_ip
+  else
+    server_ip=$(curl -fsS4 --max-time 8 https://api.ipify.org 2>/dev/null || true)
+  fi
   if grep -q 'managed by Certbot' "$SITE"; then
     SECURE=1
   elif [[ -n "$EMAIL" && -n "$server_ip" && "$dns_ip" == "$server_ip" ]]; then
