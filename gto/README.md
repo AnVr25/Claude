@@ -31,22 +31,39 @@
 
 Знак уровня N дают, если выполнены все четыре обязательные категории (скорость, выносливость, гибкость, сила) не ниже N и всего категорий на уровне N набирается 5 для бронзы и серебра или 6 для золота. Из каждой категории засчитывается лучшее испытание.
 
-## Установка на сервер
+## Установка на сервер (одной командой)
 
-Нужен **Node.js 22.5 или новее**. Сторонних npm-пакетов нет, база данных — встроенный SQLite.
+Подходит Ubuntu 22.04 или 24.04, в том числе сервер, где уже работают другие сайты (например, `reg.fla65.ru`). Скрипт ставит Node.js 22 отдельно в `/opt/gto/node`, поэтому системный Node и чужие сайты в nginx не трогает.
+
+1. В DNS добавьте запись **A `gto` → IP сервера** и подождите 15–60 минут.
+2. Зайдите на сервер по SSH и выполните:
 
 ```bash
-git clone https://github.com/AnVr25/Claude.git && cd Claude/gto
-node --no-warnings cli.js add-user admin admin "Ваше имя"   # выведет пароль администратора
-PORT=3000 npm start
+git clone -b claude/greeting-d2g8ji https://github.com/AnVr25/Claude.git /tmp/gto-src
+sudo bash /tmp/gto-src/gto/deploy/install.sh gto.fla65.ru ваш@email.ru
 ```
 
-Остальных пользователей удобнее заводить в самом приложении (кнопка «Пользователи»). Из консоли тоже можно:
+Скрипт:
+- запустит приложение как сервис `gto`;
+- добавит в nginx сайт `gto.fla65.ru` и получит HTTPS-сертификат;
+- включит ежедневную копию базы в `/var/backups/gto`;
+- **напечатает пароль администратора**.
+
+Обновление кода — те же две команды (сначала `rm -rf /tmp/gto-src`). База при обновлении сохраняется.
+
+Пользователи из консоли:
 
 ```bash
-node --no-warnings cli.js add-user ivanova viewer "Иванова М. П."
-node --no-warnings cli.js reset-password ivanova
-node --no-warnings cli.js list-users
+sudo bash /opt/gto/app/deploy/gto-user.sh list-users
+sudo bash /opt/gto/app/deploy/gto-user.sh reset-password admin
+```
+
+## Ручной запуск (для разработки)
+
+```bash
+cd gto
+node --no-warnings cli.js add-user admin admin "Ваше имя"
+PORT=3000 npm start
 ```
 
 ### Переменные окружения
@@ -57,6 +74,7 @@ node --no-warnings cli.js list-users
 | `HOST` | `127.0.0.1` | адрес; оставьте так, если впереди стоит nginx |
 | `GTO_DB` | `./data/gto.sqlite` | файл базы данных |
 | `GTO_SECURE_COOKIE` | — | `1`, когда сайт работает по HTTPS (обязательно в боевом режиме) |
+| `GTO_TRUST_PROXY` | — | `1` за nginx: брать адрес посетителя из `X-Real-IP` (для защиты от подбора пароля) |
 
 ### Поддомен gto.fla65.ru через nginx
 

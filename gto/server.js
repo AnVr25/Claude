@@ -30,8 +30,18 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const today = () => new Date().toISOString().slice(0, 10);
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 
-function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE === '1' } = {}) {
+function createApp({
+  db = open(),
+  secureCookie = process.env.GTO_SECURE_COOKIE === '1',
+  trustProxy = process.env.GTO_TRUST_PROXY === '1',
+} = {}) {
   const loginAttempts = new Map(); // ip -> {count, until}
+
+  // За nginx все запросы приходят с 127.0.0.1 — настоящий адрес в X-Real-IP (ставит наш nginx).
+  function clientIp(req) {
+    if (trustProxy && req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
+    return req.socket.remoteAddress || '';
+  }
 
   // ---------- helpers ----------
   function send(res, status, body, headers = {}) {
@@ -219,7 +229,7 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
     let m;
 
     if (method === 'POST' && p === '/api/login') {
-      const ip = req.socket.remoteAddress || '';
+      const ip = clientIp(req);
       const att = loginAttempts.get(ip);
       if (att && att.count >= 10 && att.until > Date.now()) {
         throw new HttpError(429, 'Слишком много попыток. Подождите 15 минут.');

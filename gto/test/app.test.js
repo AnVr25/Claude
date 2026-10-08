@@ -259,3 +259,18 @@ test('API: УИН, дата рождения, маскировка для про
   res = await ed('POST', '/api/students/import', { rows: parsed.filter((r) => !r.error) });
   assert.deepEqual(await res.json(), { imported: 2, created: 0, updated: 2 });
 });
+
+test('за nginx блокировка подбора пароля — по настоящему IP, а не для всех', async (t) => {
+  const db = open(':memory:');
+  db.prepare('INSERT INTO users (login, name, role, pass_hash) VALUES (?, ?, ?, ?)').run('ed', 'ed', 'editor', hashPassword('password123'));
+  const server = http.createServer(createApp({ db, trustProxy: true }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const tryLogin = (ip, password) => fetch(base + '/api/login', {
+    method: 'POST', headers: { 'X-Real-IP': ip }, body: JSON.stringify({ login: 'ed', password }),
+  });
+  for (let i = 0; i < 10; i++) await tryLogin('10.0.0.1', 'wrong');
+  assert.equal((await tryLogin('10.0.0.1', 'password123')).status, 429, 'злоумышленник заблокирован');
+  assert.equal((await tryLogin('10.0.0.2', 'password123')).status, 200, 'остальные входят');
+});
