@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import hashlib
 import csv
 import datetime as dt
 import hmac
@@ -692,7 +693,12 @@ class Store:
     EVENT_FIELDS = ("name", "date", "place", "finish_device", "min_time_sec", "push_wiclax", "notes",
                     "alert_silence_min", "organizer", "chief_judge", "chief_secretary", "start_clock",
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
-                    "reg_info", "reg_consent")
+                    "reg_info", "reg_consent",
+                    "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
+                    "live_url", "photo_url", "links", "pub_start", "pub_results")
+    KINDS = ("mass", "stadium")
+    TIMINGS = ("chips", "judge", "manual", "lynx")
+    LEVELS = ("russia", "dfo", "interregion", "region", "mass")
 
     def _migrate(self) -> None:
         """Добавляет новые поля в базы, созданные старой версией."""
@@ -763,6 +769,14 @@ class Store:
                        ("reg_info", "TEXT"), ("reg_consent", "TEXT")))
         add("entries", (("lane", "INTEGER"), ("coach", "TEXT"), ("seed", "TEXT"), ("reg_id", "INTEGER"), ("sex", "TEXT")))
         add("files", (("folder", "TEXT"),))
+        # 2.1: событие на сайте fla65.ru, тип события, введённые вручную результаты, публичные файлы
+        add("events", (("kind", "TEXT"), ("timing", "TEXT"), ("pub_site", "INTEGER NOT NULL DEFAULT 0"),
+                       ("ours", "INTEGER NOT NULL DEFAULT 1"), ("level", "TEXT"), ("adaptive", "INTEGER NOT NULL DEFAULT 0"),
+                       ("date_end", "TEXT"), ("city", "TEXT"), ("note", "TEXT"), ("live_url", "TEXT"),
+                       ("photo_url", "TEXT"), ("links", "TEXT"), ("pub_start", "INTEGER NOT NULL DEFAULT 0"),
+                       ("pub_results", "INTEGER NOT NULL DEFAULT 0")))
+        add("files", (("public", "INTEGER NOT NULL DEFAULT 0"),))
+        add("entries", (("result", "TEXT"), ("status", "TEXT")))
         self.con.executescript(
             """
             CREATE TABLE IF NOT EXISTS registrations(
@@ -809,7 +823,59 @@ class Store:
                 devices TEXT NOT NULL,
                 name TEXT
             );
+            CREATE TABLE IF NOT EXISTS users(
+                login TEXT PRIMARY KEY,
+                name TEXT,
+                role TEXT NOT NULL DEFAULT 'secretary',
+                pwd TEXT NOT NULL,
+                created_at TEXT,
+                last_login TEXT
+            );
+            CREATE TABLE IF NOT EXISTS sessions(
+                token TEXT PRIMARY KEY,
+                login TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                ip TEXT
+            );
             """)
+
+    # ---- пользователи и сессии (вход через браузер)
+    def users(self) -> list:
+        return self._rows(self.con.execute("SELECT login, name, role, created_at, last_login FROM users ORDER BY login"))
+
+    def get_user(self, login: str) -> Optional[dict]:
+        rows = self._rows(self.con.execute("SELECT * FROM users WHERE login = ?", (login,)))
+        return rows[0] if rows else None
+
+    def save_user(self, login: str, name: str, role: str, pwd: Optional[str]) -> None:
+        if self.get_user(login):
+            self.con.execute("UPDATE users SET name = ?, role = ? WHERE login = ?", (name, role, login))
+            if pwd:
+                self.con.execute("UPDATE users SET pwd = ? WHERE login = ?", (pwd, login))
+                self.con.execute("DELETE FROM sessions WHERE login = ?", (login,))
+        else:
+            self.con.execute("INSERT INTO users(login, name, role, pwd, created_at) VALUES (?,?,?,?,?)",
+                             (login, name, role, pwd, fmt_db(now_local())))
+
+    def delete_user(self, login: str) -> None:
+        self.con.execute("DELETE FROM users WHERE login = ?", (login,))
+        self.con.execute("DELETE FROM sessions WHERE login = ?", (login,))
+
+    def add_session(self, token_hash: str, login: str, days: int, ip: str) -> None:
+        now = now_local()
+        self.con.execute("DELETE FROM sessions WHERE expires_at < ?", (fmt_db(now),))
+        self.con.execute("INSERT INTO sessions(token, login, created_at, expires_at, ip) VALUES (?,?,?,?,?)",
+                         (token_hash, login, fmt_db(now), fmt_db(now + dt.timedelta(days=days)), ip))
+        self.con.execute("UPDATE users SET last_login = ? WHERE login = ?", (fmt_db(now), login))
+
+    def get_session(self, token_hash: str) -> Optional[dict]:
+        rows = self._rows(self.con.execute("SELECT * FROM sessions WHERE token = ? AND expires_at > ?",
+                                           (token_hash, fmt_db(now_local()))))
+        return rows[0] if rows else None
+
+    def delete_session(self, token_hash: str) -> None:
+        self.con.execute("DELETE FROM sessions WHERE token = ?", (token_hash,))
 
     # ---- ридеры, заведённые через браузер
     def readers(self) -> list:
@@ -911,8 +977,16 @@ class Store:
                     v = 1 if v else 0
                 if k == "heats_sequential":
                     v = None if v is None or v == "" else (1 if v else 0)
-                if k == "reg_open":
+                if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results"):
                     v = 1 if v else 0
+                if k == "kind":
+                    v = v if v in self.KINDS else "mass"
+                if k == "timing":
+                    v = v if v in self.TIMINGS else None
+                if k == "level":
+                    v = v if v in self.LEVELS else None
+                if k in ("date_end", "city", "note", "live_url", "photo_url", "links") and v is not None:
+                    v = str(v).strip()[:4000 if k == "links" else 500] or None
                 if k == "reg_lanes":
                     v = max(1, min(int(v or 8), 50))
                 if k in ("reg_distances", "reg_rules", "reg_info", "reg_consent", "reg_deadline") and v is not None:
@@ -924,7 +998,8 @@ class Store:
 
     def set_event_field(self, eid: int, **kw) -> None:
         for k, v in kw.items():
-            if k not in ("start_time", "status", "check_since", "archived", "finished_at", "reg_slug"):
+            if k not in ("start_time", "status", "check_since", "archived", "finished_at", "reg_slug", "pub_site", "ours",
+                         "level", "adaptive", "date_end", "city", "note", "kind", "links"):
                 raise ValueError(k)
             self.con.execute(f"UPDATE events SET {k} = ? WHERE id = ?", (v, eid))
 
@@ -958,8 +1033,16 @@ class Store:
 
     def entries_rows(self, eid: int) -> list:
         return self._rows(self.con.execute(
-            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex FROM entries"
+            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
+
+    def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str]) -> int:
+        cur = self.con.execute("UPDATE entries SET result = ?, status = ? WHERE event_id = ? AND bib = ?",
+                               (result or None, status or None, eid, bib))
+        return cur.rowcount
+
+    def set_file_public(self, fid: int, public: bool) -> None:
+        self.con.execute("UPDATE files SET public = ? WHERE id = ?", (1 if public else 0, fid))
 
     def update_entry(self, eid: int, bib: str, **kw) -> int:
         sets, args = [], []
@@ -1094,7 +1177,7 @@ class Store:
 
     def files(self, eid: int) -> list:
         rows = self._rows(self.con.execute(
-            "SELECT id, event_id, name, size, kind, created_at, author, folder FROM files WHERE event_id = ? ORDER BY id",
+            "SELECT id, event_id, name, size, kind, created_at, author, folder, public FROM files WHERE event_id = ? ORDER BY id",
             (eid,)))
         for r in rows:
             r["folder"] = self.folder_of(r)
@@ -1586,7 +1669,130 @@ class Hub:
         out["reg_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") else ""
         out["reg_path"] = f"/r/{ev['reg_slug']}" if ev.get("reg_slug") else ""
         out["reg_lanes"] = ev.get("reg_lanes") or 8
+        out["kind"] = ev.get("kind") or ("stadium" if (ev.get("finish_device") or "").upper() == "JUDGE" else "mass")
+        out["timing"] = ev.get("timing") or ("chips" if out["kind"] == "mass" else "judge")
+        for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results"):
+            out[k] = bool(ev.get(k)) if ev.get(k) is not None else (k == "ours")
+        out["page_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") and base else out["reg_path"]
         return out
+
+    # ---- публикация на сайте fla65.ru: календарь и страница события
+    URL_RE = re.compile(r"https?://[^\s<>\"']{3,490}")
+
+    @classmethod
+    def clean_url(cls, v) -> Optional[str]:
+        v = str(v or "").strip()
+        return v if cls.URL_RE.fullmatch(v) else None
+
+    @classmethod
+    def parse_links(cls, text) -> list:
+        """Строки «Название | https://…» → [{title, url}] (только http/https)."""
+        out = []
+        for ln in str(text or "").splitlines():
+            title, _, url = ln.rpartition("|") if "|" in ln else ("", "", ln)
+            url = cls.clean_url(url)
+            if url:
+                out.append({"title": (title.strip() or "Ссылка")[:80], "url": url})
+        return out[:12]
+
+    def ensure_slug(self, eid: int) -> str:
+        ev = self.store.get_event(eid)
+        if ev.get("reg_slug"):
+            return ev["reg_slug"]
+        import secrets
+        while True:
+            slug = secrets.token_urlsafe(6).replace("-", "x").replace("_", "z")
+            if slug.lower() not in ("assets", "api") and not self.store.event_by_slug(slug):
+                break
+        self.store.set_event_field(eid, reg_slug=slug)
+        return slug
+
+    def public_base(self) -> str:
+        return (self.cfg.get("public", {}).get("url") or "").rstrip("/")
+
+    def event_card(self, ev: dict) -> dict:
+        """Элемент календаря для сайта (см. docs/public-api.md)."""
+        v = self._event_view(ev)
+        base, slug = self.public_base(), ev.get("reg_slug")
+        page = f"{base}/r/{slug}" if slug and v["ours"] else None
+        open_, _ = self.reg_state(ev) if slug else (False, "")
+        files = []
+        if page:
+            for f in self.store.files(ev["id"]):
+                if f.get("public"):
+                    ext = os.path.splitext(f["name"])[1].lstrip(".").lower()[:6]
+                    files.append({"title": f["name"], "url": f"{page}/files/{f['id']}", "size": f["size"], "ext": ext})
+        status = v.get("status") or "planned"
+        return {"slug": slug if page else None, "name": ev["name"], "date": ev.get("date"), "date_end": ev.get("date_end"),
+                "place": ev.get("place") or "", "city": ev.get("city") or "", "level": ev.get("level") or "region",
+                "adaptive": v["adaptive"], "note": ev.get("note") or "", "ours": v["ours"], "kind": v["kind"],
+                "status": status, "page": page,
+                "reg": {"open": True, "deadline": ev.get("reg_deadline"), "url": page} if page and open_ else None,
+                "start_list": f"{page}/protocol?kind=start" if page and v["pub_start"] else None,
+                "results": f"{page}/protocol" if page and v["pub_results"] else None,
+                "results_live": bool(page and v["pub_results"] and status == "running"),
+                "live": self.clean_url(ev.get("live_url")), "photo": self.clean_url(ev.get("photo_url")),
+                "links": self.parse_links(ev.get("links")), "files": files}
+
+    def calendar(self, year: Optional[int]) -> dict:
+        evs = [e for e in self.store.list_events() if e.get("pub_site")]
+        if year:
+            evs = [e for e in evs if (e.get("date") or "").startswith(str(year))]
+        evs.sort(key=lambda e: (e.get("date") or "9999", e["id"]))
+        return {"year": year, "updated": fmt_db(now_local())[:19].replace(" ", "T"),
+                "events": [self.event_card(e) for e in evs]}
+
+    PUBLIC_EVENT_KEYS = ("id", "name", "date", "date_end", "place", "city", "organizer", "start_clock", "chief_judge",
+                         "chief_secretary", "status", "start_time", "finished_at", "finish_device", "kind")
+
+    def _public_event(self, ev: dict) -> dict:
+        v = self._event_view(ev)
+        out = {k: v.get(k) for k in self.PUBLIC_EVENT_KEYS}
+        out["waves"] = [{k: w.get(k) for k in ("name", "category", "distance", "state", "start_time")} for w in v["waves"]]
+        return out
+
+    @staticmethod
+    def _no_chips(rows: list) -> list:
+        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "result", "status") or
+                 (k == "status" and val)} for r in rows]
+
+    def public_results(self, ev: dict) -> dict:
+        r = self.compute(ev)
+        return {"event": self._public_event(ev), "started": r["started"], "devices": r["devices"],
+                "finished": self._no_chips(r["finished"]), "on_course": self._no_chips(r["on_course"]),
+                "not_seen": self._no_chips(r["not_seen"]), "groups": r["groups"],
+                "final": (ev.get("status") == "finished")}
+
+    def public_startlist(self, ev: dict) -> dict:
+        sl = self.startlist(ev)
+        for h in sl["heats"]:
+            h["entries"] = self._no_chips(h["entries"])
+        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._no_chips(sl["no_heat"])}
+
+    def import_calendar(self, year: int, who: str) -> dict:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed", f"calendar-{int(year)}.json")
+        try:
+            with open(p, encoding="utf-8") as f:
+                items = json.load(f)["events"]
+        except (OSError, ValueError, KeyError):
+            return {"error": f"нет календаря на {year} год"}
+        have = {(e["name"].strip().lower(), e.get("date")) for e in self.store.list_events()}
+        added = 0
+        for it in items:
+            if (it["name"].strip().lower(), it.get("date")) in have:
+                continue
+            eid = self.store.add_event({"name": it["name"], "date": it.get("date"), "place": it.get("place") or None})
+            self.store.update_event(eid, {"kind": it.get("kind") or "stadium", "pub_site": True,
+                                          "ours": it.get("level") in ("region", "mass"), "level": it.get("level"),
+                                          "adaptive": bool(it.get("adaptive")), "date_end": it.get("date_end"),
+                                          "city": it.get("city"), "note": it.get("note"),
+                                          "links": "\n".join(f"{l['title']} | {l['url']}" for l in it.get("links") or [])})
+            if (it.get("date_end") or it.get("date") or "9999") < now_local().strftime("%Y-%m-%d"):
+                self.store.set_event_field(eid, status="finished", archived=1)   # прошедшие — сразу в архив
+            self.ensure_slug(eid)
+            added += 1
+        self.store.audit(who, None, "Импорт календаря", f"{year}: добавлено {added}")
+        return {"added": added, "total": len(items)}
 
     def known_devices(self) -> list:
         devs = {str(s.cfg["device"]) for s in self.sources.values()}
@@ -1623,9 +1829,39 @@ class Hub:
             return f"{m}:{s:02d}.{t}"
         return f"{s}.{t}"
 
+    RESULT_RE = re.compile(r"(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?")
+    STATUSES = ("DNS", "DNF", "DQ", "NM")
+
+    @classmethod
+    def parse_result(cls, text) -> Optional[tuple]:
+        """Результат, введённый секретарём: 12.84 · 12,8 · 1:05.32 · 2:05:31 → (секунды, текст для протокола)."""
+        t = re.sub(r"\s+", "", str(text or ""))
+        m = cls.RESULT_RE.fullmatch(t)
+        if not m or not t:
+            return None
+        a, b, c, frac = m.groups()
+        h, mi = (int(a), int(b)) if b is not None else (0, int(a) if a is not None else 0)
+        sec = int(c)
+        if (a is not None or b is not None) and sec >= 60:
+            return None
+        total = h * 3600 + mi * 60 + sec + (int(frac) / 10 ** len(frac) if frac else 0)
+        if total <= 0:
+            return None
+        f = f".{frac}" if frac else ""
+        txt = f"{h}:{mi:02d}:{sec:02d}{f}" if h else (f"{mi}:{sec:02d}{f}" if mi else f"{sec}{f}")
+        return total, txt
+
     def compute(self, ev: dict) -> dict:
         eid = ev["id"]
         erows = self.store.entries_rows(eid)
+        entered, status_of = {}, {}
+        for r in erows:
+            if r.get("status") in self.STATUSES:
+                status_of[r["chip"]] = r["status"]
+            elif r.get("result"):
+                pr = self.parse_result(r["result"])
+                if pr:
+                    entered[r["chip"]] = pr
         entries = {r["chip"]: r["bib"] for r in erows}
         info = {r["chip"]: r for r in erows}
         chip_wave = {r["chip"]: r["wave"] for r in erows if r["wave"]}
@@ -1638,7 +1874,7 @@ class Hub:
         ev_start = parse_db(ev["start_time"]) if ev.get("start_time") else None
         fin_dev = ev.get("finish_device") or ""
         min_time = dt.timedelta(seconds=float(ev.get("min_time_sec") or 0))
-        res = {"event": self._event_view(ev), "started": bool(ev_start or wave_start),
+        res = {"event": self._event_view(ev), "started": bool(ev_start or wave_start or entered),
                "devices": [], "finished": [], "on_course": [], "not_seen": [], "alerts": [],
                "manual_pending": 0, "unknown": [], "groups": []}
 
@@ -1712,7 +1948,7 @@ class Hub:
             return s
 
         def row(chip):
-            per = first[chip]
+            per = first.get(chip, {})
             w = chip_wave.get(chip, "")
             meta = wmeta.get(w, {})
             inf = info.get(chip, {})
@@ -1724,17 +1960,32 @@ class Hub:
                     "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
                     "manual": sorted(d for d in per if (chip, d) in manual_set)}
 
-        finished = [c for c in first if fin_dev in first[c]]
-        finished.sort(key=lambda c: (wave_order.get(chip_wave.get(c, ""), -1), secs(c, fin_dev)))
+        def fin_sec(chip):
+            return entered[chip][0] if chip in entered else secs(chip, fin_dev)
+
+        finished = [c for c in first if fin_dev in first[c] and c not in entered and c not in status_of] + list(entered)
+        finished.sort(key=lambda c: (wave_order.get(chip_wave.get(c, ""), -1), fin_sec(c)))
         place_by_wave: dict = {}
+        prev_by_wave: dict = {}
         for chip in finished:
-            sec = secs(chip, fin_dev)
+            sec = fin_sec(chip)
             w = chip_wave.get(chip, "")
             place_by_wave[w] = place_by_wave.get(w, 0) + 1
             r = row(chip)
-            r.update(place=place_by_wave[w], time=self.fmt_elapsed(sec), result=self.fmt_result(sec),
-                     seconds=round(sec, 3), finish_at=fmt_db(first[chip][fin_dev]),
-                     finish_epoch_ms=self._epoch_ms(first[chip][fin_dev]))
+            if chip in entered:
+                txt = entered[chip][1]
+                pv = prev_by_wave.get(w)
+                place = pv[1] if pv and pv[0] == txt else place_by_wave[w]   # одинаковый результат — одно место
+                r.update(place=place, time=self.fmt_elapsed(sec), result=txt, seconds=round(sec, 3),
+                         finish_at=None, finish_epoch_ms=None, entered=True)
+            else:
+                txt = self.fmt_result(sec)
+                pv = prev_by_wave.get(w)
+                place = place_by_wave[w]
+                r.update(place=place, time=self.fmt_elapsed(sec), result=txt,
+                         seconds=round(sec, 3), finish_at=fmt_db(first[chip][fin_dev]),
+                         finish_epoch_ms=self._epoch_ms(first[chip][fin_dev]))
+            prev_by_wave[w] = (txt, place)
             res["finished"].append(r)
         # общий рейтинг: все забеги одной категории и дистанции вместе
         groups: dict = {}
@@ -1753,7 +2004,7 @@ class Hub:
             res["groups"].append({"category": cat, "distance": dist, "count": len(lst)})
         res["groups"].sort(key=lambda g: (g["distance"], g["category"]))
         for chip, per in first.items():
-            if fin_dev not in per:
+            if fin_dev not in per and chip not in entered and chip not in status_of:
                 last_dev = max(per, key=lambda d: per[d])
                 r = row(chip)
                 r.update(last_point=last_dev, last_time=self.fmt_elapsed(secs(chip, last_dev)))
@@ -1762,12 +2013,13 @@ class Hub:
         res["not_seen"] = [{"bib": r["bib"], "chip": "" if r["chip"].startswith("#") else r["chip"],
                             "wave": r["wave"] or "", "name": r["name"] or "", "birth_year": r["birth_year"] or "",
                             "team": r["team"] or "", "coach": r.get("coach") or "", "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
-                            "distance": wmeta.get(r["wave"] or "", {}).get("distance") or ""}
-                           for r in erows if r["chip"] not in first]
+                            "distance": wmeta.get(r["wave"] or "", {}).get("distance") or "",
+                            **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
+                           for r in erows if (r["chip"] not in first or r["chip"] in status_of) and r["chip"] not in entered]
 
         # ---- предупреждения
         A = res["alerts"]
-        if not fin_dev:
+        if not fin_dev and not entered:
             A.append({"level": "warn", "text": "Не выбрана точка финиша — результаты не считаются"})
         if res["manual_pending"]:
             A.append({"level": "warn", "text": f"Отсечек судьи без номера: {res['manual_pending']} — впишите номера"})
@@ -2070,6 +2322,11 @@ class Hub:
                 out.append(item)
             last = out[-1]["id"] if out else (since if since > 0 else self.store.last_id())
             return ok({"last_id": last, "reads": out})
+        if path == "/api/calendar":
+            if method == "POST" and data.get("import"):
+                out = self.import_calendar(int(data.get("year") or now_local().year), who)
+                return (err(out["error"], 404) if "error" in out else ok(out))
+            return ok(self.calendar(int(qs["year"]) if str(qs.get("year", "")).isdigit() else None))
         if path == "/api/events":
             if method == "GET":
                 return ok({"events": [self._event_view(e) for e in self.store.list_events()]})
@@ -2078,6 +2335,12 @@ class Hub:
                 if not name:
                     return err("укажите название")
                 eid = self.store.add_event({**data, "name": name})
+                extra = {k: data[k] for k in ("kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end",
+                                              "city", "note") if k in data}
+                if extra:
+                    self.store.update_event(eid, extra)
+                if data.get("pub_site"):
+                    self.ensure_slug(eid)
                 self.store.audit(who, eid, "Создано соревнование", name)
                 return ok(self._event_view(self.store.get_event(eid)), 201)
             return err("метод не поддерживается", 405)
@@ -2157,10 +2420,12 @@ class Hub:
         if action == "":
             if "name" in data and not str(data["name"]).strip():
                 return err("название не может быть пустым")
+            for k in ("live_url", "photo_url"):
+                if data.get(k) and not self.clean_url(data[k]):
+                    return err("ссылка должна начинаться с https://")
             self.store.update_event(eid, data)
-            if data.get("reg_open") and not ev.get("reg_slug"):
-                import secrets
-                self.store.set_event_field(eid, reg_slug=secrets.token_urlsafe(6).replace("-", "x").replace("_", "z"))
+            if data.get("reg_open") or data.get("pub_site"):
+                self.ensure_slug(eid)
             self.store.audit(who, eid, "Изменены настройки", ", ".join(k for k in data if k != "judge"))
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "delete":
@@ -2201,6 +2466,37 @@ class Hub:
             self.store.set_event_field(eid, archived=flag)
             self.store.audit(who, eid, "Перенесено в архив" if flag else "Возвращено из архива")
             return ok(self._event_view(self.store.get_event(eid)))
+        if action == "results" and isinstance(data.get("rows"), list):
+            bad, n = [], 0
+            for rw in data["rows"][:2000]:
+                if not isinstance(rw, dict):
+                    continue
+                bib = str(rw.get("bib") or "").strip()
+                st = str(rw.get("status") or "").strip().upper()
+                txt = str(rw.get("result") or "").strip()
+                if st and st not in self.STATUSES:
+                    bad.append(f"{bib}: неизвестная отметка {st}")
+                    continue
+                pr = None
+                if txt and not st:
+                    pr = self.parse_result(txt)
+                    if not pr:
+                        bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: 12.84 или 4:05.32")
+                        continue
+                if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None):
+                    n += 1
+                else:
+                    bad.append(f"{bib}: нет такого номера")
+            if n:
+                self.store.audit(who, eid, "Введены результаты", f"строк: {n}")
+            return ok({"saved": n, "errors": bad})
+        if action == "files" and sub_id is not None and "public" in data:
+            f = self.store.get_file(sub_id)
+            if f is None or f["event_id"] != eid:
+                return err("файл не найден", 404)
+            self.store.set_file_public(sub_id, bool(data["public"]))
+            self.store.audit(who, eid, "Файл на сайте" if data["public"] else "Файл убран с сайта", f["name"])
+            return ok({"public": bool(data["public"])})
         if action == "files" and sub_id is not None and data.get("folder"):
             f = self.store.get_file(sub_id)
             if f is None or f["event_id"] != eid:
@@ -3475,7 +3771,8 @@ class Hub:
         name = f"Результаты (снимок) {now_local():%Y-%m-%d %H-%M}.csv"
         return self.save_file(ev["id"], name, data.encode("utf-8"), "snapshot", author)
 
-    ASSET_TYPES = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".css": "text/css; charset=utf-8"}
+    ASSET_TYPES = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".css": "text/css; charset=utf-8",
+                   ".js": "text/javascript; charset=utf-8"}
 
     def _asset(self, name: str):
         """Шрифты, логотипы и общий стиль из папки assets рядом с hub.py (только известные типы, без подкаталогов)."""
@@ -4066,6 +4363,88 @@ class Hub:
             return hmac.compare_digest(u, web.get("user", "admin")) and hmac.compare_digest(p, pwd)
         return False
 
+    ROLES = {"admin": "Администратор", "secretary": "Секретарь", "judge": "Судья"}
+    SESSION_COOKIE = "ss_session"
+    SESSION_DAYS = 30
+
+    @staticmethod
+    def hash_password(pwd: str) -> str:
+        salt = os.urandom(16)
+        h = hashlib.scrypt(pwd.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+        return f"scrypt${salt.hex()}${h.hex()}"
+
+    @staticmethod
+    def verify_password(pwd: str, stored: str) -> bool:
+        try:
+            _, salt, h = stored.split("$")
+            got = hashlib.scrypt(pwd.encode("utf-8"), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1, dklen=32)
+            return hmac.compare_digest(got.hex(), h)
+        except (ValueError, TypeError):
+            return False
+
+    def check_login(self, login: str, pwd: str) -> Optional[dict]:
+        """Пользователь из таблицы или учётка из настроек (web.user / web.password) — администратор."""
+        u = self.store.get_user(login)
+        if u:
+            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]} \
+                if self.verify_password(pwd, u["pwd"]) else None
+        web = self.cfg["web"]
+        cfg_pwd = web.get("password") or ""
+        if cfg_pwd and hmac.compare_digest(login, web.get("user", "admin")) and hmac.compare_digest(pwd, cfg_pwd):
+            return {"login": login, "name": "Администратор", "role": "admin"}
+        return None
+
+    def _user_by_login(self, login: str) -> Optional[dict]:
+        u = self.store.get_user(login)
+        if u:
+            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]}
+        if login == self.cfg["web"].get("user", "admin"):
+            return {"login": login, "name": "Администратор", "role": "admin"}
+        return None
+
+    @staticmethod
+    def _cookie(headers: dict, name: str) -> str:
+        for part in headers.get("cookie", "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == name:
+                return v
+        return ""
+
+    def session_user(self, headers: dict) -> Optional[dict]:
+        tok = self._cookie(headers, self.SESSION_COOKIE)
+        if not tok or len(tok) > 100:
+            return None
+        sess = self.store.get_session(hashlib.sha256(tok.encode()).hexdigest())
+        return self._user_by_login(sess["login"]) if sess else None
+
+    def request_user(self, headers: dict, proxied: bool) -> Optional[dict]:
+        u = self.session_user(headers)
+        if u:
+            return u
+        # Basic-авторизация — только напрямую (VPN, скрипты, самопроверка), не через nginx из интернета
+        if not proxied and self._auth_ok(headers, allow_api_key=False) and self.cfg["web"].get("password"):
+            return self._user_by_login(self._auth_user(headers)) or {"login": self._auth_user(headers), "name": "", "role": "admin"}
+        if not self.cfg["web"].get("password") and not proxied:
+            return {"login": "-", "name": "", "role": "admin"}
+        return None
+
+    JUDGE_GET = re.compile(r"/api/(clock|status|events|events/\d+(/(results|files|manual|startlist))?)")
+    JUDGE_POST = re.compile(r"/api/events/\d+/(manual(/\d+)?|start|waves)")
+    JUDGE_PAGES = ("/judge", "/board", "/announcer", "/protocol", "/api/me", "/api/logout")
+    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
+
+    def role_allows(self, role: str, method: str, path: str) -> bool:
+        if role == "admin":
+            return True
+        if role == "secretary":
+            return not self.ADMIN_ONLY.fullmatch(path)
+        if role == "judge":
+            if path in self.JUDGE_PAGES or re.fullmatch(r"/files/\d+", path):
+                return True
+            rx = self.JUDGE_GET if method == "GET" else self.JUDGE_POST
+            return bool(rx.fullmatch(path))
+        return False
+
     @staticmethod
     def _auth_user(headers: dict) -> str:
         auth = headers.get("authorization", "")
@@ -4075,6 +4454,97 @@ class Hub:
             except Exception:
                 return "?"
         return "-"
+
+    def _trusted_proxies(self) -> set:
+        return {"127.0.0.1", "::1", "::ffff:127.0.0.1", str(self.cfg["web"].get("listen_host") or "")}
+
+    @staticmethod
+    def _safe_next(nxt: str) -> str:
+        nxt = str(nxt or "")
+        return nxt if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt and len(nxt) < 300 else "/"
+
+    def do_login(self, body: bytes, headers: dict, ip: str, secure: bool) -> tuple:
+        if headers.get("x-requested-with") != "timing-hub":
+            return 403, {"error": "нужен заголовок X-Requested-With"}, None
+        try:
+            d = json.loads(body.decode("utf-8") or "{}")
+            login, pwd = str(d.get("login") or "").strip()[:64], str(d.get("password") or "")[:200]
+        except (ValueError, UnicodeDecodeError, AttributeError):
+            return 400, {"error": "неверные данные"}, None
+        if not (self._rate_ok("login-ip:" + ip, 10, 600) and self._rate_ok("login-u:" + login.lower(), 10, 600)
+                and self._rate_ok("login-all", 200, 600)):
+            return 429, {"error": "Слишком много попыток. Подождите 10 минут."}, None
+        u = self.check_login(login, pwd) if login and pwd else None
+        if not u:
+            self.store.audit(f"{login or '?'}@{ip}", None, "Неудачный вход")
+            return 401, {"error": "Неверный логин или пароль"}, None
+        import secrets
+        tok = secrets.token_urlsafe(32)
+        self.store.add_session(hashlib.sha256(tok.encode()).hexdigest(), u["login"], self.SESSION_DAYS, ip)
+        self.store.audit(f"{u['login']}@{ip}", None, "Вход")
+        cookie = (f"{self.SESSION_COOKIE}={tok}; Path=/; Max-Age={self.SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax"
+                  + ("; Secure" if secure else ""))
+        nxt = "/judge" if u["role"] == "judge" else self._safe_next(d.get("next"))
+        return 200, {"ok": True, "user": u, "next": nxt}, {"Set-Cookie": cookie}
+
+    LOGIN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,31}")
+
+    def users_api(self, method: str, path: str, body: bytes, me: dict, actor: str) -> tuple:
+        try:
+            data = json.loads(body.decode("utf-8") or "{}") if method == "POST" else {}
+            if not isinstance(data, dict):
+                raise ValueError
+        except (ValueError, UnicodeDecodeError):
+            return 400, {"error": "неверные данные"}
+        if path == "/api/me":
+            return 200, {**me, "role_name": self.ROLES.get(me["role"], me["role"])}
+        if path == "/api/me/password" and method == "POST":
+            old, new = str(data.get("old") or ""), str(data.get("new") or "")
+            if not self.check_login(me["login"], old):
+                return 400, {"error": "текущий пароль неверный"}
+            if len(new) < 8:
+                return 400, {"error": "новый пароль — не короче 8 символов"}
+            self.store.save_user(me["login"], me.get("name") or me["login"], me["role"], self.hash_password(new))
+            self.store.audit(actor, None, "Смена пароля")
+            return 200, {"ok": True}
+        if me["role"] != "admin":
+            return 403, {"error": "недостаточно прав"}
+        if path == "/api/users" and method == "GET":
+            have = {u["login"] for u in self.store.users()}
+            cfg_admin = self.cfg["web"].get("user", "admin")
+            lst = self.store.users()
+            if cfg_admin not in have:
+                lst.insert(0, {"login": cfg_admin, "name": "Администратор (из настроек сервера)", "role": "admin",
+                               "created_at": None, "last_login": None, "builtin": True})
+            return 200, {"users": lst, "roles": self.ROLES, "me": me["login"]}
+        m = re.fullmatch(r"/api/users(?:/([a-z0-9._-]{1,32})/delete)?", path)
+        if not m or method != "POST":
+            return 404, {"error": "нет такого адреса"}
+        if m.group(1):
+            if m.group(1) == me["login"]:
+                return 400, {"error": "нельзя удалить самого себя"}
+            self.store.delete_user(m.group(1))
+            self.store.audit(actor, None, "Удалён пользователь", m.group(1))
+            return 200, {"deleted": m.group(1)}
+        login = str(data.get("login") or "").strip().lower()
+        role = str(data.get("role") or "")
+        name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:80]
+        pwd = str(data.get("password") or "")
+        if not self.LOGIN_RE.fullmatch(login):
+            return 400, {"error": "логин: латиница, цифры, точка, дефис; 2–32 символа"}
+        if role not in self.ROLES:
+            return 400, {"error": "неизвестная роль"}
+        if login == me["login"] and role != "admin":
+            return 400, {"error": "нельзя снять права администратора с самого себя"}
+        exists = self.store.get_user(login) is not None
+        if (not exists or pwd) and len(pwd) < 8:
+            return 400, {"error": "пароль — не короче 8 символов"}
+        if not exists and login == self.cfg["web"].get("user", "admin") and login != me["login"]:
+            return 400, {"error": "этот логин занят встроенным администратором"}
+        self.store.save_user(login, name or login, role, self.hash_password(pwd) if pwd else None)
+        self.store.audit(actor, None, "Пользователь сохранён" if exists else "Добавлен пользователь",
+                         f"{login} · {self.ROLES[role]}")
+        return 200, {"ok": True, "login": login}
 
     async def _http(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -4102,17 +4572,67 @@ class Hub:
                     return
                 await self._send(writer, *self._api_reads(qs, headers, body))
                 return
-            if not self._auth_ok(headers, allow_api_key=False):
-                await self._send(writer, 401, "text/plain", "Нужен логин и пароль",
-                                 extra={"WWW-Authenticate": 'Basic realm="timing-hub", charset="UTF-8"'})
+            peer = writer.get_extra_info("peername")
+            peer_ip = peer[0] if peer else "?"
+            # через nginx (вход из интернета по https://reg.fla65.ru) — доверяем его заголовкам
+            proxied = peer_ip in self._trusted_proxies() and "x-forwarded-proto" in headers
+            client_ip = (headers.get("x-real-ip") or peer_ip) if proxied else peer_ip
+            secure = proxied and headers.get("x-forwarded-proto") == "https"
+            J = "application/json; charset=utf-8"
+            # без входа: страница входа, вход/выход, шрифты и логотипы, публичная часть
+            if path == "/login" and method == "GET":
+                await self._send(writer, 200, "text/html; charset=utf-8", self._ui_file("login.html") or "нет login.html")
+                return
+            if path == "/api/login" and method == "POST":
+                code, res, extra = self.do_login(body, headers, client_ip, secure)
+                await self._send(writer, code, J, json.dumps(res, ensure_ascii=False), extra=extra)
+                return
+            if path == "/api/logout" and method == "POST":
+                tok = self._cookie(headers, self.SESSION_COOKIE)
+                if tok:
+                    self.store.delete_session(hashlib.sha256(tok.encode()).hexdigest())
+                await self._send(writer, 200, J, '{"ok":true}',
+                                 extra={"Set-Cookie": f"{self.SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
+                return
+            if path.startswith("/assets/") and method == "GET":
+                a = self._asset(path[8:])
+                if a is None:
+                    await self._send(writer, 404, "text/plain", "нет такого файла")
+                else:
+                    await self._send(writer, 200, a[0], a[1], extra={"Cache-Control": "public, max-age=86400"})
+                return
+            if (path == "/r" or path.startswith("/r/")) and method in ("GET", "POST"):
+                code, ctype, data, extra = self._public_route(method, path, headers, body, client_ip, qs)
+                await self._send(writer, code, ctype, data, extra={**self.PUBLIC_HEADERS, **(extra or {})})
+                return
+            user = self.request_user(headers, proxied)
+            if user is None:
+                if path.startswith("/api/") or path in ("/export.csv", "/raw") or method != "GET":
+                    await self._send(writer, 401, J, json.dumps({"error": "нужно войти", "login": "/login"}, ensure_ascii=False))
+                elif path == "/" and proxied:
+                    await self._send(writer, 302, "text/plain", "", extra={"Location": "/r/"})
+                else:
+                    from urllib.parse import quote
+                    nxt = "" if path == "/" else "?next=" + quote(target, safe="")
+                    await self._send(writer, 302, "text/plain", "", extra={"Location": "/login" + nxt})
+                return
+            if not self.role_allows(user["role"], method, path):
+                if method == "GET" and not path.startswith("/api/"):
+                    await self._send(writer, 302, "text/plain", "",
+                                     extra={"Location": "/judge" if user["role"] == "judge" else "/"})
+                else:
+                    await self._send(writer, 403, J, json.dumps({"error": "недостаточно прав"}, ensure_ascii=False))
                 return
             self._note_client(writer, headers, path)
             if path.startswith("/api/") and path not in ("/api/status",):
                 if method == "POST" and headers.get("x-requested-with") != "timing-hub":
                     await self._send(writer, 403, "text/plain", "нужен заголовок X-Requested-With")
                     return
-                peer = writer.get_extra_info("peername")
-                actor = f"{self._auth_user(headers)}@{peer[0] if peer else '?'}"
+                actor = f"{user['login']}@{client_ip}"
+                if path == "/api/me" or path.startswith("/api/users") or path == "/api/me/password":
+                    code, res = self.users_api(method, path, body, user, actor)
+                    await self._send(writer, code, J, json.dumps(res, ensure_ascii=False))
+                    return
                 # Обновление с GitHub: сеть — в отдельном потоке, чтобы не задерживать приём отметок
                 if path == "/api/system/update/github/check" and method == "GET":
                     code, res = await asyncio.to_thread(self.github_check)
@@ -4144,7 +4664,7 @@ class Hub:
                 return
             if path == "/r" or path.startswith("/r/"):
                 peer = writer.get_extra_info("peername")
-                code, ctype, data, extra = self._public_route(method, path, headers, body, peer[0] if peer else "?")
+                code, ctype, data, extra = self._public_route(method, path, headers, body, peer[0] if peer else "?", qs)
                 await self._send(writer, code, ctype, data, extra=extra)
             elif method != "GET":
                 await self._send(writer, 405, "text/plain", "метод не поддерживается")
@@ -4221,7 +4741,7 @@ class Hub:
         q.append(now)
         return True
 
-    def _public_route(self, method: str, path: str, headers: dict, body: bytes, client: str):
+    def _public_route(self, method: str, path: str, headers: dict, body: bytes, client: str, qs: Optional[dict] = None):
         J = "application/json; charset=utf-8"
 
         def js(obj, code=200):
@@ -4234,7 +4754,14 @@ class Hub:
             a = self._asset(path[10:])
             if a is None:
                 return 404, "text/plain; charset=utf-8", "нет такого файла", None
-            return 200, a[0], a[1], {"Cache-Control": "public, max-age=86400"}
+            # виджет календаря и шрифты подключаются на fla65.ru — разрешаем чужому сайту их читать
+            return 200, a[0], a[1], {"Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*",
+                                     "Cross-Origin-Resource-Policy": "cross-origin"}
+        if method == "GET" and path == "/r/api/calendar":
+            y = str((qs or {}).get("year", ""))
+            data = self.calendar(int(y) if y.isdigit() else None)
+            return 200, J, json.dumps(data, ensure_ascii=False), {"Access-Control-Allow-Origin": "*",
+                                                                  "Cache-Control": "public, max-age=60"}
         if method == "GET" and path == "/r/api/open":
             out = []
             for e in self.store.list_events():
@@ -4242,7 +4769,8 @@ class Hub:
                     out.append({"name": e["name"], "date": e.get("date"), "place": e.get("place"),
                                 "deadline": e.get("reg_deadline"), "slug": e["reg_slug"]})
             return js({"events": out})
-        m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team)?/?", path)
+        m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/results\.json|/startlist\.json"
+                         r"|/protocol|/files/\d+)?/?", path)
         if not m:
             return 404, "text/plain; charset=utf-8", "нет такой страницы", None
         ev = self.store.event_by_slug(m.group(1))
@@ -4253,7 +4781,30 @@ class Hub:
         if method == "GET" and sub == "/template.xlsx":
             return self._template_response(ev)
         if method == "GET" and sub == "/info":
-            return js(self._public_info(ev))
+            info = self._public_info(ev)
+            info["card"] = self.event_card(ev)
+            return js(info)
+        if method == "GET" and sub in ("/results.json", "/startlist.json", "/protocol"):
+            v = self._event_view(ev)
+            if sub == "/protocol":
+                page = self._ui_file("protocol.html")
+                return 200, "text/html; charset=utf-8", page or "нет protocol.html", None
+            if not v["ours"] or not (v["pub_results"] if sub == "/results.json" else v["pub_start"]):
+                return js({"error": "протокол ещё не опубликован"}, 404)
+            return js(self.public_results(ev) if sub == "/results.json" else self.public_startlist(ev))
+        if method == "GET" and sub.startswith("/files/"):
+            f = self.store.get_file(int(sub.rsplit("/", 1)[1]))
+            fp = os.path.join(self.files_dir, f["stored"]) if f else None
+            if not f or f["event_id"] != ev["id"] or not f.get("public") or not os.path.isfile(fp):
+                return 404, "text/plain; charset=utf-8", "файл не найден", None
+            import mimetypes
+            from urllib.parse import quote
+            with open(fp, "rb") as fh:
+                blob = fh.read()
+            ctype = mimetypes.guess_type(f["name"])[0] or "application/octet-stream"
+            disp = "inline" if ctype in ("application/pdf",) or ctype.startswith("image/") else "attachment"
+            return 200, ctype, blob, {"Content-Disposition": f"{disp}; filename*=UTF-8''{quote(f['name'])}",
+                                      "Cache-Control": "public, max-age=300"}
         if method == "POST" and sub in ("/team-check", "/team"):
             open_, why = self.reg_state(ev)
             if not open_:
@@ -4322,7 +4873,9 @@ class Hub:
             body = await asyncio.wait_for(reader.readexactly(n), timeout=15) if n else b""
             peer = writer.get_extra_info("peername")
             client = headers.get("x-real-ip") or (peer[0] if peer else "?")
-            code, ctype, data, extra = self._public_route(method, urlsplit(target).path, headers, body, client)
+            u = urlsplit(target)
+            code, ctype, data, extra = self._public_route(method, u.path, headers, body, client,
+                                                          {k: v[-1] for k, v in parse_qs(u.query).items()})
             await self._send(writer, code, ctype, data, extra={**self.PUBLIC_HEADERS, **(extra or {})})
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError,
                 ConnectionError, ValueError):
@@ -4341,7 +4894,7 @@ class Hub:
 
     @staticmethod
     async def _send(writer, code: int, ctype: str, body, extra: Optional[dict] = None) -> None:
-        reasons = {200: "OK", 201: "Created", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
+        reasons = {200: "OK", 201: "Created", 302: "Found", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
                    404: "Not Found", 405: "Method Not Allowed", 409: "Conflict", 413: "Payload Too Large",
                    415: "Unsupported Media Type", 429: "Too Many Requests", 500: "Internal Server Error"}
         data = body.encode("utf-8") if isinstance(body, str) else body
@@ -4351,6 +4904,8 @@ class Hub:
                "Connection: close"]
         if "Cache-Control" not in (extra or {}):
             hdr.append("Cache-Control: no-store")
+        if "X-Frame-Options" not in (extra or {}):
+            hdr += ["X-Frame-Options: DENY", "X-Content-Type-Options: nosniff", "Referrer-Policy: same-origin"]
         for k, v in (extra or {}).items():
             hdr.append(f"{k}: {v}")
         writer.write(("\r\n".join(hdr) + "\r\n\r\n").encode("utf-8") + data)

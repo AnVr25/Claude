@@ -1,0 +1,492 @@
+{
+ "source": "https://fla65.ru/competitions (календарный план минспорта Сахалинской области на 2026 год)",
+ "events": [
+  {
+   "name": "Кубок Сахалинской области в помещении",
+   "date": "2026-01-05",
+   "date_end": "2026-01-06",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Первенство ДФО в помещении",
+   "date": "2026-01-14",
+   "date_end": "2026-01-15",
+   "level": "dfo",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "203 спортсмена из семи регионов Дальнего Востока",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат и первенство ДФО",
+   "date": "2026-01-26",
+   "date_end": "2026-01-30",
+   "level": "dfo",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Открытое первенство Сахалинской области среди ветеранов",
+   "date": "2026-02-20",
+   "date_end": "2026-02-21",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "Первый зимний старт ветеранов: более 50 спортсменов из Южно-Сахалинска, Корсакова, Анивы и Поронайска",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат России и всероссийские соревнования в помещении",
+   "date": "2026-02-28",
+   "date_end": "2026-03-03",
+   "level": "russia",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "Впервые на Дальнем Востоке: около 300 спортсменов из 57 регионов",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "На сайте ВФЛА",
+     "url": "https://rusathletics.info/meropriyatiya/calendar/19439-chemionat-rossii-v-pomeshhenii-vserossijskie-sorevnovaniya-v-pomeshhenii/"
+    }
+   ]
+  },
+  {
+   "name": "Межрегиональные соревнования по легкоатлетическому четырёхборью среди школьников",
+   "date": "2026-03-05",
+   "date_end": "2026-03-08",
+   "level": "interregion",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "Мальчики и девочки до 12 лет, юноши и девушки до 14 и 16 лет",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Отборочные соревнования среди юношей и девушек до 14 и 16 лет",
+   "date": "2026-03-06",
+   "date_end": "2026-03-07",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Межрегиональные соревнования в помещении",
+   "date": "2026-03-18",
+   "date_end": "2026-03-22",
+   "level": "interregion",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Областные соревнования среди юношей и девушек до 12 и 14 лет",
+   "date": "2026-04-28",
+   "date_end": "2026-04-29",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Поронайск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат и первенство Сахалинской области",
+   "date": "2026-05-01",
+   "date_end": "2026-05-03",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/bgcsbffdy1-chempionat-i-pervenstvo-sahalinskoi-obla"
+    }
+   ]
+  },
+  {
+   "name": "Чемпионат и первенство среди лиц с интеллектуальными нарушениями",
+   "date": "2026-05-05",
+   "date_end": "2026-05-06",
+   "level": "region",
+   "adaptive": true,
+   "place": "Стадион «Спартак»",
+   "city": "Южно-Сахалинск",
+   "note": "Более 50 спортсменов из Невельска и Южно-Сахалинска",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/1zxlx2ikf1-chempionat-oblasti-sredi-lits-s-intellek"
+    }
+   ]
+  },
+  {
+   "name": "Первенство ДФО среди юниоров до 20 лет и юношей до 18 лет",
+   "date": "2026-05-13",
+   "date_end": "2026-05-15",
+   "level": "dfo",
+   "adaptive": false,
+   "place": "Стадион «Спартак»",
+   "city": "Южно-Сахалинск",
+   "note": "260 спортсменов из девяти регионов",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/85ym1cpfn1-48-medalei-pervenstva-dfo"
+    }
+   ]
+  },
+  {
+   "name": "Межрегиональные соревнования",
+   "date": "2026-05-14",
+   "date_end": "2026-05-16",
+   "level": "interregion",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "«Шиповка юных»: четырёхборье, мальчики и девочки до 12 лет",
+   "date": "2026-05-17",
+   "date_end": "2026-05-19",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Корсаков",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "«Шиповка юных»: четырёхборье, юноши и девушки до 14 и 16 лет",
+   "date": "2026-05-20",
+   "date_end": "2026-05-22",
+   "level": "region",
+   "adaptive": false,
+   "place": "Стадион «Спартак»",
+   "city": "Южно-Сахалинск",
+   "note": "Более 300 участников из семи муниципалитетов",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/1sykig2s01-shipovka-yunih"
+    }
+   ]
+  },
+  {
+   "name": "Полумарафон «Сахалинский забег» в рамках «ЗаБег.РФ»",
+   "date": "2026-05-23",
+   "date_end": null,
+   "level": "mass",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "Более 1 000 участников на дистанциях до 21,1 км",
+   "kind": "mass",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/0k02t62k41-bolee-1000-uchastnikov-zabegarf"
+    }
+   ]
+  },
+  {
+   "name": "Соревнования среди детей с ОВЗ, посвящённые Дню защиты детей",
+   "date": "2026-05-28",
+   "date_end": "2026-05-29",
+   "level": "region",
+   "adaptive": true,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "Более 50 юных спортсменов из Долинска, Анивы, Невельска и Южно-Сахалинска",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/jm8ojhgrs1-sorevnovaniya-ko-dnyu-zaschiti-detei"
+    }
+   ]
+  },
+  {
+   "name": "Кубок Сахалинской области",
+   "date": "2026-06-12",
+   "date_end": "2026-06-13",
+   "level": "region",
+   "adaptive": false,
+   "place": "Стадион «Спартак»",
+   "city": "Южно-Сахалинск",
+   "note": "Более 200 легкоатлетов из семи городов: взрослые и юниоры до 16 и 18 лет",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/gnhrmejyy1-kubok-sahalinskoi-oblasti"
+    }
+   ]
+  },
+  {
+   "name": "Легкоатлетическая эстафета «Я выбираю бег»",
+   "date": "2026-06-18",
+   "date_end": "2026-06-19",
+   "level": "mass",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "В рамках акции «Спорт Сахалина и Курил против наркотиков»",
+   "kind": "mass",
+   "links": []
+  },
+  {
+   "name": "Открытое первенство Сахалинской области среди ветеранов",
+   "date": "2026-07-04",
+   "date_end": "2026-07-05",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат Сахалинской области по спорту лиц с ПОДА: метание сидя",
+   "date": "2026-07-09",
+   "date_end": "2026-07-10",
+   "level": "region",
+   "adaptive": true,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат и первенство Сахалинской области памяти заслуженного тренера РСФСР Э.М. Комнацкого",
+   "date": "2026-09-11",
+   "date_end": "2026-09-12",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Первенство Сахалинской области по кроссу памяти Э.М. Комнацкого",
+   "date": "2026-09-11",
+   "date_end": "2026-09-12",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат и первенство ДФО по кроссу",
+   "date": "2026-09-20",
+   "date_end": "2026-09-22",
+   "level": "dfo",
+   "adaptive": false,
+   "place": "ЛБК «Триумф»",
+   "city": "Южно-Сахалинск",
+   "note": "Около 100 спортсменов из шести регионов Дальнего Востока",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/merth0leu1-devyat-medalei-na-chempionate-i-pervenst"
+    }
+   ]
+  },
+  {
+   "name": "Кубок Сахалинской области",
+   "date": "2026-09-25",
+   "date_end": "2026-09-27",
+   "level": "region",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Кубок и первенство России по кроссу",
+   "date": "2026-09-26",
+   "date_end": null,
+   "level": "russia",
+   "adaptive": false,
+   "place": "ЛБК «Триумф»",
+   "city": "Южно-Сахалинск",
+   "note": "Более 115 спортсменов из 11 регионов, Сахалин принимает старт в третий раз",
+   "kind": "stadium",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/tpvz6fi3y1-dve-medali-sahalintsev-na-kubke-i-perven"
+    }
+   ]
+  },
+  {
+   "name": "Всероссийский день бега «Кросс нации»",
+   "date": "2026-09-27",
+   "date_end": null,
+   "level": "mass",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск, Корсаков, Холмск, Долинск, Поронайск, Смирных, Тымовское, Макаров, Невельск, Углегорск, Шикотан",
+   "note": "На ЛБК «Триумф» в Южно-Сахалинске — почти 1 000 участников",
+   "kind": "mass",
+   "links": [
+    {
+     "title": "Итоги",
+     "url": "https://fla65.ru/news/260nfha231-kross-natsii-sobral-pochti-1000-uchastni"
+    }
+   ]
+  },
+  {
+   "name": "Региональные соревнования «Золотая берёзка»",
+   "date": "2026-10-07",
+   "date_end": "2026-10-08",
+   "level": "region",
+   "adaptive": true,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "Для спортсменов с интеллектуальными нарушениями",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "«Ночной забег»",
+   "date": "2026-10-16",
+   "date_end": null,
+   "level": "mass",
+   "adaptive": false,
+   "place": "",
+   "city": "Южно-Сахалинск",
+   "note": "Открытый забег для всех желающих",
+   "kind": "mass",
+   "links": []
+  },
+  {
+   "name": "Отборочные соревнования в помещении",
+   "date": "2026-11-06",
+   "date_end": "2026-11-07",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Всероссийские соревнования",
+   "date": "2026-11-11",
+   "date_end": "2026-11-15",
+   "level": "russia",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Первенство Сахалинской области в помещении",
+   "date": "2026-12-04",
+   "date_end": "2026-12-06",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат и первенство среди лиц с интеллектуальными нарушениями в помещении",
+   "date": "2026-12-09",
+   "date_end": "2026-12-10",
+   "level": "region",
+   "adaptive": true,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Отборочные соревнования в помещении",
+   "date": "2026-12-12",
+   "date_end": "2026-12-13",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Чемпионат Сахалинской области в помещении",
+   "date": "2026-12-18",
+   "date_end": "2026-12-20",
+   "level": "region",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  },
+  {
+   "name": "Всероссийские соревнования",
+   "date": "2026-12-18",
+   "date_end": "2026-12-21",
+   "level": "russia",
+   "adaptive": false,
+   "place": "Легкоатлетический манеж",
+   "city": "Южно-Сахалинск",
+   "note": "",
+   "kind": "stadium",
+   "links": []
+  }
+ ]
+}

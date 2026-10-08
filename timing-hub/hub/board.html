@@ -31,13 +31,19 @@ body{overflow:hidden;-webkit-font-smoothing:antialiased}
 main{flex:1;min-height:0;display:flex;flex-direction:column;padding:clamp(8px,1.6vh,26px) var(--bd-pad) 0}
 h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em}
 .list{flex:1;min-height:0;overflow:hidden}
-.r{position:relative;display:grid;grid-template-columns:1.6em 2.5em minmax(0,1fr) auto;align-items:center;column-gap:.55em;
+.r,.hd{position:relative;display:grid;grid-template-columns:2.4em 2.9em minmax(0,1fr) minmax(0,.62fr) 4.6em;align-items:center;column-gap:.55em;
   padding:.11em .3em;border-bottom:1px solid var(--bd-line);font:500 var(--bd-row)/1.2 var(--head);font-variant-numeric:tabular-nums}
 .r>span{position:relative;z-index:1;min-width:0}
 .r .p{color:var(--bd-muted)}
 .r .b{color:var(--start);font-weight:600}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .r .t{text-align:right;font-weight:600;white-space:nowrap}
+.r .d{color:var(--bd-muted);font-size:.62em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* подписи колонок */
+.hd{font:500 var(--bd-row)/1.2 var(--head);color:var(--bd-muted);padding:0 .3em .1em;border-bottom:2px solid var(--bd-line);align-items:end}
+.hd span{font-size:max(12px,.36em);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd span:last-child{text-align:right}
+.hd.hide{display:none}
 /* самый свежий финишёр — верхняя строка: красная растяжка в прозрачность */
 .r:first-child{background:linear-gradient(90deg,rgba(231,30,37,.42),rgba(231,30,37,.12) 45%,transparent 85%);box-shadow:inset 4px 0 0 var(--track)}
 /* вспышка при появлении нового результата */
@@ -65,7 +71,8 @@ h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--
     <div class="clock idle" id="clock">ожидание старта</div>
   </header>
   <main>
-    <h2>Последние финишировавшие</h2>
+    <h2>Последние финишировавшие — новые сверху</h2>
+    <div class="hd hide" id="hd"><span id="hdPlace">Место</span><span>Номер</span><span>Участник</span><span>Дисциплина</span><span>Результат</span></div>
     <div class="list" id="list"></div>
   </main>
   <footer class="foot">
@@ -81,7 +88,9 @@ const eid=new URLSearchParams(location.search).get("event");
 let offset=0,startMs=null,seen=new Set(),first=true;
 function fmt(ms){const n=ms<0;ms=Math.abs(ms);const t=Math.floor(ms/100),h=Math.floor(t/36000),m=Math.floor(t%36000/600),s=Math.floor(t%600/10),d=t%10;
   return (n?"-":"")+h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"."+d;}
-async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing-hub"}});if(!r.ok)throw new Error(r.status);return r.json();}
+async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing-hub"}});if(r.status===401){location.href="/login?next="+encodeURIComponent(location.pathname+location.search);throw new Error(401);}if(!r.ok)throw new Error(r.status);return r.json();}
+const MON=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const dRu=d=>{const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d||"");return m?`${+m[3]} ${MON[+m[2]-1]} ${m[1]}`:(d||"");};
 async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_ms-Date.now();}catch(e){}}
 async function load(){
   if(!eid){$("name").textContent="Не выбрано соревнование";return;}
@@ -89,10 +98,15 @@ async function load(){
     const r=await get(`/api/events/${encodeURIComponent(eid)}/results`);
     const ev=r.event; startMs=ev.start_epoch_ms;
     $("name").textContent=ev.name;
-    $("meta").textContent=[ev.date,ev.place,`финишировали: ${r.finished.length}`].filter(Boolean).join(" · ");
-    const last=r.finished.slice(-10).reverse();
-    $("list").innerHTML=last.map(x=>{const k=x.chip+x.time,isNew=!first&&!seen.has(k);seen.add(k);
-      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||x.chip.slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="t">${esc(x.time)}</span></div>`;}).join("");
+    $("meta").textContent=[dRu(ev.date),ev.place,`финишировали: ${r.finished.length}`].filter(Boolean).join(" · ");
+    const hasW=(ev.waves||[]).length>0;
+    $("hdPlace").textContent=hasW?"Место в забеге":"Место";
+    // последние по времени прихода на финиш, а не по порядку забегов
+    const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||0)-(a.finish_epoch_ms||0)).slice(0,10);
+    $("hd").classList.toggle("hide",!last.length);
+    $("list").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time,isNew=!first&&!seen.has(k);seen.add(k);
+      const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
+      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||(x.chip||"").slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
     first=false;
   }catch(e){$("meta").textContent="нет связи с сервером…";}
 }

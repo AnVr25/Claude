@@ -270,7 +270,62 @@ def main() -> int:
 
         # 9. страница состояния, JSON, CSV
         code, txt = http("GET", "/", auth=False)
-        check("страница закрыта паролем", code == 401, str(code))
+        check("без входа — страница входа", code == 200 and "Вход для организаторов" in txt, str(code))
+        code, _ = http("GET", "/api/events", auth=False)
+        check("API без входа закрыто", code == 401, str(code))
+
+        # 9a. вход через браузер (сессии, роли), в т.ч. через nginx
+        def jpost(path, obj, cookie=None, proxied=False):
+            h = {"Content-Type": "application/json", "X-Requested-With": "timing-hub"}
+            if cookie:
+                h["Cookie"] = cookie
+            if proxied:
+                h.update({"X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+            req = urllib.request.Request(f"http://127.0.0.1:{p_web}{path}", data=json.dumps(obj).encode(), method="POST", headers=h)
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status, json.loads(resp.read() or b"{}"), resp.headers.get("Set-Cookie", "")
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read() or b"{}"), ""
+
+        def cget(path, cookie, proxied=True):
+            h = {"Cookie": cookie}
+            if proxied:
+                h.update({"X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+            req = urllib.request.Request(f"http://127.0.0.1:{p_web}{path}", headers=h)
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status
+            except urllib.error.HTTPError as e:
+                return e.code
+
+        code, d, ck = jpost("/api/login", {"login": "admin", "password": "wrong"}, proxied=True)
+        check("вход: неверный пароль отклонён", code == 401, str(code))
+        code, d, ck = jpost("/api/login", {"login": "admin", "password": "test-pass"}, proxied=True)
+        adm = ck.split(";")[0]
+        check("вход: администратор из настроек, cookie Secure+HttpOnly через https",
+              code == 200 and adm.startswith("ss_session=") and "Secure" in ck and "HttpOnly" in ck, f"{code} {ck[:60]}")
+        check("вход: с сессией панель открывается", cget("/api/events", adm) == 200)
+        req = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events", headers={
+            "Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(), "X-Forwarded-Proto": "https"})
+        try:
+            urllib.request.urlopen(req, timeout=5); code = 200
+        except urllib.error.HTTPError as e:
+            code = e.code
+        check("через nginx из интернета Basic-пароль не принимается", code == 401, str(code))
+        code, d, _ = jpost("/api/users", {"login": "judge1", "name": "Судья", "role": "judge", "password": "judge-pass-1"}, adm, True)
+        check("пользователи: судья добавлен", code == 200, str(d))
+        code, d, _ = jpost("/api/users", {"login": "sec1", "role": "secretary", "password": "123"}, adm, True)
+        check("пользователи: короткий пароль отклонён", code == 400, str(d))
+        code, d, ck = jpost("/api/login", {"login": "judge1", "password": "judge-pass-1", "next": "/"}, proxied=True)
+        jck = ck.split(";")[0]
+        check("судья после входа попадает на экран судьи", code == 200 and d.get("next") == "/judge", str(d))
+        check("судья: соревнования и ручные отметки доступны, система — нет",
+              cget("/api/events", jck) == 200 and cget("/api/system", jck) == 403 and cget("/api/users", jck) == 403)
+        code, _, _ = jpost(f"/api/events/1/delete", {}, jck, True)
+        check("судья не может удалить соревнование", code == 403, str(code))
+        jpost("/api/logout", {}, jck, True)
+        check("после выхода сессия не действует", cget("/api/events", jck) == 401)
         code, txt = http("GET", "/")
         check("страница состояния открывается", code == 200 and "Сервер хронометража" in txt, str(code))
         code, txt = http("GET", "/api/status")
@@ -479,6 +534,45 @@ def main() -> int:
         for bad in ("/api/events", "/judge", "/", f"/api/events/{e4}/regs", "/r/../api/events", "/files/1"):
             code, _, _ = pub("GET", bad)
             check(f"публичный порт не отдаёт {bad}", code == 404, str(code))
+        # стадион: результаты вписывает секретарь; публикация на сайте fla65.ru
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Стадион 60 м", "kind": "stadium", "timing": "manual",
+                         "finish_device": "JUDGE", "pub_site": True}).encode(), J)
+        es = json.loads(txt)
+        check("стадион: событие создано с форматом и ручным хронометражем",
+              es.get("kind") == "stadium" and es.get("timing") == "manual" and es.get("pub_site") and es.get("reg_slug"), txt[:200])
+        http("POST", f"/api/events/{es['id']}/entries",
+             json.dumps({"text": "Номер;Чип;Забег;ФИО\n11;;;Иванов Иван\n12;;;Петров Пётр\n13;;;Сидоров Сидор"}).encode(), J)
+        code, txt = http("POST", f"/api/events/{es['id']}/results", json.dumps({"rows": [
+            {"bib": "11", "result": "8,15"}, {"bib": "12", "result": "7.94"}, {"bib": "13", "status": "dnf"},
+            {"bib": "99", "result": "9"}, {"bib": "11x", "result": "abc"}]}).encode(), J)
+        rr = json.loads(txt)
+        check("стадион: результаты сохранены, ошибки названы", rr["saved"] == 3 and len(rr["errors"]) == 2, txt[:300])
+        _, txt = http("GET", f"/api/events/{es['id']}/results")
+        rs = json.loads(txt)
+        check("стадион: места по введённым результатам, DNF отдельно",
+              [(x["bib"], x["place"], x["result"]) for x in rs["finished"]] == [("12", 1, "7.94"), ("11", 2, "8.15")]
+              and any(x["bib"] == "13" and x.get("status") == "DNF" for x in rs["not_seen"]), txt[:300])
+        code, txt, hd = pub("GET", "/r/api/calendar")
+        cal = json.loads(txt)
+        card = next((c for c in cal["events"] if c["name"] == "Стадион 60 м"), None)
+        check("календарь для fla65.ru: событие видно, CORS открыт, страница есть",
+              card and card["page"] and hd.get("Access-Control-Allow-Origin") == "*" and card["results"] is None, txt[:300])
+        sslug = es["reg_slug"]
+        code, _, _ = pub("GET", f"/r/{sslug}/results.json")
+        check("результаты не опубликованы — на сайте не видны", code == 404, str(code))
+        http("POST", f"/api/events/{es['id']}", json.dumps({"pub_results": True, "live_url": "https://vk.com/video1",
+             "links": "Итоги | https://fla65.ru/news/1\nПлохая | javascript:alert(1)"}).encode(), J)
+        code, txt, _ = pub("GET", f"/r/{sslug}/results.json")
+        check("результаты опубликованы — на сайте без чипов", code == 200 and '"chip"' not in txt and "Петров" in txt, txt[:200])
+        code, txt, _ = pub("GET", f"/r/{sslug}/info")
+        cd = json.loads(txt).get("card", {})
+        check("страница события: ссылки только http(s), трансляция, протокол",
+              cd.get("live") == "https://vk.com/video1" and [l["url"] for l in cd.get("links", [])] == ["https://fla65.ru/news/1"]
+              and cd.get("results", "").endswith(f"/r/{sslug}/protocol"), str(cd)[:300])
+        code, txt = http("POST", f"/api/events/{es['id']}", json.dumps({"photo_url": "javascript:alert(1)"}).encode(), J)
+        check("ссылка не https — отклонена", code == 400, str(code))
+        code, txt, hd = pub("GET", "/r/assets/calendar.js")
+        check("виджет календаря для fla65.ru отдаётся с CORS", code == 200 and hd.get("Access-Control-Allow-Origin") == "*", str(code))
         code, txt, hd = pub("GET", "/r/assets/sakhstart-dark.svg")
         check("логотип для формы регистрации отдаётся через /r/assets", code == 200 and "<svg" in txt and "image/svg" in hd.get("Content-Type", ""), str(code))
         for bad in ("/r/assets/hub.py", "/r/assets/..%2F..%2Fhub.py"):

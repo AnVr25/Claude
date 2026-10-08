@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0B1D37">
+<title>Вход · SakhStart</title>
+<link rel="icon" href="/assets/flaso-mark.png">
+<link rel="stylesheet" href="/assets/brand.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font:16px/1.45 var(--body);color:#fff;background:var(--night);display:grid;min-height:100vh;place-items:center;padding:24px 16px;position:relative;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 112% 50%,transparent 0 300px,#E71E25 300px 316px,transparent 316px 338px,#E71E25 338px 354px,transparent 354px 376px,#E71E25 376px 392px,transparent 392px);opacity:.9}
+.box{position:relative;width:100%;max-width:400px}
+.logos{justify-content:center;margin-bottom:26px;flex-wrap:wrap}
+.logos .lg-ss{height:48px}
+.card{background:var(--panel);color:var(--ink);border-radius:var(--r);padding:26px 24px 22px;box-shadow:0 24px 60px #0007;border-top:4px solid var(--track)}
+h1{font:600 26px var(--head);margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+label{display:block;font-weight:700;font-size:14px;margin:12px 0 5px}
+input{font:inherit;width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);color:var(--ink)}
+input:focus{outline:3px solid #E71E2555;outline-offset:1px;border-color:var(--night)}
+button{margin-top:18px;width:100%;font:600 18px var(--head);letter-spacing:.3px;background:var(--track);color:#fff;border:0;border-radius:var(--r);padding:13px;cursor:pointer}
+button:hover{background:#c8151b}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.err{color:var(--track);font-weight:700;font-size:14px;min-height:20px;margin-top:10px}
+.foot{text-align:center;color:var(--night-muted);font-size:13px;margin-top:18px}
+.foot a{color:#fff}
+.partners{display:flex;justify-content:center;gap:16px;margin-top:22px;opacity:.85}
+.partners img{height:34px}
+@media (prefers-color-scheme:dark){.card{background:#fff;color:#101B33}input{background:#fff;color:#101B33;border-color:#D9E0EA}.sub{color:#5E6B80}}
+</style>
+</head>
+<body>
+<main class="box">
+  <div class="logos"><img class="lg-ss" src="/assets/sakhstart-dark.svg" alt="SakhStart"></div>
+  <form class="card" id="f" novalidate>
+    <h1>Вход для организаторов</h1>
+    <p class="sub">Секретари, судьи и администраторы соревнований.</p>
+    <label for="login">Логин</label>
+    <input id="login" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <label for="password">Пароль</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button id="go" type="submit">Войти</button>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+  <div class="partners"><img src="/assets/sakhalin-light.png" alt="Сахалин — маяк России"><img src="/assets/flaso-dark.png" alt="ФЛАСО"></div>
+  <p class="foot">Регистрация участников и протоколы — <a href="/r/">на странице соревнований</a>. Забыли пароль — обратитесь к администратору.</p>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const next = new URLSearchParams(location.search).get("next") || "/";
+$("login").focus();
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("err").textContent = "";
+  if (!$("login").value.trim() || !$("password").value) { $("err").textContent = "Введите логин и пароль"; return; }
+  $("go").disabled = true; $("go").textContent = "Вхожу…";
+  try {
+    const r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json", "X-Requested-With": "timing-hub"},
+      body: JSON.stringify({login: $("login").value.trim(), password: $("password").value, next})});
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok) { location.replace(d.next || "/"); return; }
+    $("err").textContent = d.error || "Не удалось войти";
+  } catch (err) { $("err").textContent = "Нет связи с сервером. Проверьте интернет."; }
+  $("go").disabled = false; $("go").textContent = "Войти"; $("password").select();
+});
+</script>
+</body>
+</html>

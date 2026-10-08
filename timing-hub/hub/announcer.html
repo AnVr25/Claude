@@ -96,7 +96,7 @@ function beep(){if(!sound)return;try{actx=actx||new(window.AudioContext||window.
   [880,1320].forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);
   const t=actx.currentTime+i*.12;g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.11);o.start(t);o.stop(t+.12);});}catch(e){}}
 $("snd").onclick=()=>{sound=!sound;$("snd").textContent="🔔 звук: "+(sound?"вкл":"выкл");beep();};
-async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing-hub"}});if(!r.ok)throw new Error(r.status);return r.json();}
+async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing-hub"}});if(r.status===401){location.href="/login?next="+encodeURIComponent(location.pathname+location.search);throw new Error(401);}if(!r.ok)throw new Error(r.status);return r.json();}
 async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_ms-Date.now();}catch(e){}}
 async function load(){
   if(!eid){$("name").textContent="Не выбрано соревнование (откройте из интерфейса)";return;}

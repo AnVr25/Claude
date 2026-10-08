@@ -152,6 +152,11 @@ fi
 install -d -m 755 "$APP_DIR" "$APP_DIR/tools" "$APP_DIR/wiclax"
 install -m 755 "$KIT_DIR/hub/hub.py" "$APP_DIR/hub.py"
 install -m 644 "$KIT_DIR"/hub/*.html "$APP_DIR/"
+# календарь федерации для первичного импорта (Календарь → «Загрузить календарь ФЛАСО»)
+if [[ -d "$KIT_DIR/hub/seed" ]]; then
+  install -d -m 755 "$APP_DIR/seed"
+  install -m 644 "$KIT_DIR"/hub/seed/*.json "$APP_DIR/seed/"
+fi
 # фирменный стиль: шрифты, логотипы, общий brand.css (работают и без интернета)
 if [[ -d "$KIT_DIR/hub/assets" ]]; then
   install -d -m 755 "$APP_DIR/assets"
@@ -193,6 +198,33 @@ fi
 if [[ -f /etc/nginx/sites-available/timing-reg-https ]] && grep -q 'client_max_body_size 16k' /etc/nginx/sites-available/timing-reg-https; then
   sed -i 's/client_max_body_size 16k;/client_max_body_size 3m;/' /etc/nginx/sites-available/timing-reg-https
   nginx -t >/dev/null 2>&1 && systemctl reload nginx && echo "  nginx: загрузка файлов заявок до 3 МБ"
+fi
+# вход в панель через браузер без VPN: https://<домен регистрации>/login (nginx → приватный порт панели)
+REGSITE=/etc/nginx/sites-available/timing-reg-https
+if [[ -f "$REGSITE" && -f "$CFG_DIR/config.json" ]] && ! grep -q '# timing-hub: панель' "$REGSITE"; then
+  WEBADDR="$(python3 -c "import json;w=json.load(open('$CFG_DIR/config.json',encoding='utf-8')).get('web',{});h=w.get('listen_host') or '127.0.0.1';print(('127.0.0.1' if h in ('0.0.0.0','::') else h)+':'+str(w.get('listen_port',8080)))")"
+  cp -a "$REGSITE" "$REGSITE.bak"
+  python3 - "$REGSITE" "$WEBADDR" <<'PY'
+import sys
+p, addr = sys.argv[1], sys.argv[2]
+s = open(p, encoding="utf-8").read()
+s = s.replace("    location = / { return 302 /r/; }\n", "")
+block = ("    location / {   # timing-hub: панель (вход по логину, сессии)\n"
+         f"        proxy_pass http://{addr};\n"
+         "        proxy_set_header Host $host;\n"
+         "        proxy_set_header X-Real-IP $remote_addr;\n"
+         "        proxy_set_header X-Forwarded-Proto https;\n"
+         "        proxy_read_timeout 180s;\n"
+         "        client_max_body_size 30m;\n"
+         "    }")
+s = s.replace("    location / { return 404; }", block)
+open(p, "w", encoding="utf-8").write(s)
+PY
+  if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx && echo "  nginx: панель открывается по https://$(grep -m1 -oP 'server_name \K[^;]+' "$REGSITE")/login"
+  else
+    mv -f "$REGSITE.bak" "$REGSITE"; echo "  nginx: не удалось включить вход через браузер — настройки возвращены"
+  fi
 fi
 install -m 755 "$KIT_DIR"/tools/*.py "$APP_DIR/tools/"
 install -m 644 "$KIT_DIR"/wiclax/* "$APP_DIR/wiclax/" 2>/dev/null || true

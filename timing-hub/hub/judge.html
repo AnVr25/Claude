@@ -221,7 +221,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 async function api(path,body){
   const o={headers:{"X-Requested-With":"timing-hub"}};
   if(body!==undefined){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(Object.assign({judge:$("judge").value.trim()},body));}
-  const r=await fetch(path,o); const d=await r.json().catch(()=>({}));
+  const r=await fetch(path,o); if(r.status===401){location.href="/login?next="+encodeURIComponent(location.pathname+location.search);throw new Error("нужно войти");} const d=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error(d.error||r.status);e.http=r.status;throw e;}
   return d;
 }

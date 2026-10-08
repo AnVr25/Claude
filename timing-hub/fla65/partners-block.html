@@ -1,0 +1,99 @@
+<!--
+  «Партнёры федерации» — блок для главной страницы fla65.ru (Tilda, «HTML-код» T123).
+  Куда вставлять: на главной, перед разделом «Контакты» — в большом HTML-блоке найдите
+  <section class="fl-sec alt" id="contacts"> и вставьте весь этот код прямо перед ним
+  (или добавьте отдельный блок T123 перед блоком с контактами). Все стили внутри и начинаются с .flaso-partners —
+  на остальную страницу они не влияют.
+
+  Как добавить логотип партнёра:
+  1. Загрузите логотип в Tilda (любой блок с картинкой → «Загрузить» → скопируйте ссылку на файл)
+     или возьмите ссылку на файл с сайта партнёра. Лучше PNG/SVG на прозрачном фоне, ширина от 400 px.
+  2. Скопируйте образец ниже (между «ОБРАЗЕЦ») и вставьте его вместо одного из пустых слотов
+     <a class="flaso-partners__logo is-empty" …>…</a>.
+  3. Поменяйте href — сайт партнёра, src — ссылка на логотип, alt — название партнёра.
+  Пустые слоты можно удалять — сетка перестроится сама.
+
+  ОБРАЗЕЦ:
+  <a class="flaso-partners__logo" href="https://partner.example.ru" target="_blank" rel="noopener" title="Название партнёра">
+    <img src="https://static.tildacdn.com/…/partner-logo.png" alt="Название партнёра" loading="lazy">
+  </a>
+  ОБРАЗЕЦ
+-->
+<style>
+.flaso-partners{background:#fff;padding:80px 0;font-family:"PT Sans",Arial,sans-serif;color:#1B2B45;font-size:17px;line-height:1.55}
+.flaso-partners *{box-sizing:border-box}
+.flaso-partners a{text-decoration:none!important}
+.flaso-partners .flaso-partners__w{max-width:1240px;margin:0 auto;padding:0 32px}
+.flaso-partners .flaso-partners__kicker{font-family:Oswald,Arial,sans-serif;font-size:15px;letter-spacing:3px;text-transform:uppercase;color:#E71E25;margin:0 0 10px}
+.flaso-partners .flaso-partners__h2{font-family:Oswald,Arial,sans-serif;font-weight:700;font-size:44px;line-height:1.05;text-transform:uppercase;color:#0B1D37;margin:0 0 18px}
+.flaso-partners .flaso-partners__lead{max-width:760px;margin:0 0 36px;font-size:18px;color:#55627A}
+.flaso-partners .flaso-partners__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin:0 0 28px}
+.flaso-partners .flaso-partners__logo{display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;min-height:120px;padding:22px;background:#fff;border:1px solid #DCE0E8;border-bottom:4px solid #E71E25;transition:.15s}
+.flaso-partners .flaso-partners__logo:hover{border-color:#0B1D37;border-bottom-color:#E71E25;box-shadow:0 10px 26px rgba(11,29,55,.1)}
+.flaso-partners .flaso-partners__logo img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+.flaso-partners .flaso-partners__logo.is-empty{flex-direction:column;gap:6px;text-align:center;background:#F2F4F7;border:2px dashed #C3CBD8;border-bottom:2px dashed #C3CBD8;color:#55627A!important}
+.flaso-partners .flaso-partners__logo.is-empty b{font-family:Oswald,Arial,sans-serif;font-weight:500;font-size:16px;letter-spacing:1px;text-transform:uppercase;color:#0B1D37}
+.flaso-partners .flaso-partners__logo.is-empty span{font-size:14px}
+.flaso-partners .flaso-partners__logo.is-empty:hover{border-color:#E71E25;background:#fff;box-shadow:none}
+.flaso-partners .flaso-partners__cta{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:24px 40px;flex-wrap:wrap;background:#0B1D37;color:#C9D1E0;padding:40px 44px;border-left:6px solid #E71E25}
+.flaso-partners .flaso-partners__lanes{position:absolute;right:-90px;top:50%;height:150%;width:auto;transform:translateY(-50%);opacity:.75;pointer-events:none}
+.flaso-partners .flaso-partners__txt{position:relative;max-width:660px}
+.flaso-partners .flaso-partners__cta h3{font-family:Oswald,Arial,sans-serif;font-weight:700;font-size:34px;line-height:1.1;text-transform:uppercase;color:#fff;margin:0 0 10px}
+.flaso-partners .flaso-partners__cta p{margin:0 0 8px}
+.flaso-partners .flaso-partners__cta p:last-child{margin:0}
+.flaso-partners .flaso-partners__cta b{color:#fff}
+.flaso-partners .flaso-partners__cta .flaso-partners__u{color:#fff!important;border-bottom:1px solid #E71E25;white-space:nowrap}
+.flaso-partners .flaso-partners__cta .flaso-partners__u:hover{color:#FFB3B5!important}
+.flaso-partners .flaso-partners__btns{position:relative;display:flex;flex-wrap:wrap;gap:12px}
+.flaso-partners .flaso-partners__btn{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:14px 28px;font-family:Oswald,Arial,sans-serif;font-size:17px;letter-spacing:1px;text-transform:uppercase;border:2px solid #E71E25;background:#E71E25;color:#fff!important;transition:.15s;white-space:nowrap}
+.flaso-partners .flaso-partners__btn:hover{background:#C4141B;border-color:#C4141B}
+.flaso-partners .flaso-partners__btn.is-ghost{background:transparent;border-color:#fff}
+.flaso-partners .flaso-partners__btn.is-ghost:hover{background:#fff;color:#0B1D37!important}
+.flaso-partners .flaso-partners__btn svg{width:20px;height:20px;flex:0 0 auto}
+.flaso-partners a:focus-visible{outline:3px solid rgba(231,30,37,.45);outline-offset:3px}
+@media (max-width:1100px){
+  .flaso-partners .flaso-partners__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width:700px){
+  .flaso-partners{padding:56px 0;font-size:16px}
+  .flaso-partners .flaso-partners__w{padding:0 16px}
+  .flaso-partners .flaso-partners__h2{font-size:32px}
+  .flaso-partners .flaso-partners__lead{font-size:16px;margin-bottom:24px}
+  .flaso-partners .flaso-partners__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .flaso-partners .flaso-partners__logo{min-height:96px;padding:14px}
+  .flaso-partners .flaso-partners__logo.is-empty b{font-size:14px}
+  .flaso-partners .flaso-partners__logo.is-empty span{display:none}
+  .flaso-partners .flaso-partners__cta{padding:28px 20px}
+  .flaso-partners .flaso-partners__cta h3{font-size:26px}
+  .flaso-partners .flaso-partners__lanes{opacity:.25;right:-200px}
+  .flaso-partners .flaso-partners__btns,.flaso-partners .flaso-partners__btn{width:100%;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){.flaso-partners .flaso-partners__logo,.flaso-partners .flaso-partners__btn{transition:none}}
+</style>
+<section class="flaso-partners" id="partners" aria-labelledby="flaso-partners-h">
+  <div class="flaso-partners__w">
+    <p class="flaso-partners__kicker">Партнёрство</p>
+    <h2 class="flaso-partners__h2" id="flaso-partners-h">Партнёры федерации</h2>
+    <p class="flaso-partners__lead">Компании и организации, которые помогают проводить старты, растить юных легкоатлетов и возить сборную области на всероссийские соревнования.</p>
+
+    <div class="flaso-partners__grid">
+      <!-- Слоты логотипов. Чтобы добавить партнёра — замените пустой слот образцом из комментария вверху. -->
+      <a class="flaso-partners__logo is-empty" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B"><b>Здесь может быть ваш логотип</b><span>Станьте партнёром федерации</span></a>
+      <a class="flaso-partners__logo is-empty" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B"><b>Здесь может быть ваш логотип</b><span>Станьте партнёром федерации</span></a>
+      <a class="flaso-partners__logo is-empty" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B"><b>Здесь может быть ваш логотип</b><span>Станьте партнёром федерации</span></a>
+      <a class="flaso-partners__logo is-empty" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B"><b>Здесь может быть ваш логотип</b><span>Станьте партнёром федерации</span></a>
+    </div>
+
+    <div class="flaso-partners__cta">
+      <svg class="flaso-partners__lanes" viewBox="0 0 620 600" preserveAspectRatio="xMaxYMid meet" aria-hidden="true"><g fill="none" stroke="#E71E25" stroke-width="14"><path d="M620 30 H300 A270 270 0 0 0 300 570 H620"/><path d="M620 64 H300 A236 236 0 0 0 300 536 H620"/><path d="M620 98 H300 A202 202 0 0 0 300 502 H620"/><path d="M620 132 H300 A168 168 0 0 0 300 468 H620"/></g></svg>
+      <div class="flaso-partners__txt">
+        <h3>Мы ищем партнёров</h3>
+        <p>Поддержите лёгкую атлетику Сахалина: старты для детей и взрослых, массовые забеги, выезды сборной. Расскажем о вашей компании на сайте, в соцсетях и на соревнованиях.</p>
+        <p>Напишите на официальный адрес федерации <a class="flaso-partners__u" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B">sakhathletics@bk.ru</a> с темой <b>«Партнёры»</b> или позвоните: <a class="flaso-partners__u" href="tel:+74242559555">8 (4242) 55-95-55</a>, доб. 1100.</p>
+      </div>
+      <div class="flaso-partners__btns">
+        <a class="flaso-partners__btn" href="mailto:sakhathletics@bk.ru?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%8B">Написать в федерацию <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>

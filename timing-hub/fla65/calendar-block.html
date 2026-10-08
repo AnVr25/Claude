@@ -1,0 +1,42 @@
+<!--
+  Календарь соревнований fla65.ru/competitions — данные из SakhStart (reg.fla65.ru).
+
+  Куда вставлять (Tilda, страница «Соревнования»):
+  1. Откройте большой блок «HTML-код» (T123), где сейчас лежит календарь.
+  2. Найдите в нём <section class="fl-sec" id="calendar"> … </section>
+     (старый календарь: месяцы, карточки, фильтры; заканчивается перед <section class="fl-sec alt" id="results">)
+     и замените этот кусок целиком на всё, что ниже этого комментария.
+  3. Старый скрипт календаря в конце блока (начинается с «var root=document.querySelector('.cp')») можно удалить —
+     без старого календаря он ничего не делает.
+  Можно вставить и как отдельный блок T123 — стили ниже самодостаточные.
+  В новом году поменяйте data-year и «Сезон 2026» (или уберите data-year — будет текущий год).
+-->
+<style>
+.ssc-cal{background:#fff;padding:80px 0;font-family:"PT Sans",Arial,sans-serif;color:#1B2B45;font-size:17px;line-height:1.55}
+.ssc-cal *{box-sizing:border-box}
+.ssc-cal .ssc-w{max-width:1240px;margin:0 auto;padding:0 32px}
+.ssc-cal .ssc-kicker{font-family:Oswald,Arial,sans-serif;font-size:15px;letter-spacing:3px;text-transform:uppercase;color:#E71E25;margin:0 0 10px}
+.ssc-cal .ssc-h2{font-family:Oswald,Arial,sans-serif;font-weight:700;font-size:44px;line-height:1.05;text-transform:uppercase;color:#0B1D37;margin:0 0 18px}
+.ssc-cal .ssc-lead{max-width:780px;margin:0 0 22px;font-size:18px;color:#55627A}
+.ssc-cal .ssc-src{margin:36px 0 0;max-width:860px;font-size:15px;color:#55627A}
+.ssc-cal #sakhstart-calendar{min-height:320px}
+@media (max-width:700px){
+  .ssc-cal{padding:56px 0;font-size:16px}
+  .ssc-cal .ssc-w{padding:0 16px}
+  .ssc-cal .ssc-h2{font-size:32px}
+  .ssc-cal .ssc-lead{font-size:16px}
+}
+</style>
+<section class="ssc-cal" id="calendar">
+  <div class="ssc-w">
+    <p class="ssc-kicker">Сезон 2026</p>
+    <h2 class="ssc-h2">Календарь соревнований</h2>
+    <p class="ssc-lead">Старты по лёгкой атлетике из календарного плана официальных спортивных мероприятий Сахалинской области на 2026 год. Регистрация, стартовые протоколы и результаты — прямо в карточке старта.</p>
+
+    <div id="sakhstart-calendar" data-year="2026"></div>
+    <script src="https://reg.fla65.ru/r/assets/calendar.js" defer></script>
+    <noscript><p class="ssc-lead">Календарь работает с включённым JavaScript. Старты и регистрация — на <a href="https://reg.fla65.ru/r/">reg.fla65.ru</a>.</p></noscript>
+
+    <p class="ssc-src">Сроки указаны по календарному плану министерства спорта Сахалинской области на 2026 год (с изменениями). Даты могут меняться: следите за анонсами в новостях.</p>
+  </div>
+</section>
