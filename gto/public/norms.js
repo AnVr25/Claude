@@ -240,10 +240,56 @@
     return { badge, byCategory: best };
   }
 
+  // Полных лет на дату onDate (строки ГГГГ-ММ-ДД).
+  function ageOn(birthDate, onDate) {
+    if (!birthDate) return null;
+    const [by, bm, bd] = birthDate.split('-').map(Number);
+    const [y, m, d] = onDate.split('-').map(Number);
+    return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+  }
+
+  // Ступень ГТО по возрасту: V 14–15, VI 16–17, VII 18–19, VIII 20–24, IX 25–29.
+  function stageForAge(age) {
+    if (age == null) return null;
+    if (age >= 14 && age <= 15) return 5;
+    if (age >= 16 && age <= 17) return 6;
+    if (age >= 18 && age <= 19) return 7;
+    if (age >= 20 && age <= 24) return 8;
+    if (age >= 25 && age <= 29) return 9;
+    return null;
+  }
+
+  // УИН ГТО: ГГ-РР-ННННННН (например 23-65-0012345). Принимает и 11 цифр подряд.
+  function normalizeUin(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const digits = s.replace(/\D/g, '');
+    if (digits.length !== 11 || !/^[\d\s-]+$/.test(s)) return null;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+  }
+
+  // Дата из «ДД.ММ.ГГГГ», «ГГГГ-ММ-ДД» или числа Excel → «ГГГГ-ММ-ДД» (или null).
+  function parseDate(raw) {
+    if (raw == null || raw === '') return '';
+    let y, m, d;
+    const s = String(raw).trim();
+    let mt;
+    if ((mt = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/))) [, d, m, y] = mt.map(Number);
+    else if ((mt = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) [, y, m, d] = mt.map(Number);
+    else if (/^\d{4,5}(\.\d+)?$/.test(s)) { // серийный номер даты Excel
+      const dt = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5);
+      [y, m, d] = [dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()];
+    } else return null;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+    return dt.toISOString().slice(0, 10);
+  }
+
   const api = {
     CATEGORIES, TESTS, STAGES, NORMS, REQUIRED, LEVELS, LEVEL_NAMES,
     TEST_BY_ID, CAT_BY_ID,
     normsFor, testsFor, parseValue, formatValue, levelFor, badgeFor,
+    ageOn, stageForAge, normalizeUin, parseDate,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GTO = api;

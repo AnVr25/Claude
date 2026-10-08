@@ -125,7 +125,7 @@ test('API: роли и ввод результатов', async (t) => {
   // экспорт доступен всем вошедшим
   res = await viewer('GET', '/api/export.csv');
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /Иванов;Пётр/);
+  assert.match(await res.text(), /Иванов;П\.;/, "учитель видит фамилию и первую букву имени");
 
   // импорт
   res = await ed('POST', '/api/students/import', { rows: [
@@ -164,4 +164,98 @@ test('API: администратор управляет пользовател�
   assert.equal(res.status, 401, 'заблокированный не входит');
   const me = await (await admin('GET', '/api/me')).json();
   assert.equal((await admin('PUT', `/api/users/${me.id}`, { role: 'viewer' })).status, 400, 'нельзя разжаловать себя');
+});
+
+test('УИН, даты, ступень по возрасту', () => {
+  assert.equal(GTO.normalizeUin('23-65-0012345'), '23-65-0012345');
+  assert.equal(GTO.normalizeUin('23650012345'), '23-65-0012345');
+  assert.equal(GTO.normalizeUin(''), '');
+  assert.equal(GTO.normalizeUin('23-65-12'), null);
+  assert.equal(GTO.parseDate('05.03.2006'), '2006-03-05');
+  assert.equal(GTO.parseDate('2006-03-05'), '2006-03-05');
+  assert.equal(GTO.parseDate('38781'), '2006-03-05', 'серийная дата Excel');
+  assert.equal(GTO.parseDate('31.02.2006'), null);
+  assert.equal(GTO.ageOn('2006-10-09', '2026-10-08'), 19);
+  assert.equal(GTO.ageOn('2006-10-08', '2026-10-08'), 20);
+  assert.equal(GTO.stageForAge(19), 7);
+  assert.equal(GTO.stageForAge(20), 8);
+  assert.equal(GTO.stageForAge(30), null);
+});
+
+test('шаблон .xlsx читается обратно', () => {
+  const { buildTemplate, readFirstSheet, zip } = require('../xlsx');
+  const rows = readFirstSheet(buildTemplate());
+  assert.equal(rows.length, 1);
+  assert.match(rows[0][0], /Фамилия/);
+  assert.match(rows[0][5], /УИН/);
+  // заполненный файл с sharedStrings и числовой датой, как сохраняет Excel
+  const book = zip({
+    'xl/workbook.xml': '<workbook xmlns:r="r"><sheets><sheet name="A" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/sharedStrings.xml': '<sst><si><t>Фамилия</t></si><si><t>Ёлкина</t></si><si><r><t>Ан</t></r><r><t>на</t></r></si></sst>',
+    'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row>' +
+      '<row r="2"><c r="A2" t="s"><v>1</v></c><c r="B2" t="s"><v>2</v></c><c r="D2"><v>38781</v></c></row></sheetData></worksheet>',
+  });
+  assert.deepEqual(readFirstSheet(book), [['Фамилия'], ['Ёлкина', 'Анна', '', '38781']]);
+});
+
+test('API: УИН, дата рождения, маскировка для просмотра, загрузка списка', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const ed = await login(base, 'ed');
+  const viewer = await login(base, 'teacher');
+  const admin = await login(base, 'admin');
+
+  // ступень по дате рождения
+  let res = await ed('POST', '/api/students', { last_name: 'Ёлкина', first_name: 'Анна', middle_name: 'Сергеевна', sex: 'Ж',
+    birth_date: '05.03.2006', uin: '23650012345', institute: 'ИЕН', grp: 'Б-21' });
+  assert.equal(res.status, 201);
+  const st = await res.json();
+  assert.equal(st.uin, '23-65-0012345');
+  assert.equal(st.birth_date, '2006-03-05');
+  assert.equal(st.stage, GTO.stageForAge(GTO.ageOn('2006-03-05', new Date().toISOString().slice(0, 10))));
+
+  res = await ed('POST', '/api/students', { last_name: 'Дубль', first_name: 'УИН', sex: 'М', stage: 7, uin: '23-65-0012345' });
+  assert.equal(res.status, 409, 'УИН уникален');
+  res = await ed('POST', '/api/students', { last_name: 'Х', first_name: 'У', sex: 'М', uin: '123' });
+  assert.equal(res.status, 400);
+
+  // просмотр: фамилия и первая буква имени, без УИН и даты рождения
+  const v = (await (await viewer('GET', '/api/data')).json()).students[0];
+  assert.equal(v.last_name, 'Ёлкина');
+  assert.equal(v.first_name, 'А.');
+  assert.equal(v.middle_name, '');
+  assert.equal(v.uin, '');
+  assert.equal(v.birth_date, '');
+  const a = (await (await admin('GET', '/api/data')).json()).students[0];
+  assert.equal(a.first_name, 'Анна');
+  assert.equal(a.uin, '23-65-0012345');
+  const csv = await (await viewer('GET', '/api/export.csv')).text();
+  assert.ok(!csv.includes('Анна') && !csv.includes('0012345') && !csv.includes('Сергеевна'), 'в выгрузке для просмотра нет полных данных');
+  assert.match(await (await admin('GET', '/api/export.csv')).text(), /23-65-0012345;Ёлкина;Анна;Сергеевна;05\.03\.2006/);
+
+  // шаблон доступен и учителю
+  res = await viewer('GET', '/api/template.xlsx');
+  assert.equal(res.status, 200);
+  assert.equal(Buffer.from(await res.arrayBuffer()).readUInt32LE(0), 0x04034b50);
+  assert.equal((await viewer('POST', '/api/import/parse', { text: 'x' })).status, 403);
+
+  // разбор списка по заголовкам: существующий (по УИН) → обновление, ошибки построчно
+  const text = 'Группа;Фамилия;Имя;Пол;Дата рождения;УИН;Институт\n' +
+    'Б-22;Ёлкина;Анна;Ж;05.03.2006;23-65-0012345;ИЕН\n' +
+    'Б-22;Новиков;Олег;М;01.09.2007;;ИЕН\n' +
+    'Б-22;Старый;Дед;М;01.01.1980;;ИЕН\n';
+  const parsed = (await (await ed('POST', '/api/import/parse', { text })).json()).rows;
+  assert.equal(parsed[0].action, 'update');
+  assert.equal(parsed[1].action, 'create');
+  assert.match(parsed[2].error, /Возраст/);
+  res = await ed('POST', '/api/students/import', { rows: parsed.filter((r) => !r.error) });
+  assert.deepEqual(await res.json(), { imported: 2, created: 1, updated: 1 });
+  const all = (await (await admin('GET', '/api/data')).json()).students;
+  assert.equal(all.length, 2);
+  assert.equal(all.find((s) => s.last_name === 'Ёлкина').grp, 'Б-22', 'группа обновилась');
+
+  // повторная загрузка того же списка ничего не задваивает (совпадение по ФИО + дате рождения)
+  res = await ed('POST', '/api/students/import', { rows: parsed.filter((r) => !r.error) });
+  assert.deepEqual(await res.json(), { imported: 2, created: 0, updated: 2 });
 });

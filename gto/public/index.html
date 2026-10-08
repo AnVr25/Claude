@@ -14,9 +14,10 @@
 <!-- Вход -->
 <main id="login-view" class="login" hidden>
   <form id="login-form" class="login-card" autocomplete="on">
+    <img class="login-logo" src="img/sakhalin-dark.png" alt="Сахалин — маяк России">
     <div class="brand brand-lg"><span class="brand-mark"></span><span>ГТО</span></div>
     <h1>Результаты нормативов</h1>
-    <p class="muted">Федерация лёгкой атлетики Сахалинской области</p>
+    <p class="muted">Региональный оператор ВФСК ГТО в Сахалинской области — «Спартак»</p>
     <label>Логин
       <input name="login" autocomplete="username" required autofocus>
     </label>
@@ -31,7 +32,14 @@
 <!-- Приложение -->
 <div id="app-view" hidden>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark"></span><span>ГТО</span><span class="brand-sub">ступени V–IX</span></div>
+    <div class="brand-wrap">
+      <img class="topbar-logo" src="img/sakhalin-light.png" alt="Сахалин — маяк России">
+      <span class="topbar-sep"></span>
+      <div>
+        <div class="brand"><span class="brand-mark"></span><span>ГТО</span><span class="brand-sub">ступени V–IX</span></div>
+        <div class="operator">Региональный оператор ВФСК ГТО — «Спартак»</div>
+      </div>
+    </div>
     <nav class="topbar-right">
       <span id="me-name" class="me"></span>
       <span id="me-role" class="role-chip"></span>
@@ -71,8 +79,9 @@
     <div class="toolbar-spacer"></div>
     <div class="edit-only toolbar-actions">
       <button id="btn-add" class="btn btn-primary">+ Студент</button>
-      <button id="btn-import" class="btn btn-secondary">Импорт</button>
+      <button id="btn-import" class="btn btn-secondary">Загрузить список</button>
     </div>
+    <a id="btn-template" class="btn btn-outline" href="/api/template.xlsx" download="GTO-shablon-spiska.xlsx" title="Excel-шаблон: заполнить и передать администратору">Шаблон списка</a>
     <a id="btn-export" class="btn btn-secondary" href="/api/export.csv">Экспорт CSV</a>
   </section>
 

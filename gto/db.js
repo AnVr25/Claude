@@ -60,6 +60,11 @@ function open(file = DB_PATH) {
       details    TEXT NOT NULL
     );
   `);
+  // Миграции для баз, созданных до появления полей.
+  const cols = new Set(db.prepare('PRAGMA table_info(students)').all().map((c) => c.name));
+  if (!cols.has('birth_date')) db.exec("ALTER TABLE students ADD COLUMN birth_date TEXT NOT NULL DEFAULT ''");
+  if (!cols.has('uin')) db.exec("ALTER TABLE students ADD COLUMN uin TEXT NOT NULL DEFAULT ''");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS students_uin ON students(uin) WHERE uin <> ''");
   return db;
 }
 

@@ -33,6 +33,12 @@ const todayISO = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 const canEdit = () => state.user && (state.user.role === 'admin' || state.user.role === 'editor');
+// Роль «Просмотр» получает с сервера только фамилию и первую букву имени — без УИН и даты рождения.
+const fullAccess = () => state.user && state.user.role !== 'viewer';
+const ageText = (bd) => {
+  const a = GTO.ageOn(bd, todayISO());
+  return a == null ? '' : `${a} ${a % 10 === 1 && a % 100 !== 11 ? 'год' : a % 10 >= 2 && a % 10 <= 4 && (a % 100 < 10 || a % 100 >= 20) ? 'года' : 'лет'}`;
+};
 
 function genPassword() {
   const abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -79,7 +85,8 @@ function recompute(studentId) {
 
 async function loadData() {
   const data = await api('GET', '/api/data');
-  state.students = data.students;
+  const coll = new Intl.Collator('ru');
+  state.students = data.students.sort((x, y) => coll.compare(fullName(x), fullName(y)));
   state.results = new Map();
   for (const r of data.results) {
     if (!state.results.has(r.student_id)) state.results.set(r.student_id, {});
@@ -128,7 +135,7 @@ function filtered() {
     if (f.sex && s.sex !== f.sex) return false;
     if (f.badge !== '' && String(state.computed.get(s.id)?.badge ?? 0) !== f.badge) return false;
     if (words.length) {
-      const hay = norm(fullName(s) + ' ' + s.grp);
+      const hay = norm(fullName(s) + ' ' + s.grp + ' ' + (s.uin || ''));
       if (!words.every((w) => hay.includes(w))) return false;
     }
     return true;
@@ -159,7 +166,7 @@ function render() {
     empty.hidden = false;
     empty.innerHTML = total
       ? 'Никого не нашли. Измените условия поиска.'
-      : (canEdit() ? 'Добавьте студентов кнопкой «+ Студент» или загрузите список через «Импорт».' : 'Данные ещё не внесены.');
+      : (canEdit() ? 'Добавьте студентов кнопкой «+ Студент» или через «Загрузить список».' : 'Данные ещё не внесены.');
     return;
   }
   empty.hidden = true;
@@ -171,7 +178,9 @@ function render() {
     if (last && last.cat === t.cat) last.span++;
     else groups.push({ cat: t.cat, span: 1 });
   }
+  const full = fullAccess();
   let head = '<thead><tr class="cat-row"><th class="sticky left" rowspan="2">ФИО</th>' +
+    (full ? '<th class="info" rowspan="2">УИН</th><th class="info" rowspan="2">Дата рожд.</th>' : '') +
     '<th class="info left" rowspan="2">Институт</th><th rowspan="2">Группа</th><th rowspan="2">Ступ.</th><th rowspan="2">Знак</th>';
   for (const g of groups) {
     const c = GTO.CAT_BY_ID[g.cat];
@@ -189,6 +198,7 @@ function render() {
     let tr = `<tr data-id="${s.id}"><td class="sticky left"><button class="name-btn" data-open="${s.id}">` +
       `<span class="name-sub nm-num">${i + 1}.</span> ${esc(s.last_name)} <span class="name-sub nm-full">${esc(s.first_name)} ${esc(s.middle_name)}</span>` +
       `<span class="name-sub nm-short">${esc(initials(s))}</span></button></td>` +
+      (full ? `<td class="info mono">${esc(s.uin) || '<span class="name-sub">—</span>'}</td><td class="info" title="${esc(ageText(s.birth_date))}">${fmtDate(s.birth_date)}</td>` : '') +
       `<td class="info" title="${esc(s.institute)}">${esc(s.institute)}</td><td>${esc(s.grp)}</td>` +
       `<td title="${s.sex === 'M' ? 'юноша' : 'девушка'}">${ROMAN[s.stage]} <span class="name-sub">${s.sex === 'M' ? 'м' : 'ж'}</span></td><td>${badgeHtml(comp?.badge)}</td>`;
     for (const t of tests) {
@@ -250,7 +260,9 @@ function renderDrawer() {
   }).join('');
 
   let html = `<h2>${esc(fullName(s))}</h2>
-    <div class="meta">${esc(s.institute || 'Институт не указан')} · группа ${esc(s.grp || '—')} · ${ROMAN[s.stage]} ступень (${GTO.STAGES[s.stage]}) · ${s.sex === 'M' ? 'юноша' : 'девушка'}</div>
+    <div class="meta">${esc(s.institute || 'Институт не указан')} · группа ${esc(s.grp || '—')} · ${ROMAN[s.stage]} ступень (${GTO.STAGES[s.stage]}) · ${s.sex === 'M' ? 'юноша' : 'девушка'}${fullAccess()
+      ? `<br>УИН: <strong>${esc(s.uin) || 'не указан'}</strong> · дата рождения: <strong>${s.birth_date ? fmtDate(s.birth_date) + '</strong> (' + ageText(s.birth_date) + ')' : 'не указана</strong>'}`
+      : ''}</div>
     <div class="badge-box${comp.badge ? ' lvl-' + comp.badge : ''}">
       <div class="badge-title">${comp.badge ? 'Знак: ' + BADGE_TEXT[comp.badge] : 'Знак пока не выполнен'}</div>
       <div class="badge-note">${esc(badgeNote)} Сдано испытаний: ${done} из ${tests.length}.</div>
@@ -390,7 +402,10 @@ function editStudent(id) {
     <form id="student-form" class="form-grid">
       <label>Фамилия<input name="last_name" value="${esc(s.last_name)}" required autofocus></label>
       <label>Имя<input name="first_name" value="${esc(s.first_name)}" required></label>
-      <label class="full">Отчество<input name="middle_name" value="${esc(s.middle_name)}"></label>
+      <label>Отчество<input name="middle_name" value="${esc(s.middle_name)}"></label>
+      <label>Дата рождения<input name="birth_date" type="date" max="${todayISO()}" value="${esc(s.birth_date)}"></label>
+      <label>УИН ГТО<input name="uin" value="${esc(s.uin)}" placeholder="23-65-0012345" pattern="\\d{2}-?\\d{2}-?\\d{7}" title="11 цифр: ГГ-РР-ННННННН"></label>
+      <div class="hint" id="age-hint"></div>
       <label>Институт<input name="institute" list="dl-inst" value="${esc(s.institute)}"></label>
       <label>Группа<input name="grp" list="dl-grp" value="${esc(s.grp)}"></label>
       <label>Ступень
@@ -410,6 +425,19 @@ function editStudent(id) {
         <button type="submit" class="btn btn-primary">Сохранить</button>
       </div>
     </form>`);
+  // По дате рождения подставляем ступень.
+  const bd = p.querySelector('[name=birth_date]');
+  const stageSel = p.querySelector('[name=stage]');
+  const syncStage = () => {
+    const hint = $('#age-hint');
+    if (!bd.value) { hint.textContent = ''; return; }
+    const age = GTO.ageOn(bd.value, todayISO());
+    const st = GTO.stageForAge(age);
+    if (st) { stageSel.value = String(st); hint.textContent = `Возраст ${ageText(bd.value)} → ${ROMAN[st]} ступень`; }
+    else hint.textContent = `Возраст ${ageText(bd.value)} — вне ступеней V–IX (14–29 лет)`;
+  };
+  bd.addEventListener('change', syncStage);
+  if (bd.value) syncStage();
   p.querySelector('#student-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
@@ -434,74 +462,91 @@ async function deleteStudent(id) {
   } catch (err) { toast(err.message); }
 }
 
-// Импорт списка
-function parseImport(text) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) return [];
-  const sep = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
-  let rows = lines.map((l) => l.split(sep).map((c) => c.trim().replace(/^"|"$/g, '')));
-  if (/фамил/i.test(rows[0][0])) rows = rows.slice(1); // строка заголовков
-  return rows.map((c) => {
-    let [last, first, middle, sex, stage, institute, grp] = c;
-    // «Иванов Иван Иванович» в одной ячейке
-    if (last && last.includes(' ') && (first === undefined || /^(м|ж|m|f|муж\S*|жен\S*|юн\S*|дев\S*)$/i.test(first))) {
-      const parts = last.split(/\s+/);
-      [grp, institute, stage, sex] = [stage, sex, middle, first];
-      [last, first, middle] = [parts[0], parts[1] || '', parts.slice(2).join(' ')];
-    }
-    const sx = norm(sex);
-    return {
-      last_name: last, first_name: first, middle_name: middle || '',
-      sex: sx.startsWith('ж') || sx.startsWith('f') || sx.startsWith('д') ? 'F' : sx.startsWith('м') || sx.startsWith('m') || sx.startsWith('ю') ? 'M' : sex,
-      stage: ({ v: 5, vi: 6, vii: 7, viii: 8, ix: 9 })[norm(stage)] || Number(stage),
-      institute: institute || '', grp: grp || '',
-    };
-  });
-}
-
+// Загрузка списка студентов (Excel или CSV / вставка из Excel)
 function openImport() {
   const p = openModal(`
-    <h2>Импорт студентов</h2>
-    <p class="sub">Скопируйте строки из Excel и вставьте сюда (или выберите CSV-файл). Порядок колонок:<br>
-      <strong>Фамилия · Имя · Отчество · Пол (М/Ж) · Ступень (5–9) · Институт · Группа</strong></p>
-    <label>Файл CSV<input type="file" id="imp-file" accept=".csv,.txt,text/csv"></label>
-    <label class="mt">Данные
-      <textarea id="imp-text" placeholder="Иванов&#9;Иван&#9;Иванович&#9;М&#9;7&#9;Институт права&#9;ЮР-21"></textarea>
+    <h2>Загрузить список студентов</h2>
+    <p class="sub">Физрук скачивает <a href="/api/template.xlsx" download="GTO-shablon-spiska.xlsx">шаблон списка</a>, заполняет и передаёт файл сюда.
+      Студенты, которые уже есть в базе (совпал УИН или ФИО + дата рождения), обновятся, остальные добавятся.</p>
+    <label class="drop-zone" id="imp-drop">
+      <strong>Выберите файл .xlsx или .csv</strong>
+      <span>или перетащите его сюда</span>
+      <input type="file" id="imp-file" accept=".xlsx,.csv,.txt" hidden>
     </label>
-    <div class="preview-level" id="imp-preview"></div>
+    <details class="mt"><summary class="hint">…или вставьте строки из Excel</summary>
+      <textarea id="imp-text" placeholder="Фамилия&#9;Имя&#9;Отчество&#9;Дата рождения&#9;Пол&#9;УИН&#9;Институт&#9;Группа&#9;Ступень"></textarea>
+      <button class="btn btn-outline btn-sm mt" id="imp-parse-text">Проверить</button>
+    </details>
+    <div class="preview-level" id="imp-summary"></div>
+    <div id="imp-preview"></div>
     <ul class="import-errors" id="imp-errors"></ul>
     <div class="modal-actions">
       <button class="btn btn-outline" data-close-modal>Отмена</button>
       <button class="btn btn-primary" id="imp-go" disabled>Загрузить</button>
     </div>`, { wide: true });
-  const ta = p.querySelector('#imp-text');
-  let rows = [];
-  const update = () => {
-    rows = parseImport(ta.value);
-    $('#imp-preview').textContent = rows.length ? `Строк к загрузке: ${rows.length}` : '';
+
+  let good = [];
+  async function parse(body) {
     $('#imp-errors').innerHTML = '';
-    $('#imp-go').disabled = !rows.length;
-  };
-  ta.addEventListener('input', update);
-  p.querySelector('#imp-file').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
+    $('#imp-summary').textContent = 'Проверяю…';
+    try {
+      const { rows } = await api('POST', '/api/import/parse', body);
+      good = rows.filter((r) => !r.error);
+      const bad = rows.length - good.length;
+      const upd = good.filter((r) => r.action === 'update').length;
+      $('#imp-summary').innerHTML = rows.length
+        ? `Строк: <strong>${rows.length}</strong> · новых: <strong>${good.length - upd}</strong> · обновятся: <strong>${upd}</strong>` +
+          (bad ? ` · <span class="chip lvl-0">с ошибками: ${bad} — будут пропущены</span>` : '')
+        : 'В файле не нашлось строк со студентами.';
+      $('#imp-preview').innerHTML = rows.length ? `<div class="import-scroll"><table class="import-table"><thead><tr>
+          <th>#</th><th>ФИО</th><th>Дата рожд.</th><th>Пол</th><th>УИН</th><th>Институт</th><th>Группа</th><th>Ступ.</th><th></th></tr></thead><tbody>
+          ${rows.map((r, i) => `<tr class="${r.error ? 'bad' : ''}"><td>${i + 1}</td>
+            <td>${esc([r.last_name, r.first_name, r.middle_name].filter(Boolean).join(' '))}</td>
+            <td>${r.error ? esc(r.birth_date) : fmtDate(r.birth_date)}</td><td>${r.error ? esc(r.sex) : r.sex === 'M' ? 'М' : 'Ж'}</td>
+            <td>${esc(r.uin)}</td><td>${esc(r.institute)}</td><td>${esc(r.grp)}</td><td>${r.error ? esc(r.stage) : ROMAN[r.stage]}</td>
+            <td class="${r.error ? 'err' : ''}">${r.error ? esc(r.error) : r.action === 'update' ? 'обновить' : 'новый'}</td></tr>`).join('')}
+          </tbody></table></div>` : '';
+      $('#imp-go').disabled = !good.length;
+      $('#imp-go').textContent = good.length ? `Загрузить (${good.length})` : 'Загрузить';
+    } catch (err) {
+      $('#imp-summary').textContent = '';
+      $('#imp-errors').innerHTML = `<li>${esc(err.message)}</li>`;
+      $('#imp-go').disabled = true;
+    }
+  }
+
+  async function handleFile(f) {
     if (!f) return;
     const buf = await f.arrayBuffer();
-    let text = new TextDecoder('utf-8').decode(buf);
-    if (text.includes('�')) text = new TextDecoder('windows-1251').decode(buf); // CSV из Excel
-    ta.value = text.replace(/^﻿/, '');
-    update();
-  });
+    if (/\.xlsx$/i.test(f.name)) {
+      let bin = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      parse({ xlsx: btoa(bin) });
+    } else {
+      let text = new TextDecoder('utf-8').decode(buf);
+      if (text.includes('�')) text = new TextDecoder('windows-1251').decode(buf); // CSV из Excel
+      parse({ text });
+    }
+  }
+
+  const drop = p.querySelector('#imp-drop');
+  p.querySelector('#imp-file').addEventListener('change', (e) => handleFile(e.target.files[0]));
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
+  p.querySelector('#imp-parse-text').addEventListener('click', () => parse({ text: $('#imp-text').value }));
+
   p.querySelector('#imp-go').addEventListener('click', async () => {
     try {
-      const r = await api('POST', '/api/students/import', { rows });
+      const r = await api('POST', '/api/students/import', { rows: good });
       closeModal();
       await loadData();
-      toast(`Загружено студентов: ${r.imported}`, true);
+      toast(`Готово: добавлено ${r.created}, обновлено ${r.updated}`, true);
     } catch (err) {
       const errs = err.data && err.data.errors;
       $('#imp-errors').innerHTML = errs
-        ? errs.slice(0, 50).map((x) => `<li>Строка ${x.row}: ${esc(x.error)}</li>`).join('') + (errs.length > 50 ? `<li>…и ещё ${errs.length - 50}</li>` : '')
+        ? errs.slice(0, 50).map((x) => `<li>Строка ${x.row}: ${esc(x.error)}</li>`).join('')
         : `<li>${esc(err.message)}</li>`;
     }
   });

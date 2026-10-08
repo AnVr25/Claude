@@ -53,7 +53,7 @@ h1, h2, h3 { font-family: var(--head); font-weight: 600; text-transform: upperca
 .btn-primary:hover { background: var(--red-dark); }
 .btn-secondary { background: var(--navy); color: #fff; }
 .btn-secondary:hover { background: var(--navy-2); }
-.btn-outline { border-color: var(--line-strong); background: #fff; }
+.btn-outline { border-color: var(--line-strong); background: #fff; color: var(--navy); }
 .btn-outline:hover { border-color: var(--navy); }
 .btn-danger { color: var(--red); border-color: var(--red); background: #fff; }
 .btn-danger:hover { background: var(--fail-bg); }
@@ -84,6 +84,11 @@ textarea { min-height: 160px; font-family: ui-monospace, Menlo, Consolas, monosp
 .login-card p { margin: 0; }
 
 /* ---------- topbar ---------- */
+.brand-wrap { display: flex; align-items: center; gap: 16px; }
+.topbar-logo { height: 46px; width: auto; display: block; }
+.topbar-sep { width: 1px; align-self: stretch; background: rgba(255,255,255,.25); }
+.operator { font-size: 12px; opacity: .75; margin-top: 2px; }
+.login-logo { width: 190px; height: auto; display: block; margin: 0 auto 10px; }
 .topbar {
   background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 10px 20px; flex-wrap: wrap;
@@ -142,6 +147,7 @@ body:not(.can-edit) .edit-only { display: none !important; }
 .grid tbody tr:hover td { background-color: #f7f9fc; }
 .grid tbody tr:hover td.sticky { background: #f7f9fc; }
 .grid td.left, .grid th.left { text-align: left; }
+.grid td.mono { font-variant-numeric: tabular-nums; color: var(--text); font-size: 13px; }
 .grid td.num { color: var(--muted); font-size: 12px; width: 44px; }
 .grid td.info { color: var(--muted); font-size: 13px; text-align: left; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
@@ -210,6 +216,15 @@ body.can-edit .grid td.res.empty:not(.na):hover::after { content: '+'; color: va
 .mt { margin-top: 10px; }
 .secret { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--gold-bg); padding: 2px 6px; user-select: all; }
 .add-user { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 8px; align-items: end; padding-top: 12px; border-top: 1px solid var(--line); }
+.import-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+.import-table th { text-align: left; font-family: var(--head); font-weight: 500; text-transform: uppercase; font-size: 11px; color: var(--muted); padding: 4px 6px; border-bottom: 2px solid var(--navy); position: sticky; top: 0; background: #fff; }
+.import-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.import-table tr.bad td { background: var(--fail-bg); }
+.import-table td.err { color: var(--fail-fg); white-space: normal; }
+.import-scroll { max-height: 320px; overflow: auto; border: 1px solid var(--line); }
+.drop-zone { display: grid; gap: 6px; padding: 18px; border: 2px dashed var(--line-strong); text-align: center; color: var(--muted); }
+.drop-zone.over { border-color: var(--red); background: var(--fail-bg); }
+.hint { font-size: 13px; color: var(--muted); }
 .import-errors { color: var(--red); font-size: 13px; max-height: 120px; overflow: auto; margin: 8px 0 0; padding-left: 18px; }
 
 /* ---------- toast ---------- */
@@ -219,7 +234,8 @@ body.can-edit .grid td.res.empty:not(.na):hover::after { content: '+'; color: va
 /* ---------- mobile ---------- */
 @media (max-width: 760px) {
   .topbar { padding: 10px 16px; }
-  .brand-sub, .me { display: none; }
+  .brand-sub, .me, .operator, .topbar-sep { display: none; }
+  .topbar-logo { height: 34px; }
   .toolbar { padding: 12px 16px; position: static; }
   .toolbar select { flex: 1 1 calc(50% - 4px); max-width: none; min-width: 0; }
   .search { flex-basis: 100%; max-width: none; }

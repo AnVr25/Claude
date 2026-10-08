@@ -5,11 +5,12 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { open, hashPassword, verifyPassword } = require('./db');
 const GTO = require('./public/norms');
+const { buildTemplate, readFirstSheet } = require('./xlsx');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SESSION_DAYS = 30;
 const COOKIE = 'gto_session';
-const MAX_BODY = 2 * 1024 * 1024;
+const MAX_BODY = 12 * 1024 * 1024; // xlsx приходит в base64
 const ROLES = ['admin', 'editor', 'viewer'];
 
 const MIME = {
@@ -101,20 +102,108 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
     return !Number.isNaN(dt.getTime()) && dt.toISOString().slice(0, 10) === d;
   }
 
+  function parseSex(v) {
+    const x = String(v ?? '').trim().toLowerCase();
+    if (/^(f|ж|жен\S*|д|дев\S*)$/.test(x)) return 'F';
+    if (/^(m|м|муж\S*|ю|юн\S*)$/.test(x)) return 'M';
+    return '';
+  }
+  const ROMAN_STAGE = { v: 5, vi: 6, vii: 7, viii: 8, ix: 9 };
+
   function cleanStudent(b) {
     const s = {
       last_name: str(b.last_name, 80),
       first_name: str(b.first_name, 80),
       middle_name: str(b.middle_name, 80),
-      sex: b.sex === 'F' || b.sex === 'Ж' || b.sex === 'ж' ? 'F' : (b.sex === 'M' || b.sex === 'М' || b.sex === 'м' ? 'M' : ''),
-      stage: Number(b.stage),
+      sex: parseSex(b.sex),
+      birth_date: GTO.parseDate(str(b.birth_date, 20)),
+      uin: GTO.normalizeUin(str(b.uin, 30)),
+      stage: ROMAN_STAGE[str(b.stage, 5).toLowerCase()] || Number(str(b.stage, 5) || 0),
       institute: str(b.institute, 160),
       grp: str(b.grp, 60),
     };
     if (!s.last_name || !s.first_name) throw new HttpError(400, 'Укажите фамилию и имя');
     if (!s.sex) throw new HttpError(400, 'Укажите пол (М или Ж)');
-    if (!(s.stage >= 5 && s.stage <= 9)) throw new HttpError(400, 'Ступень должна быть от 5 до 9');
+    if (s.birth_date === null) throw new HttpError(400, 'Дата рождения — в формате ДД.ММ.ГГГГ');
+    if (s.birth_date && (s.birth_date > today() || s.birth_date < '1940-01-01')) throw new HttpError(400, 'Некорректная дата рождения');
+    if (s.uin === null) throw new HttpError(400, 'УИН — 11 цифр в формате ГГ-РР-ННННННН, например 23-65-0012345');
+    if (!s.stage && s.birth_date) {
+      const age = GTO.ageOn(s.birth_date, today());
+      s.stage = GTO.stageForAge(age);
+      if (!s.stage) throw new HttpError(400, `Возраст ${age} лет не подходит для ступеней V–IX (14–29 лет)`);
+    }
+    if (!(s.stage >= 5 && s.stage <= 9)) throw new HttpError(400, 'Укажите ступень (5–9) или дату рождения');
     return s;
+  }
+
+  function checkUinFree(uin, exceptId = 0) {
+    if (uin && db.prepare('SELECT 1 FROM students WHERE uin = ? AND id <> ?').get(uin, exceptId)) {
+      throw new HttpError(409, `УИН ${uin} уже есть у другого студента`);
+    }
+  }
+
+  // Студент для ответа: роль «Просмотр» видит только фамилию и первую букву имени.
+  function present(user, s) {
+    if (user.role !== 'viewer') return s;
+    return {
+      id: s.id, last_name: s.last_name, first_name: s.first_name ? s.first_name[0] + '.' : '', middle_name: '',
+      sex: s.sex, stage: s.stage, institute: s.institute, grp: s.grp, birth_date: '', uin: '',
+    };
+  }
+
+  // Таблица (массив строк) → объекты студентов. Колонки ищем по заголовкам, иначе — порядок шаблона.
+  const HEADER_MAP = [
+    [/^фио|ф\.и\.о/, 'fio'], [/фамил/, 'last_name'], [/^имя/, 'first_name'], [/отчеств/, 'middle_name'],
+    [/рожд|^дата/, 'birth_date'], [/^пол/, 'sex'], [/уин|uin/, 'uin'], [/инстит|факульт|вуз|учебн/, 'institute'],
+    [/групп/, 'grp'], [/ступен/, 'stage'],
+  ];
+  const DEFAULT_ORDER = ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'uin', 'institute', 'grp', 'stage'];
+
+  function tableToRows(table) {
+    table = table.filter((r) => r.some((c) => String(c).trim()));
+    if (!table.length) return [];
+    let fields = table[0].map((h) => {
+      const x = String(h).trim().toLowerCase();
+      const hit = HEADER_MAP.find(([re]) => re.test(x));
+      return hit ? hit[1] : null;
+    });
+    if (fields.filter(Boolean).length >= 2) table = table.slice(1);
+    else fields = DEFAULT_ORDER;
+    return table.map((r) => {
+      const o = {};
+      fields.forEach((f, i) => { if (f && r[i] != null && o[f] === undefined) o[f] = String(r[i]).trim(); });
+      if (o.fio) {
+        const p = o.fio.split(/\s+/);
+        o.last_name = o.last_name || p[0] || '';
+        o.first_name = o.first_name || p[1] || '';
+        o.middle_name = o.middle_name || p.slice(2).join(' ');
+        delete o.fio;
+      }
+      return o;
+    });
+  }
+
+  function parseCsvText(text) {
+    const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+    if (!lines.length) return [];
+    const sep = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
+    return lines.map((l) => l.split(sep).map((c) => c.trim().replace(/^"(.*)"$/, '$1').replace(/""/g, '"')));
+  }
+
+  // Найти существующего студента: по УИН, иначе по ФИО + дате рождения.
+  function findExisting(s) {
+    if (s.uin) {
+      const byUin = db.prepare('SELECT id FROM students WHERE uin = ?').get(s.uin);
+      if (byUin) return byUin.id;
+    }
+    if (s.birth_date) {
+      // SQLite lower() не понимает кириллицу — сравниваем в JS.
+      const key = (x) => [x.last_name, x.first_name, x.middle_name].join(' ').toLowerCase().replace(/ё/g, 'е');
+      const r = db.prepare('SELECT id, last_name, first_name, middle_name FROM students WHERE birth_date = ?')
+        .all(s.birth_date).find((x) => key(x) === key(s));
+      if (r) return r.id;
+    }
+    return null;
   }
 
   function getStudent(id) {
@@ -179,7 +268,8 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
     }
 
     if (method === 'GET' && p === '/api/data') {
-      const students = db.prepare('SELECT * FROM students ORDER BY last_name, first_name, middle_name').all();
+      const students = db.prepare('SELECT * FROM students ORDER BY last_name, first_name, middle_name').all()
+        .map((s) => present(user, s));
       const results = db.prepare(`
         SELECT r.student_id, r.test_id, r.value, r.test_date, r.entered_at, u.name AS entered_by_name, u.login AS entered_by_login
         FROM results r LEFT JOIN users u ON u.id = r.entered_by
@@ -188,19 +278,55 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
     }
 
     if (method === 'GET' && p === '/api/export.csv') {
-      return sendCsv(res);
+      return sendCsv(res, user);
+    }
+
+    if (method === 'GET' && p === '/api/template.xlsx') {
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="gto-shablon-spiska.xlsx"; filename*=UTF-8''${encodeURIComponent('ГТО — шаблон списка студентов.xlsx')}`,
+        'Cache-Control': 'no-store',
+      });
+      return res.end(buildTemplate());
     }
 
     // --- студенты (admin, editor) ---
     if (method === 'POST' && p === '/api/students') {
       requireRole(user, 'admin', 'editor');
       const s = cleanStudent(await readBody(req));
-      const r = db.prepare(`INSERT INTO students (last_name, first_name, middle_name, sex, stage, institute, grp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(s.last_name, s.first_name, s.middle_name, s.sex, s.stage, s.institute, s.grp);
+      checkUinFree(s.uin);
+      const r = db.prepare(`INSERT INTO students (last_name, first_name, middle_name, sex, birth_date, uin, stage, institute, grp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(s.last_name, s.first_name, s.middle_name, s.sex, s.birth_date, s.uin, s.stage, s.institute, s.grp);
       audit(user, 'student.create', { id: Number(r.lastInsertRowid), ...s });
       return send(res, 201, getStudent(r.lastInsertRowid));
     }
 
+    // Разбор файла/текста списка: возвращает строки и ошибки по каждой, ничего не сохраняет.
+    if (method === 'POST' && p === '/api/import/parse') {
+      requireRole(user, 'admin', 'editor');
+      const b = await readBody(req);
+      let table;
+      try {
+        table = b.xlsx ? readFirstSheet(Buffer.from(String(b.xlsx), 'base64')) : parseCsvText(b.text || '');
+      } catch (e) { throw new HttpError(400, e.message || 'Не удалось прочитать файл'); }
+      const rows = tableToRows(table);
+      if (rows.length > 5000) throw new HttpError(400, 'Не больше 5000 строк за раз');
+      const seenUin = new Set();
+      const out = rows.map((row) => {
+        try {
+          const s = cleanStudent(row);
+          if (s.uin && seenUin.has(s.uin)) throw new HttpError(400, `УИН ${s.uin} повторяется в списке`);
+          if (s.uin) seenUin.add(s.uin);
+          const existing = findExisting(s);
+          if (s.uin) checkUinFree(s.uin, existing || 0);
+          return { ...s, action: existing ? 'update' : 'create' };
+        } catch (e) { return { ...row, error: e.message }; }
+      });
+      return send(res, 200, { rows: out });
+    }
+
+    // Загрузка: новые добавляются, существующие (по УИН или ФИО + дате рождения) обновляются.
     if (method === 'POST' && p === '/api/students/import') {
       requireRole(user, 'admin', 'editor');
       const b = await readBody(req);
@@ -212,16 +338,42 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
       rows.forEach((row, i) => {
         try { clean.push(cleanStudent(row)); } catch (e) { errors.push({ row: i + 1, error: e.message }); }
       });
+      const seen = new Map();
+      clean.forEach((s, i) => {
+        if (!s.uin) return;
+        if (seen.has(s.uin)) errors.push({ row: i + 1, error: `УИН ${s.uin} повторяется (строка ${seen.get(s.uin)})` });
+        else seen.set(s.uin, i + 1);
+      });
       if (errors.length) return send(res, 400, { error: 'Есть ошибки в строках', errors });
-      const ins = db.prepare(`INSERT INTO students (last_name, first_name, middle_name, sex, stage, institute, grp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      const ins = db.prepare(`INSERT INTO students (last_name, first_name, middle_name, sex, birth_date, uin, stage, institute, grp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const upd = db.prepare(`UPDATE students SET last_name=?, first_name=?, middle_name=?, sex=?, birth_date=?,
+        uin=CASE WHEN ? <> '' THEN ? ELSE uin END, stage=?, institute=?, grp=?, updated_at=datetime('now') WHERE id=?`);
+      let created = 0;
+      let updated = 0;
       db.exec('BEGIN');
       try {
-        for (const s of clean) ins.run(s.last_name, s.first_name, s.middle_name, s.sex, s.stage, s.institute, s.grp);
+        clean.forEach((s, i) => {
+          try {
+            const id = findExisting(s);
+            if (s.uin) checkUinFree(s.uin, id || 0);
+            if (id) {
+              upd.run(s.last_name, s.first_name, s.middle_name, s.sex, s.birth_date, s.uin, s.uin, s.stage, s.institute, s.grp, id);
+              updated++;
+            } else {
+              ins.run(s.last_name, s.first_name, s.middle_name, s.sex, s.birth_date, s.uin, s.stage, s.institute, s.grp);
+              created++;
+            }
+          } catch (e) { e.row = i + 1; throw e; }
+        });
         db.exec('COMMIT');
-      } catch (e) { db.exec('ROLLBACK'); throw e; }
-      audit(user, 'student.import', { count: clean.length });
-      return send(res, 200, { imported: clean.length });
+      } catch (e) {
+        db.exec('ROLLBACK');
+        if (e instanceof HttpError) return send(res, e.status, { error: e.message, errors: [{ row: e.row, error: e.message }] });
+        throw e;
+      }
+      audit(user, 'student.import', { created, updated });
+      return send(res, 200, { imported: created + updated, created, updated });
     }
 
     if ((m = p.match(/^\/api\/students\/(\d+)$/))) {
@@ -229,9 +381,10 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
       const old = getStudent(m[1]);
       if (method === 'PUT') {
         const s = cleanStudent(await readBody(req));
-        db.prepare(`UPDATE students SET last_name=?, first_name=?, middle_name=?, sex=?, stage=?, institute=?, grp=?,
+        checkUinFree(s.uin, old.id);
+        db.prepare(`UPDATE students SET last_name=?, first_name=?, middle_name=?, sex=?, birth_date=?, uin=?, stage=?, institute=?, grp=?,
           updated_at=datetime('now') WHERE id=?`)
-          .run(s.last_name, s.first_name, s.middle_name, s.sex, s.stage, s.institute, s.grp, old.id);
+          .run(s.last_name, s.first_name, s.middle_name, s.sex, s.birth_date, s.uin, s.stage, s.institute, s.grp, old.id);
         // Результаты испытаний, которых нет в новой ступени/поле, удаляем.
         const allowed = new Set(GTO.testsFor(s.stage, s.sex).map((x) => x.id));
         for (const r of db.prepare('SELECT test_id FROM results WHERE student_id = ?').all(old.id)) {
@@ -335,8 +488,10 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
     throw new HttpError(404, 'Не найдено');
   }
 
-  function sendCsv(res) {
-    const students = db.prepare('SELECT * FROM students ORDER BY institute, grp, last_name, first_name').all();
+  function sendCsv(res, user) {
+    const full = user.role !== 'viewer';
+    const students = db.prepare('SELECT * FROM students ORDER BY institute, grp, last_name, first_name').all()
+      .map((s) => present(user, s));
     const results = db.prepare('SELECT * FROM results').all();
     const byStudent = new Map();
     for (const r of results) {
@@ -347,7 +502,7 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
       const s = String(v ?? '');
       return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const head = ['Фамилия', 'Имя', 'Отчество', 'Пол', 'Ступень', 'Институт', 'Группа',
+    const head = [...(full ? ['УИН', 'Фамилия', 'Имя', 'Отчество', 'Дата рождения'] : ['Фамилия', 'Имя']), 'Пол', 'Ступень', 'Институт', 'Группа',
       ...GTO.TESTS.flatMap((x) => [x.short, x.short + ' (дата)']), 'Знак'];
     const lines = [head.map(esc).join(';')];
     for (const s of students) {
@@ -355,7 +510,9 @@ function createApp({ db = open(), secureCookie = process.env.GTO_SECURE_COOKIE =
       const values = Object.fromEntries(Object.entries(rs).map(([k, r]) => [k, r.value]));
       const badge = GTO.badgeFor(s.stage, s.sex, values).badge;
       lines.push([
-        s.last_name, s.first_name, s.middle_name, s.sex === 'M' ? 'М' : 'Ж', s.stage, s.institute, s.grp,
+        ...(full ? [s.uin, s.last_name, s.first_name, s.middle_name, s.birth_date ? s.birth_date.split('-').reverse().join('.') : '']
+          : [s.last_name, s.first_name]),
+        s.sex === 'M' ? 'М' : 'Ж', s.stage, s.institute, s.grp,
         ...GTO.TESTS.flatMap((x) => rs[x.id] ? [GTO.formatValue(x.id, rs[x.id].value), rs[x.id].test_date] : ['', '']),
         badge ? GTO.LEVEL_NAMES[GTO.LEVELS[badge - 1]] : '',
       ].map(esc).join(';'));
