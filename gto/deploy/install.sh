@@ -154,6 +154,31 @@ NGINX
     warn "HTTPS пока не настроен: DNS $DOMAIN → '${dns_ip:-нет}', IP сервера '${server_ip:-?}', e-mail '${EMAIL:-не указан}'."
     warn "Когда DNS обновится, запустите скрипт ещё раз с e-mail вторым параметром."
   fi
+
+  # Порт 443 может держать не nginx, а, например, OpenVPN с port-share: он пересылает обычный
+  # https в nginx на локальный порт (у reg.fla65.ru это 127.0.0.1:8443). Тогда https-часть сайта
+  # должна слушать тот же локальный порт — nginx выберет сертификат по имени домена.
+  if [[ $SECURE -eq 1 ]] && ss -ltnp '( sport = :443 )' | tail -n +2 | grep -qv nginx; then
+    share=$(nginx -T 2>/dev/null | grep -oE 'listen[[:space:]]+127\.0\.0\.1:[0-9]+[[:space:]]+ssl[^;]*' | head -1 | sed -E 's/^listen[[:space:]]+//')
+    if [[ -n "$share" ]]; then
+      say "Порт 443 занят $(ss -ltnp '( sport = :443 )' | grep -o 'users:(("[^"]*' | cut -d'"' -f2 | head -1) — https для $DOMAIN через $share"
+      sed -i -E \
+        -e "s|^([[:space:]]*)listen[[:space:]]+\[::\]:443[[:space:]]+ssl[^;]*;.*$|\1# [::]:443 занят другой программой — https приходит через $share|" \
+        -e "s|^([[:space:]]*)listen[[:space:]]+443[[:space:]]+ssl[^;]*;.*$|\1listen $share; # managed by Certbot (перенесено с 443)|" \
+        "$SITE"
+      nginx -t || die "конфигурация nginx не прошла проверку после переноса на $share"
+      systemctl reload nginx
+    else
+      warn "Порт 443 занят не nginx, и локальный порт для https не найден — HTTPS для $DOMAIN работать не будет."
+    fi
+  fi
+
+  # Проверка: какой сертификат реально отдаётся для домена
+  sleep 1
+  got=$(curl -skv --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" -o /dev/null 2>&1 | grep -o 'subject: .*' | head -1 || true)
+  if [[ $SECURE -eq 1 && "$got" != *"$DOMAIN"* ]]; then
+    warn "Для https://$DOMAIN отдаётся чужой сертификат (${got:-нет ответа}). Проверьте: journalctl -u nginx -n 20"
+  fi
 fi
 
 # ---------- systemd ----------

@@ -35,7 +35,7 @@ function createApp({
   secureCookie = process.env.GTO_SECURE_COOKIE === '1',
   trustProxy = process.env.GTO_TRUST_PROXY === '1',
 } = {}) {
-  const loginAttempts = new Map(); // ip -> {count, until}
+  const loginAttempts = new Map(); // «ip|логин» -> {count, until}
 
   // За nginx все запросы приходят с 127.0.0.1 — настоящий адрес в X-Real-IP (ставит наш nginx).
   function clientIp(req) {
@@ -236,23 +236,25 @@ function createApp({
     let m;
 
     if (method === 'POST' && p === '/api/login') {
-      const ip = clientIp(req);
-      const att = loginAttempts.get(ip);
-      if (att && att.count >= 10 && att.until > Date.now()) {
-        throw new HttpError(429, 'Слишком много попыток. Подождите 15 минут.');
-      }
       if (secureCookie && !isHttps(req)) {
         throw new HttpError(400, `Вход только по защищённому адресу: https://${str(req.headers.host, 100)}`);
       }
       const b = await readBody(req);
+      // Ключ — адрес + логин: если прокси (например, OpenVPN port-share) скрывает адреса,
+      // подбор пароля к одной учётке не блокирует вход остальным.
+      const key = clientIp(req) + '|' + str(b.login, 80).toLowerCase();
+      const att = loginAttempts.get(key);
+      if (att && att.count >= 10 && att.until > Date.now()) {
+        throw new HttpError(429, 'Слишком много попыток. Подождите 15 минут.');
+      }
       const u = db.prepare('SELECT * FROM users WHERE login = ? AND active = 1').get(str(b.login, 80));
       if (!u || !verifyPassword(String(b.password || ''), u.pass_hash)) {
         const a = att && att.until > Date.now() ? att : { count: 0, until: Date.now() + 15 * 60e3 };
         a.count++;
-        loginAttempts.set(ip, a);
+        loginAttempts.set(key, a);
         throw new HttpError(401, 'Неверный логин или пароль');
       }
-      loginAttempts.delete(ip);
+      loginAttempts.delete(key);
       const token = crypto.randomBytes(32).toString('hex');
       db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
       db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')

@@ -299,3 +299,16 @@ test('за nginx: cookie Secure только по https, при обязател
   assert.match((await res.json()).error, /https:\/\//);
   assert.equal((await strict('https')).status, 200);
 });
+
+test('подбор пароля к одной учётке не блокирует другие, даже если все адреса одинаковые', async (t) => {
+  const db = open(':memory:');
+  for (const l of ['ed', 'admin']) db.prepare('INSERT INTO users (login, name, role, pass_hash) VALUES (?, ?, ?, ?)').run(l, l, 'editor', hashPassword('password123'));
+  const server = http.createServer(createApp({ db }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const tryLogin = (login, password) => fetch(base + '/api/login', { method: 'POST', body: JSON.stringify({ login, password }) });
+  for (let i = 0; i < 10; i++) await tryLogin('admin', 'wrong');
+  assert.equal((await tryLogin('admin', 'password123')).status, 429);
+  assert.equal((await tryLogin('ed', 'password123')).status, 200);
+});
