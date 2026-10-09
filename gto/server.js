@@ -401,6 +401,30 @@ function createApp({
       return send(res, 200, { imported: created + updated, created, updated });
     }
 
+    // Массовое удаление (только администратор): выбранные или все найденные по фильтру.
+    if (method === 'POST' && p === '/api/students/delete') {
+      requireRole(user, 'admin');
+      const b = await readBody(req);
+      const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
+      if (!ids.length) throw new HttpError(400, 'Никто не выбран');
+      if (ids.length > 20000) throw new HttpError(400, 'Слишком много за раз');
+      const get = db.prepare('SELECT id, last_name, first_name, middle_name, birth_date, uin FROM students WHERE id = ?');
+      const del = db.prepare('DELETE FROM students WHERE id = ?');
+      const gone = [];
+      db.exec('BEGIN');
+      try {
+        for (const id of ids) {
+          const st = get.get(id);
+          if (!st) continue;
+          del.run(id);
+          gone.push(st);
+        }
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+      audit(user, 'student.delete_bulk', { count: gone.length, students: gone });
+      return send(res, 200, { deleted: gone.length });
+    }
+
     if ((m = p.match(/^\/api\/students\/(\d+)$/))) {
       requireRole(user, 'admin', 'editor');
       const old = getStudent(m[1]);

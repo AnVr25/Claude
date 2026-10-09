@@ -35,7 +35,7 @@ function open(file = DB_PATH) {
       first_name  TEXT NOT NULL,
       middle_name TEXT NOT NULL DEFAULT '',
       sex         TEXT NOT NULL CHECK (sex IN ('M', 'F')),
-      stage       INTEGER NOT NULL CHECK (stage BETWEEN 5 AND 9),
+      stage       INTEGER NOT NULL CHECK (stage BETWEEN 1 AND 18),
       institute   TEXT NOT NULL DEFAULT '',
       grp         TEXT NOT NULL DEFAULT '',
       created_at  TEXT NOT NULL DEFAULT (datetime('now')),
@@ -67,6 +67,40 @@ function open(file = DB_PATH) {
   const ucols = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
   if (!ucols.has('note')) db.exec("ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''");
   if (!ucols.has('last_login')) db.exec('ALTER TABLE users ADD COLUMN last_login TEXT');
+  // Раньше были только ступени V–IX (CHECK 5–9): пересобираем таблицу под все ступени I–XVIII.
+  const ddl = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'students'").get();
+  if (ddl && /BETWEEN 5 AND 9/.test(ddl.sql)) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN');
+    try {
+      db.exec(`
+        CREATE TABLE students_new (
+          id          INTEGER PRIMARY KEY,
+          last_name   TEXT NOT NULL,
+          first_name  TEXT NOT NULL,
+          middle_name TEXT NOT NULL DEFAULT '',
+          sex         TEXT NOT NULL CHECK (sex IN ('M', 'F')),
+          stage       INTEGER NOT NULL CHECK (stage BETWEEN 1 AND 18),
+          institute   TEXT NOT NULL DEFAULT '',
+          grp         TEXT NOT NULL DEFAULT '',
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          birth_date  TEXT NOT NULL DEFAULT '',
+          uin         TEXT NOT NULL DEFAULT ''
+        );
+        INSERT INTO students_new (id, last_name, first_name, middle_name, sex, stage, institute, grp, created_at, updated_at, birth_date, uin)
+          SELECT id, last_name, first_name, middle_name, sex, stage, institute, grp, created_at, updated_at, birth_date, uin FROM students;
+        DROP TABLE students;
+        ALTER TABLE students_new RENAME TO students;
+      `);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+  }
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS students_uin ON students(uin) WHERE uin <> ''");
   return db;
 }

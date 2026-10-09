@@ -395,3 +395,49 @@ test('API обновления: только админ, ставится тол
   assert.equal(off.status().enabled, false);
   await assert.rejects(off.install(HEAD), /не настроено/);
 });
+
+test('API: массовое удаление — только администратор, вместе с результатами', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const admin = await login(base, 'admin');
+  const ed = await login(base, 'ed');
+  const ids = [];
+  for (const [ln, bd] of [['Первый', '01.02.2008'], ['Второй', '02.02.2008'], ['Третий', '03.02.2008']]) {
+    const r = await admin('POST', '/api/students', { last_name: ln, first_name: 'Иван', sex: 'М', birth_date: bd, institute: 'ИФК', grp: '1' });
+    ids.push((await r.json()).id);
+  }
+  await admin('PUT', '/api/results', { student_id: ids[0], test_id: 'pushup', value: '30', test_date: '2026-09-01' });
+  assert.equal((await ed('POST', '/api/students/delete', { ids })).status, 403, 'ввод результатов не может удалять массово');
+  assert.equal((await admin('POST', '/api/students/delete', { ids: [] })).status, 400);
+  const r = await admin('POST', '/api/students/delete', { ids: [ids[0], ids[1], 999999] });
+  assert.equal((await r.json()).deleted, 2);
+  const data = await (await admin('GET', '/api/data')).json();
+  assert.deepEqual(data.students.map((s) => s.id), [ids[2]]);
+  assert.equal(data.results.length, 0, 'результаты удалённых тоже удалены');
+});
+
+test('база со старым ограничением ступеней V–IX переносится без потерь', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { DatabaseSync } = require('node:sqlite');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gto-mig-')), 'old.sqlite');
+  const old = new DatabaseSync(file);
+  old.exec(`PRAGMA foreign_keys = ON;
+    CREATE TABLE students (id INTEGER PRIMARY KEY, last_name TEXT NOT NULL, first_name TEXT NOT NULL, middle_name TEXT NOT NULL DEFAULT '',
+      sex TEXT NOT NULL CHECK (sex IN ('M','F')), stage INTEGER NOT NULL CHECK (stage BETWEEN 5 AND 9), institute TEXT NOT NULL DEFAULT '',
+      grp TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      birth_date TEXT NOT NULL DEFAULT '', uin TEXT NOT NULL DEFAULT '');
+    CREATE TABLE results (student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE, test_id TEXT NOT NULL, value REAL NOT NULL,
+      test_date TEXT NOT NULL, entered_by INTEGER, entered_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (student_id, test_id));
+    INSERT INTO students (id, last_name, first_name, sex, stage, uin) VALUES (7, 'Старый', 'Студент', 'M', 6, '23-65-0000001');
+    INSERT INTO results (student_id, test_id, value, test_date) VALUES (7, 'pushup', 40, '2025-05-05');`);
+  old.close();
+  const db = open(file);
+  assert.equal(db.prepare('SELECT stage FROM students WHERE id = 7').get().stage, 6);
+  assert.equal(db.prepare('SELECT value FROM results WHERE student_id = 7').get().value, 40);
+  db.prepare("INSERT INTO students (last_name, first_name, sex, stage) VALUES ('Новый', 'Малыш', 'M', 1)").run();
+  db.prepare('DELETE FROM students WHERE id = 7').run();
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM results').get().n, 0, 'каскадное удаление работает после переноса');
+  db.close();
+});

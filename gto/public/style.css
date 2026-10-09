@@ -159,6 +159,11 @@ body:not(.can-edit) .edit-only { display: none !important; }
 .grid td.num { color: var(--muted); font-size: 12px; width: 44px; }
 .grid td.info { color: var(--muted); font-size: 13px; text-align: left; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
+.sel-box { width: 18px; height: 18px; margin: 0 8px 0 0; vertical-align: middle; accent-color: var(--gto-red); cursor: pointer; flex: none; }
+.name-cell { display: flex; align-items: center; }
+.grid tr.selected td { background: #FDECEE; }
+.selbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 20px; background: #FFF4F4; border-bottom: 1px solid #F3C9CD; font-size: 14px; }
+.selbar #sel-count { font-weight: 700; color: var(--red-dark); }
 .name-btn { all: unset; cursor: pointer; font-weight: 700; color: var(--navy); display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .name-btn:hover { color: var(--red); text-decoration: underline; }
 .name-sub { font-weight: 400; color: var(--muted); }

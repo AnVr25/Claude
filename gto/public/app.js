@@ -10,6 +10,7 @@ const state = {
   results: new Map(), // studentId -> { testId: row }
   computed: new Map(), // studentId -> { badge, byCategory }
   filters: { q: '', inst: '', grp: '', stage: '', sex: '', badge: '' },
+  selected: new Set(), // выбранные для массового удаления (только администратор)
 };
 
 const ROMAN = { 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX' };
@@ -33,6 +34,7 @@ const todayISO = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 const canEdit = () => state.user && (state.user.role === 'admin' || state.user.role === 'editor');
+const isAdmin = () => state.user && state.user.role === 'admin';
 // Роль «Просмотр» получает с сервера только фамилию и первую букву имени — без УИН и даты рождения.
 const fullAccess = () => state.user && state.user.role !== 'viewer';
 const ageText = (bd) => {
@@ -179,7 +181,10 @@ function render() {
     else groups.push({ cat: t.cat, span: 1 });
   }
   const full = fullAccess();
-  let head = '<thead><tr class="cat-row"><th class="sticky left" rowspan="2">ФИО</th>' +
+  const sel = isAdmin();
+  const allSel = sel && rows.length > 0 && rows.every((s) => state.selected.has(s.id));
+  let head = '<thead><tr class="cat-row"><th class="sticky left" rowspan="2">' +
+    (sel ? `<span class="name-cell"><input type="checkbox" class="sel-box" id="sel-head" title="Выбрать всех найденных"${allSel ? ' checked' : ''}>ФИО</span>` : 'ФИО') + '</th>' +
     (full ? '<th class="info" rowspan="2">УИН</th><th class="info" rowspan="2">Дата рожд.</th>' : '') +
     '<th class="info left" rowspan="2">Институт</th><th rowspan="2">Группа</th><th rowspan="2">Ступ.</th><th rowspan="2">Знак</th>';
   for (const g of groups) {
@@ -195,9 +200,12 @@ function render() {
     const rs = state.results.get(s.id) || {};
     const n = GTO.normsFor(s.stage, s.sex);
     const comp = state.computed.get(s.id);
-    let tr = `<tr data-id="${s.id}"><td class="sticky left"><button class="name-btn" data-open="${s.id}">` +
+    const on = sel && state.selected.has(s.id);
+    let tr = `<tr data-id="${s.id}"${on ? ' class="selected"' : ''}><td class="sticky left">` +
+      (sel ? `<span class="name-cell"><input type="checkbox" class="sel-box" data-sel="${s.id}" aria-label="Выбрать"${on ? ' checked' : ''}>` : '') +
+      `<button class="name-btn" data-open="${s.id}">` +
       `<span class="name-sub nm-num">${i + 1}.</span> ${esc(s.last_name)} <span class="name-sub nm-full">${esc(s.first_name)} ${esc(s.middle_name)}</span>` +
-      `<span class="name-sub nm-short">${esc(initials(s))}</span></button></td>` +
+      `<span class="name-sub nm-short">${esc(initials(s))}</span></button>${sel ? '</span>' : ''}</td>` +
       (full ? `<td class="info mono">${esc(s.uin) || '<span class="name-sub">—</span>'}</td><td class="info" title="${esc(ageText(s.birth_date))}">${fmtDate(s.birth_date)}</td>` : '') +
       `<td class="info" title="${esc(s.institute)}">${esc(s.institute)}</td><td>${esc(s.grp)}</td>` +
       `<td title="${s.sex === 'M' ? 'юноша' : 'девушка'}">${ROMAN[s.stage]} <span class="name-sub">${s.sex === 'M' ? 'м' : 'ж'}</span></td><td>${badgeHtml(comp?.badge)}</td>`;
@@ -214,6 +222,54 @@ function render() {
   });
 
   $('#grid').innerHTML = head + '<tbody>' + parts.join('') + '</tbody>';
+  renderSelbar(rows);
+}
+
+// ---------- массовое удаление ----------
+function renderSelbar(rows = filtered()) {
+  const bar = $('#selbar');
+  for (const id of [...state.selected]) if (!state.students.some((s) => s.id === id)) state.selected.delete(id);
+  if (!isAdmin() || !state.selected.size) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const n = state.selected.size;
+  $('#sel-count').textContent = `Выбрано: ${n}`;
+  const rest = rows.filter((s) => !state.selected.has(s.id)).length;
+  $('#sel-all').hidden = !rest;
+  $('#sel-all').textContent = `Выбрать всех найденных (${rows.length})`;
+}
+
+function deleteSelected() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  const names = state.students.filter((s) => state.selected.has(s.id)).slice(0, 8).map(fullName);
+  const word = 'УДАЛИТЬ';
+  const p = openModal(`
+    <h2>Удалить ${ids.length} ${plural(ids.length, 'участника', 'участников', 'участников')}?</h2>
+    <p class="sub">Вместе с ними удалятся все их результаты. Отменить это нельзя — перед удалением можно сделать «Экспорт CSV».</p>
+    <p>${names.map(esc).join(', ')}${ids.length > names.length ? ` и ещё ${ids.length - names.length}` : ''}</p>
+    <label>Для подтверждения введите слово ${word}<input id="del-word" autocomplete="off"></label>
+    <p class="form-error" id="del-error"></p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" data-close-modal>Отмена</button>
+      <button class="btn btn-danger" id="del-go" disabled>Удалить</button>
+    </div>`);
+  const inp = p.querySelector('#del-word');
+  inp.addEventListener('input', () => { p.querySelector('#del-go').disabled = inp.value.trim().toUpperCase() !== word; });
+  inp.focus();
+  p.querySelector('#del-go').addEventListener('click', async () => {
+    try {
+      const r = await api('POST', '/api/students/delete', { ids });
+      state.selected.clear();
+      closeModal();
+      await loadData();
+      toast(`Удалено: ${r.deleted}`, true);
+    } catch (e) { p.querySelector('#del-error').textContent = e.message; }
+  });
+}
+
+function plural(n, one, few, many) {
+  const a = n % 10, b = n % 100;
+  return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
 }
 
 function initials(s) {
@@ -801,6 +857,21 @@ function bind() {
     Object.assign(f, { q: '', inst: '', grp: '', stage: '', sex: '', badge: '' });
     fillFilterOptions(); saveFilters(); render();
   });
+
+  $('#grid').addEventListener('change', (e) => {
+    const box = e.target.closest('.sel-box');
+    if (!box) return;
+    if (box.id === 'sel-head') {
+      for (const st of filtered()) { if (box.checked) state.selected.add(st.id); else state.selected.delete(st.id); }
+    } else {
+      const id = Number(box.dataset.sel);
+      if (box.checked) state.selected.add(id); else state.selected.delete(id);
+    }
+    render();
+  });
+  $('#sel-all').addEventListener('click', () => { for (const st of filtered()) state.selected.add(st.id); render(); });
+  $('#sel-none').addEventListener('click', () => { state.selected.clear(); render(); });
+  $('#sel-delete').addEventListener('click', deleteSelected);
 
   $('#grid').addEventListener('click', (e) => {
     const open = e.target.closest('[data-open]');
