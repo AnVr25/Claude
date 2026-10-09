@@ -985,6 +985,125 @@ def main() -> int:
             wic_km.close()
         conn_ip.close(); ip_srv.close()
 
+        # 2.8: лимит мест, диапазоны номеров, эстафета, выдача номеров, страница события, копия, серия
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Осенний забег 2026", "date": "2026-11-01",
+                         "kind": "stadium", "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+        e8 = json.loads(txt)["id"]
+        code, txt = http("POST", f"/api/events/{e8}", json.dumps({
+            "reg_open": True, "pub_site": True, "reg_rules": "Юноши;М;2008;2012\nДевушки;Ж;2008;2012",
+            "reg_distances": "5 км | лимит 2 | номера с 1\n10 км | 3 | 500\n4×100 м | эстафета 4 | лимит 1",
+            "cover": "https://example.ru/cover.jpg", "program": "18:30 | Выдача номеров\n19:00 Старт 5 км",
+            "contacts": "Секретарь: +7 924 111-22-33\nfla65@mail.ru", "series": "Кубок проверки"}).encode(), J)
+        s8 = json.loads(txt)["reg_path"].rsplit("/", 1)[-1]
+        code, txt, _ = pub("GET", f"/r/{s8}/info")
+        i8 = json.loads(txt)
+        di = {d["name"]: d for d in i8["dist_info"]}
+        check("2.8: дистанции с лимитом, диапазоном и эстафетой",
+              i8["distances"] == ["5 км", "10 км"] and di["5 км"]["left"] == 2 and di["10 км"]["limit"] == 3
+              and di["4×100 м"]["legs"] == 4, txt[:400])
+        c8 = i8["card"]
+        check("2.8: страница события — обложка, программа, контакты, серия, места",
+              c8["cover"] == "https://example.ru/cover.jpg" and c8["program"][0] == {"time": "18:30", "title": "Выдача номеров"}
+              and c8["program"][1]["time"] == "19:00" and c8["contacts"][0]["href"] == "tel:+79241112233"
+              and c8["contacts"][1]["href"] == "mailto:fla65@mail.ru" and c8["series"]["name"] == "Кубок проверки"
+              and {p["distance"]: p["left"] for p in c8["places"]} == {"5 км": 2, "10 км": 3, "4×100 м": 1}, str(c8)[:500])
+
+        def reg8(last, bd, dist, sex="М"):
+            c, t, _ = pub("POST", f"/r/{s8}", json.dumps({"last_name": last, "first_name": "Тест", "birth_date": bd, "sex": sex,
+                          "team": "СШОР", "consent": True, "representative": "Родитель", "distances": [dist]}).encode())
+            return c, json.loads(t)
+        r1, r2 = reg8("Первый", "2010-01-01", "5 км"), reg8("Второй", "2010-02-02", "5 км")
+        r3 = reg8("Третий", "2010-03-03", "5 км")
+        check("2.8: лимит мест — третья заявка на 5 км отклонена",
+              r1[0] == 201 and r2[0] == 201 and r3[0] == 400 and "мест больше нет" in r3[1]["fields"]["distances"], str(r3))
+        code, txt, _ = pub("GET", f"/r/{s8}/info")
+        check("2.8: «осталось мест» обновилось", {d["name"]: d["left"] for d in json.loads(txt)["dist_info"]}["5 км"] == 0, txt[:300])
+        r4 = reg8("Длинный", "2009-04-04", "10 км")
+        r5 = reg8("Эстафетный", "2009-05-05", "4×100 м")
+        check("2.8: эстафету нельзя заявить как личную дистанцию",
+              r4[0] == 201 and r5[0] == 400 and "эстафета" in r5[1]["fields"]["distances"], str(r5))
+        legs = [{"last_name": f"Бегун{c}", "first_name": "Этап", "birth_date": f"2010-0{i + 1}-10", "sex": "М"}
+                for i, c in enumerate("АБВГ")]
+        relay = {"distance": "4×100 м", "team": "СШОР", "relay": "СШОР-1", "coach": "Тренеров", "contact": "+79240000000",
+                 "consent": True, "members": legs}
+        c, t, _ = pub("POST", f"/r/{s8}/relay", json.dumps({**relay, "members": legs[:3]}).encode())
+        check("2.8: эстафета без участника на 4-м этапе — ошибка этапа", c == 400 and "4" in json.loads(t).get("members", {}), t[:300])
+        c, t, _ = pub("POST", f"/r/{s8}/relay", json.dumps(relay).encode())
+        check("2.8: заявка эстафеты принята", c == 201 and json.loads(t)["relay"] == "СШОР-1" and len(json.loads(t)["ids"]) == 4, t[:300])
+        c, t, _ = pub("POST", f"/r/{s8}/relay", json.dumps({**relay, "relay": "СШОР-2", "members": [
+            {**m, "last_name": m["last_name"] + "ов"} for m in legs]}).encode())
+        check("2.8: лимит эстафеты — вторая команда не влезла", c == 409, t[:200])
+        http("POST", f"/api/events/{e8}/regs", json.dumps({"approve_all": True}).encode(), J)
+        code, txt = http("POST", f"/api/events/{e8}/heats", json.dumps({"lanes": 8}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e8}/startlist")
+        ents = [e for h in json.loads(txt)["heats"] for e in h["entries"]]
+        bibs = {e["name"]: e["bib"] for e in ents}
+        rel = [e for e in ents if e["name"] == "СШОР-1"]
+        check("2.8: номера по диапазонам дистанций, эстафета — одна запись с составом",
+              bibs.get("Первый Тест") == "1" and bibs.get("Второй Тест") == "2" and bibs.get("Длинный Тест") == "500"
+              and rel and rel[0]["bib"] == "501" and rel[0]["members"].startswith("1. БегунА Этап (2010)") and len(ents) == 4,
+              str(bibs) + str(rel)[:200])
+        _, txt = http("GET", f"/api/events/{e8}/regs")
+        check("2.8: у всех участников эстафеты номер команды",
+              sorted(r["entry_bib"] for r in json.loads(txt)["regs"] if r.get("relay")) == ["501"] * 4, txt[:200])
+        code, txt = http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "500"}).encode(), J)
+        pk = json.loads(txt)
+        check("2.8: выдача номера отмечена", code == 200 and pk["picked"] == 1 and pk["total"] == 4 and pk["picked_at"], txt)
+        http("POST", f"/api/events/{e8}/heats", json.dumps({"lanes": 8}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e8}/pickup")
+        pv = json.loads(txt)
+        check("2.8: отметка «выдан» сохраняется при пересборке забегов",
+              pv["picked"] == 1 and next(r for r in pv["rows"] if r["bib"] == "500")["picked_at"], txt[:300])
+        code, txt = http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "777"}).encode(), J)
+        check("2.8: выдача: нет такого номера", code == 404, txt)
+        http("POST", f"/api/events/{e8}", json.dumps({"pub_start": True}).encode(), J)
+        code, txt, _ = pub("GET", f"/r/{s8}/startlist.json")
+        check("2.8: в публичном стартовом протоколе нет отметок выдачи, состав эстафеты есть",
+              code == 200 and "picked_at" not in txt and "БегунА" in txt, txt[:200])
+        http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "500", "undo": True}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e8}/pickup")
+        check("2.8: выдача отменена", json.loads(txt)["picked"] == 0, txt[:200])
+        code, txt = http("POST", f"/api/events/{e8}/copy", b"{}", J)
+        cp = json.loads(txt)
+        _, txt = http("GET", f"/api/events/{cp['id']}/regs")
+        check("2.8: копия на следующий год — настройки есть, участников и заявок нет",
+              code == 201 and cp["name"] == "Осенний забег 2027" and cp["date"] == "2027-11-01" and not cp["reg_open"]
+              and not cp["pub_site"] and cp["reg_distances"].startswith("5 км | лимит 2") and cp["program"]
+              and cp["series"] == "Кубок проверки" and cp["entries_count"] == 0 and not json.loads(txt)["regs"]
+              and cp["kind"] == "stadium", str(cp)[:400])
+        # серия: два этапа с результатами — сумма очков
+        stage_ids = []
+        for n, (res_a, res_b) in enumerate((("12.0", "12.5"), ("13.1", "12.9")), 1):
+            code, txt = http("POST", "/api/events", json.dumps({"name": f"Этап {n}", "date": f"2026-0{n}-10", "kind": "stadium",
+                             "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+            sid = json.loads(txt)["id"]
+            stage_ids.append(sid)
+            http("POST", f"/api/events/{sid}", json.dumps({"series": "Кубок проверки", "pub_results": True}).encode(), J)
+            http("POST", f"/api/events/{sid}/entries", json.dumps({"text": "Номер;ФИО;Год;Команда;Категория;Дистанция\n"
+                 "1;Альфа Аня;2010;СШОР;Девушки;100 м\n2;Бета Вера;2010;Холмск;Девушки;100 м"}).encode(), J)
+            http("POST", f"/api/events/{sid}/results", json.dumps({"rows": [{"bib": "1", "result": res_a},
+                 {"bib": "2", "result": res_b}]}).encode(), J)
+        code, txt, _ = pub("GET", "/r/api/series?name=" + urllib.parse.quote("кубок проверки"))
+        sr = json.loads(txt)
+        g = next((x for x in sr.get("groups", []) if x["group"] == "Девушки"), {"rows": []})
+        tot = {r["name"]: (r["total"], r["place"], r["starts"]) for r in g["rows"]}
+        check("2.8: зачёт серии — сумма очков за этапы и места",
+              code == 200 and tot.get("Альфа Аня") == (37, 1, 2) and tot.get("Бета Вера") == (37, 1, 2)
+              and len(sr["stages"]) == 4, str(tot) + txt[:200])
+        code, txt, _ = pub("GET", "/r/series?name=x")
+        code2, txt2, _ = pub("GET", "/r/api/series")
+        check("2.8: страница серии и список серий",
+              code == 200 and "Зачёт серии" in txt and any(x["name"] == "Кубок проверки" for x in json.loads(txt2)["series"]), txt2[:200])
+        # календарь: перенесённый старт обновляет прежнюю запись
+        code, txt = http("POST", "/api/events", json.dumps({"name": "«Ночной забег»", "date": "2026-10-16"}).encode(), J)
+        en = json.loads(txt)["id"]
+        code, txt = http("POST", "/api/calendar", json.dumps({"import": True, "year": 2026}).encode(), J)
+        _, txt2 = http("GET", f"/api/events/{en}")
+        n8 = json.loads(txt2)
+        check("2.8: календарь — «Ночной забег» перенесён на 23 октября, проводит ЦСП",
+              json.loads(txt).get("updated") == 1 and n8["date"] == "2026-10-23" and n8["name"] == "«Ночной забег К-70»"
+              and n8["ours"] is False and "myrace.info/events/2124" in (n8["links"] or ""), txt + str(n8)[:300])
+
         wic.close()
         # 10. второй Wiclax подключается и получает новые отметки
         wic2 = WiclaxSim(p_wic)

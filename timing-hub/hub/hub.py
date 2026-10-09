@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.7"
+VERSION = "2.8"
 log = logging.getLogger("timing-hub")
 
 
@@ -695,7 +695,8 @@ class Store:
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
                     "reg_info", "reg_consent",
                     "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
-                    "live_url", "photo_url", "links", "pub_start", "pub_results", "team_best")
+                    "live_url", "photo_url", "links", "pub_start", "pub_results", "team_best",
+                    "cover", "program", "contacts", "series")
     KINDS = ("mass", "stadium")
     TIMINGS = ("chips", "judge", "manual", "lynx")
     LEVELS = ("russia", "dfo", "interregion", "region", "mass")
@@ -721,6 +722,9 @@ class Store:
         add("entries", (("points", "REAL"),))
         add("events", (("team_best", "INTEGER"),))
         add("users", (("note", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1")))
+        # 2.8: обложка, программа, контакты, серия; выдача номеров; эстафеты
+        add("events", (("cover", "TEXT"), ("program", "TEXT"), ("contacts", "TEXT"), ("series", "TEXT")))
+        add("entries", (("picked_at", "TEXT"), ("members", "TEXT")))
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
         self.con.executescript(
@@ -853,6 +857,7 @@ class Store:
                 ip TEXT
             );
             """)
+        add("registrations", (("relay", "TEXT"), ("leg", "INTEGER")))
 
     # ---- пользователи и сессии (вход через браузер)
     def users(self) -> list:
@@ -1019,6 +1024,13 @@ class Store:
                         v = max(1, min(int(v), 20)) if v not in (None, "", 0, "0") else None
                     except (TypeError, ValueError):
                         v = None
+                if k == "cover" and v is not None:
+                    v = str(v).strip()
+                    v = v if re.fullmatch(r"file:\d{1,9}", v) or re.fullmatch(r"https?://[^\s<>\"']{3,490}", v) else None
+                if k in ("program", "contacts") and v is not None:
+                    v = str(v).strip()[:2000] or None
+                if k == "series" and v is not None:
+                    v = re.sub(r"\s+", " ", str(v)).strip()[:80] or None
                 if k in ("reg_distances", "reg_rules", "reg_info", "reg_consent", "reg_deadline") and v is not None:
                     v = str(v)[:4000] or None
                 sets.append(f"{k} = ?")
@@ -1040,15 +1052,21 @@ class Store:
 
     # участники: номер, чип, забег, ФИО, год, команда, категория
     def set_entries(self, eid: int, rows: list) -> None:
+        # отметка «номер выдан» и состав эстафеты сохраняются по номеру, если в новых строках их нет
+        keep = {b: (p, m) for b, p, m in self.con.execute(
+            "SELECT bib, picked_at, members FROM entries WHERE event_id = ?", (eid,))}
         self.con.execute("BEGIN")
         try:
             self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
             self.con.executemany(
                 "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex, result, status, points) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
                   r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
-                  r.get("result"), r.get("status"), r.get("points"))
+                  r.get("result"), r.get("status"), r.get("points"),
+                  r["picked_at"] if "picked_at" in r else keep.get(r["bib"], (None, None))[0],
+                  r["members"] if "members" in r else keep.get(r["bib"], (None, None))[1])
                  for r in rows])
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
                 self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
@@ -1064,14 +1082,18 @@ class Store:
 
     def entries_rows(self, eid: int) -> list:
         return self._rows(self.con.execute(
-            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points"
-            " FROM entries"
+            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
+            " picked_at, members FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
 
     def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str]) -> int:
         cur = self.con.execute("UPDATE entries SET result = ?, status = ? WHERE event_id = ? AND bib = ?",
                                (result or None, status or None, eid, bib))
         return cur.rowcount
+
+    def set_picked(self, eid: int, bib: str, ts: Optional[str]) -> int:
+        return self.con.execute("UPDATE entries SET picked_at = ? WHERE event_id = ? AND bib = ?",
+                                (ts, eid, bib)).rowcount
 
     def set_file_public(self, fid: int, public: bool) -> None:
         self.con.execute("UPDATE files SET public = ? WHERE id = ?", (1 if public else 0, fid))
@@ -1091,16 +1113,17 @@ class Store:
     def add_entry(self, eid: int, r: dict) -> None:
         self.con.execute(
             "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-            " reg_id, sex) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " reg_id, sex, members) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
-             r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex")))
+             r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
+             r.get("members")))
 
     def delete_entry(self, eid: int, bib: str) -> None:
         self.con.execute("DELETE FROM entries WHERE event_id = ? AND bib = ?", (eid, bib))
 
     # заявки с публичной формы
     REG_FIELDS = ("last_name", "first_name", "middle_name", "birth_date", "sex", "team", "coach", "distance",
-                  "best", "best_sec", "category", "representative", "contact", "status", "note", "bib")
+                  "best", "best_sec", "category", "representative", "contact", "status", "note", "bib", "relay", "leg")
 
     def add_registration(self, eid: int, d: dict) -> int:
         cols = [k for k in self.REG_FIELDS if k in d] + ["consent_at", "consent_hash", "created_at", "event_id"]
@@ -1734,7 +1757,7 @@ class Hub:
         import secrets
         while True:
             slug = secrets.token_urlsafe(6).replace("-", "x").replace("_", "z")
-            if slug.lower() not in ("assets", "api") and not self.store.event_by_slug(slug):
+            if slug.lower() not in ("assets", "api", "series") and not self.store.event_by_slug(slug):
                 break
         self.store.set_event_field(eid, reg_slug=slug)
         return slug
@@ -1776,6 +1799,7 @@ class Hub:
 
     def event_card(self, ev: dict) -> dict:
         """Элемент календаря для сайта (см. docs/public-api.md)."""
+        from urllib.parse import quote
         v = self._event_view(ev)
         base, slug = self.public_base(), ev.get("reg_slug")
         page = f"{base}/r/{slug}" if slug and v["ours"] else None
@@ -1798,7 +1822,152 @@ class Hub:
                 "teams": f"{page}/protocol?kind=teams" if page and v["pub_results"] and ev.get("team_best") else None,
                 "results_live": bool(page and v["pub_results"] and status == "running"),
                 "live": self.clean_url(ev.get("live_url")), "photo": self.clean_url(ev.get("photo_url")),
-                "links": self.parse_links(ev.get("links")), "files": files}
+                "links": self.parse_links(ev.get("links")), "files": files,
+                "cover": self.cover_url(ev, page), "program": self.parse_program(ev.get("program")),
+                "contacts": self.parse_contacts(ev.get("contacts")),
+                "series": {"name": ev["series"], "url": f"{base}/r/series?name={quote(ev['series'])}"}
+                if ev.get("series") and base else None,
+                "places": [{"distance": d["name"], "limit": d["limit"], "left": d["left"]}
+                           for d in self.dist_info(ev) if d["limit"]] if page and open_ else []}
+
+    def cover_url(self, ev: dict, page: Optional[str]) -> Optional[str]:
+        """Обложка страницы события: ссылка на картинку или фото из «Документов» с галочкой «на сайте»."""
+        c = (ev.get("cover") or "").strip()
+        m = re.fullmatch(r"file:(\d+)", c)
+        if m:
+            f = self.store.get_file(int(m.group(1)))
+            ok = f and f["event_id"] == ev["id"] and f.get("public") and page
+            return f"{page}/files/{f['id']}" if ok else None
+        return self.clean_url(c)
+
+    @staticmethod
+    def parse_program(text) -> list:
+        """Программа дня: строки «18:30 | Выдача номеров» или «18:30 Выдача номеров» → [{time, title}]."""
+        out = []
+        for ln in str(text or "").splitlines():
+            ln = ln.strip()
+            if not ln:
+                continue
+            t, sep, title = ln.partition("|")
+            if not sep:
+                m = re.match(r"(\d{1,2}[:.]\d{2}(?:\s*[–—-]\s*\d{1,2}[:.]\d{2})?)\s+(.+)", ln)
+                t, title = (m.group(1), m.group(2)) if m else ("", ln)
+            out.append({"time": t.strip()[:20], "title": title.strip()[:200]})
+        return out[:30]
+
+    @staticmethod
+    def parse_contacts(text) -> list:
+        """Контакты организатора: телефон → tel:, почта → mailto:, ссылка → как есть. → [{text, href}]"""
+        out = []
+        for ln in str(text or "").splitlines():
+            ln = ln.strip()[:200]
+            if not ln:
+                continue
+            href = None
+            mail = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", ln)
+            url = re.search(r"https?://[^\s<>\"']{3,300}", ln)
+            phone = re.search(r"(?:\+7|8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}", ln)
+            if url:
+                href = url.group()
+            elif mail:
+                href = "mailto:" + mail.group()
+            elif phone:
+                href = "tel:+7" + re.sub(r"\D", "", phone.group())[1:]
+            out.append({"text": ln, "href": href})
+        return out[:8]
+
+    def copy_event(self, ev: dict, who: str) -> int:
+        """Копия события на следующий год: настройки, дистанции, правила, забеги — без участников и заявок."""
+        def next_year(v):
+            v = str(v or "")
+            if not re.match(r"\d{4}-\d\d-\d\d", v):
+                return v or None
+            y, rest = int(v[:4]) + 1, v[4:]
+            return f"{y}{'-02-28' + rest[6:] if rest.startswith('-02-29') else rest}"
+        view = self._event_view(ev)
+        data = {k: ev.get(k) for k in self.store.EVENT_FIELDS}
+        data.update(name=re.sub(r"\b(20\d\d)\b", lambda m: str(int(m.group(1)) + 1), ev["name"]),
+                    date=next_year(ev.get("date")), date_end=next_year(ev.get("date_end")),
+                    reg_deadline=next_year(ev.get("reg_deadline")), reg_open=0, pub_site=0, pub_start=0,
+                    pub_results=0, live_url=None, photo_url=None, kind=view["kind"], timing=view["timing"],
+                    cover=None if str(ev.get("cover") or "").startswith("file:") else ev.get("cover"))
+        eid = self.store.add_event(data)
+        self.store.update_event(eid, data)
+        for w in self.store.waves(ev["id"]):
+            self.store.add_wave(eid, w["name"], w.get("category"), w.get("distance"))
+        self.store.audit(who, eid, "Скопировано соревнование", f"из «{ev['name']}» ({ev.get('date') or 'без даты'})")
+        return eid
+
+    # ---- серии и кубки: сумма очков за этапы
+    def series_names(self) -> list:
+        seen: dict = {}
+        for e in self.store.list_events():
+            n = (e.get("series") or "").strip()
+            if n and (e.get("pub_site") or e.get("reg_slug")):
+                seen.setdefault(n.lower(), {"name": n, "events": 0})["events"] += 1
+        return sorted(seen.values(), key=lambda x: x["name"])
+
+    def series_standings(self, name: str) -> dict:
+        """Зачёт серии: очки участника за каждый этап (из протокола или по месту в категории: 20, 17, 15 … 1),
+        сумма — по всем этапам. Участник — фамилия и имя + год рождения."""
+        key = re.sub(r"\s+", " ", name or "").strip().lower()
+        evs = sorted([e for e in self.store.list_events() if (e.get("series") or "").strip().lower() == key],
+                     key=lambda e: (e.get("date") or "9999", e["id"]))
+        base = self.public_base()
+        stages, people = [], {}
+        for e in evs:
+            v = self._event_view(e)
+            page = f"{base}/r/{e['reg_slug']}" if e.get("reg_slug") and v["ours"] else None
+            st = {"id": e["id"], "name": e["name"], "date": e.get("date"), "page": page,
+                  "results": f"{page}/protocol" if page and v["pub_results"] else None, "done": False}
+            stages.append(st)
+            if not (v["ours"] and v["pub_results"]):
+                continue
+            fin = self.compute(e)["finished"]
+            st["done"] = bool(fin) and e.get("status") == "finished"
+            grp: dict = {}
+            for x in fin:
+                grp.setdefault((x["category"], x["distance"]), []).append(x)
+            for (cat, dist), lst in grp.items():
+                imported = any(x.get("points") is not None for x in lst) and not e.get("team_best")
+                for x in lst:
+                    po = x.get("place_overall") or x.get("place") or 99
+                    pts = float(x["points"]) if imported and x.get("points") is not None else \
+                        (self.TEAM_POINTS[po - 1] if po <= len(self.TEAM_POINTS) else 1)
+                    who = re.sub(r"\s+", " ", x["name"] or "").strip()
+                    if not who:
+                        continue
+                    group = cat or dist or "Общий зачёт"
+                    p = people.setdefault((group, who.lower(), x.get("birth_year") or ""), {
+                        "group": group, "name": who, "birth_year": x.get("birth_year") or "", "team": "", "by": {}})
+                    p["team"] = x.get("team") or p["team"]
+                    p["by"][str(e["id"])] = max(p["by"].get(str(e["id"]), 0), pts)
+        groups: dict = {}
+        for p in people.values():
+            tot = sum(p["by"].values())
+            p["total"] = int(tot) if float(tot).is_integer() else round(tot, 1)
+            p["starts"] = len(p["by"])
+            p["by"] = {k: int(v) if float(v).is_integer() else v for k, v in p["by"].items()}
+            groups.setdefault(p["group"], []).append(p)
+        out = []
+        for g in sorted(groups):
+            rows = sorted(groups[g], key=lambda p: (-p["total"], p["name"]))
+            for i, p in enumerate(rows):
+                p["place"] = rows[i - 1]["place"] if i and rows[i - 1]["total"] == p["total"] else i + 1
+                p.pop("group")
+            out.append({"group": g, "rows": rows})
+        return {"name": evs[0]["series"].strip() if evs else name, "stages": stages, "groups": out,
+                "updated": fmt_db(now_local())[:19].replace(" ", "T")}
+
+    def pickup_view(self, ev: dict) -> dict:
+        """Выдача стартовых пакетов: кто получил номер, кто ещё не пришёл."""
+        dist = {w["name"]: w.get("distance") or "" for w in self.store.waves(ev["id"])}
+        rows = [{"bib": r["bib"], "name": r["name"] or "", "team": r["team"] or "", "category": r["category"] or "",
+                 "birth_year": r["birth_year"] or "", "wave": r["wave"] or "", "distance": dist.get(r["wave"] or "", ""),
+                 "members": r.get("members") or "", "picked_at": r.get("picked_at")}
+                for r in self.store.entries_rows(ev["id"])]
+        picked = sum(1 for r in rows if r["picked_at"])
+        return {"rows": rows, "total": len(rows), "picked": picked, "left": len(rows) - picked}
 
     def calendar(self, year: Optional[int]) -> dict:
         evs = [e for e in self.store.list_events() if e.get("pub_site")]
@@ -1819,7 +1988,7 @@ class Hub:
 
     @staticmethod
     def _no_chips(rows: list) -> list:
-        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id")} for r in rows]
+        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "picked_at")} for r in rows]
 
     def public_results(self, ev: dict) -> dict:
         r = self.compute(ev)
@@ -1841,23 +2010,33 @@ class Hub:
                 items = json.load(f)["events"]
         except (OSError, ValueError, KeyError):
             return {"error": f"нет календаря на {year} год"}
-        have = {(e["name"].strip().lower(), e.get("date")) for e in self.store.list_events()}
-        added = 0
+        evs = self.store.list_events()
+        have = {(e["name"].strip().lower(), e.get("date")) for e in evs}
+        added = updated = 0
         for it in items:
             if (it["name"].strip().lower(), it.get("date")) in have:
                 continue
-            eid = self.store.add_event({"name": it["name"], "date": it.get("date"), "place": it.get("place") or None})
+            # старт перенесли или уточнили (название, дата, место) — обновляем прежнюю запись, а не плодим вторую
+            rp = it.get("replaces") or {}
+            old = next((e for e in evs if rp and e["name"].strip().lower() == str(rp.get("name", "")).strip().lower()
+                        and e.get("date") == rp.get("date")), None)
+            if old:
+                eid = old["id"]
+                self.store.update_event(eid, {"name": it["name"], "date": it.get("date"), "place": it.get("place") or None})
+                updated += 1
+            else:
+                eid = self.store.add_event({"name": it["name"], "date": it.get("date"), "place": it.get("place") or None})
             self.store.update_event(eid, {"kind": it.get("kind") or "stadium", "pub_site": True,
-                                          "ours": it.get("level") in ("region", "mass"), "level": it.get("level"),
+                                          "ours": it.get("ours", it.get("level") in ("region", "mass")), "level": it.get("level"),
                                           "adaptive": bool(it.get("adaptive")), "date_end": it.get("date_end"),
                                           "city": it.get("city"), "note": it.get("note"),
                                           "links": "\n".join(f"{l['title']} | {l['url']}" for l in it.get("links") or [])})
             if (it.get("date_end") or it.get("date") or "9999") < now_local().strftime("%Y-%m-%d"):
                 self.store.set_event_field(eid, status="finished", archived=1)   # прошедшие — сразу в архив
             self.ensure_slug(eid)
-            added += 1
-        self.store.audit(who, None, "Импорт календаря", f"{year}: добавлено {added}")
-        return {"added": added, "total": len(items)}
+            added += 0 if old else 1
+        self.store.audit(who, None, "Импорт календаря", f"{year}: добавлено {added}" + (f", обновлено {updated}" if updated else ""))
+        return {"added": added, "updated": updated, "total": len(items)}
 
     def known_devices(self) -> list:
         devs = {str(s.cfg["device"]) for s in self.sources.values()}
@@ -2068,7 +2247,7 @@ class Hub:
                     "distance": meta.get("distance") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
-                    "points": inf.get("points"),
+                    "points": inf.get("points"), "members": inf.get("members") or "",
                     "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
                     "manual": sorted(d for d in per if (chip, d) in manual_set)}
 
@@ -2126,7 +2305,8 @@ class Hub:
         res["on_course"].sort(key=lambda r: r["last_time"], reverse=True)
         res["not_seen"] = [{"bib": r["bib"], "chip": "" if r["chip"].startswith("#") else r["chip"],
                             "wave": r["wave"] or "", "name": r["name"] or "", "birth_year": r["birth_year"] or "",
-                            "team": r["team"] or "", "coach": r.get("coach") or "", "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
+                            "team": r["team"] or "", "coach": r.get("coach") or "", "members": r.get("members") or "",
+                            "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
                             "distance": wmeta.get(r["wave"] or "", {}).get("distance") or "",
                             **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
                            for r in erows if (r["chip"] not in first or r["chip"] in status_of) and r["chip"] not in entered]
@@ -2382,6 +2562,7 @@ class Hub:
             rows, e = self.parse_team_file(ev, body)
             if e:
                 return err(e)
+            ev = {**ev, "_no_limit": True}          # секретарь может внести сверх лимита мест
             info = {"team": qs.get("team", ""), "coach": qs.get("coach", "")}
             if qs.get("check"):
                 out = self._strip_check(self.check_team(ev, info, rows))
@@ -2530,11 +2711,14 @@ class Hub:
                 out = self.regs_view(ev)
                 out["consent"] = self.consent_text(ev)
                 out["default_rules"] = self.default_rules(ev)
+                out["dist_info"] = self.dist_info(ev)
                 return ok(out)
             if action == "regs.csv":
                 return self._regs_csv(ev)
             if action == "startlist":
                 return ok(self.startlist(ev))
+            if action == "pickup":
+                return ok(self.pickup_view(ev))
             if action == "template.xlsx":
                 return self._template_response(ev)
             if action == "wiclax.csv":
@@ -2567,6 +2751,23 @@ class Hub:
                 self.ensure_slug(eid)
             self.store.audit(who, eid, "Изменены настройки", ", ".join(k for k in data if k != "judge"))
             return ok(self._event_view(self.store.get_event(eid)))
+        if action == "copy":
+            new = self.copy_event(ev, who)
+            return ok(self._event_view(self.store.get_event(new)), 201)
+        if action == "pickup":
+            # выдача стартового пакета: по номеру; undo — отменить отметку
+            bib = str(data.get("bib") or "").strip()
+            ts = None if data.get("undo") else fmt_db(now_local())[:19]
+            if not self.store.set_picked(eid, bib, ts):
+                return err("нет участника с таким номером", 404)
+            if data.get("undo"):
+                self.store.audit(who, eid, "Выдача номера отменена", f"№{bib}")
+            v = self.pickup_view(ev)
+            return ok({"bib": bib, "picked_at": ts, "picked": v["picked"], "total": v["total"]})
+        if action == "relay":
+            # эстафета вручную (секретарь): сразу подтверждена, сверх лимита можно
+            code, out = self.submit_relay({**ev, "_no_limit": True}, data, status="approved", actor=who)
+            return code, J, json.dumps(out, ensure_ascii=False), None
         if action == "delete":
             self.store.delete_event(eid)
             self.store.audit(who, None, "Удалено соревнование", ev["name"])
@@ -2756,7 +2957,7 @@ class Hub:
                     return ok(self.regs_view(self.store.get_event(eid)))
                 # заявка вручную (секретарь), без публичной формы
                 code, out = self.submit_registration({**ev, "reg_open": 1, "reg_deadline": None, "status": "planned",
-                                                      "archived": 0}, {**data, "consent": True})
+                                                      "archived": 0, "_no_limit": True}, {**data, "consent": True})
                 if code == 201:
                     for rid in out["ids"]:
                         self.store.update_registration(rid, status="approved", note="внесена секретарём")
@@ -2792,8 +2993,8 @@ class Hub:
             if upd.get("last_name") is None and "last_name" in upd or upd.get("first_name") is None and "first_name" in upd:
                 return err("фамилия и имя обязательны")
             self.store.update_registration(sub_id, **upd)
-            # участник уже в забеге — обновляем и стартовый список
-            if r.get("bib"):
+            # участник уже в забеге — обновляем и стартовый список (эстафета — запись команды, её не трогаем)
+            if r.get("bib") and not r.get("relay"):
                 e = {"name": " ".join(x for x in (upd.get("last_name", r["last_name"]), upd.get("first_name", r["first_name"])) if x),
                      "team": upd.get("team", r["team"]), "coach": upd.get("coach", r["coach"]),
                      "category": upd.get("category", r["category"]), "seed": upd.get("best", r["best"]),
@@ -2834,18 +3035,26 @@ class Hub:
                 r = self.store.get_registration(int(data["reg_id"]))
                 if not r or r["event_id"] != eid or r["status"] != "approved":
                     return err("заявка не найдена или не подтверждена")
-                if r.get("bib") and any(e["bib"] == r["bib"] for e in self.store.entries_rows(eid)):
-                    return err("участник уже в стартовом списке")
+                if r.get("relay"):                       # эстафета — в забег всей командой
+                    team = [x for x in self.store.registrations(eid) if x["status"] == "approved"
+                            and x["distance"] == r["distance"] and (x.get("relay") or "").lower() == r["relay"].lower()]
+                    r = self.relay_entry(team)
                 rows = self.store.entries_rows(eid)
-                bib = str(max([int(e["bib"]) for e in rows if e["bib"].isdigit()] + [0]) + 1)
+                ids = r.get("_ids") or [r["id"]]
+                if any(x.get("reg_id") in ids for x in rows) or (r.get("bib") and any(e["bib"] == r["bib"] for e in rows)):
+                    return err("участник уже в стартовом списке")
+                bib = self.next_bib(ev, {e["bib"] for e in rows}, r["distance"])
                 if lane is None and wave:
                     taken = {e["lane"] for e in rows if e["wave"] == wave}
                     lane = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
                 self.store.add_entry(eid, {"bib": bib, "chip": "#" + bib, "wave": wave,
-                                           "name": f"{r['last_name']} {r['first_name']}", "birth_year": r["birth_date"][:4],
+                                           "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
+                                           "birth_year": r["birth_date"][:4].strip(),
                                            "team": r["team"], "category": r["category"], "lane": lane,
-                                           "coach": r["coach"], "seed": r["best"], "reg_id": r["id"], "sex": r["sex"]})
-                self.store.update_registration(r["id"], bib=bib)
+                                           "coach": r["coach"], "seed": r["best"], "reg_id": r["id"], "sex": r["sex"],
+                                           "members": r.get("members")})
+                for rid in ids:
+                    self.store.update_registration(rid, bib=bib)
                 self.store.audit(who, eid, "Участник добавлен в забег", f"№{bib} {r['last_name']} → {wave or 'без забега'}")
                 return ok({"bib": bib})
             bib = str(data.get("bib") or "").strip()
@@ -2987,8 +3196,69 @@ class Hub:
         return float(c)
 
     @staticmethod
-    def reg_distances(ev: dict) -> list:
-        return [d.strip()[:20] for d in (ev.get("reg_distances") or "").splitlines() if d.strip()]
+    def dist_specs(ev: dict) -> list:
+        """Строки дистанций «5 км | лимит 300 | номера с 1», «4×100 м | эстафета 4 | лимит 12».
+        Числа без слов — по порядку: лимит, первый номер. → [{name, limit, bib_from, legs}]"""
+        out = []
+        for ln in (ev.get("reg_distances") or "").splitlines():
+            parts = [p.strip() for p in ln.split("|")]
+            name = parts[0][:20].strip()
+            if not name or name in [x["name"] for x in out]:
+                continue
+            sp = {"name": name, "limit": None, "bib_from": None, "legs": None}
+            loose = []
+            for part in parts[1:]:
+                low = part.lower()
+                m = re.search(r"\d+", low)
+                if not m:
+                    continue
+                n = int(m.group())
+                if low.startswith(("эстаф", "relay")):
+                    sp["legs"] = max(2, min(n, 10))
+                elif low.startswith(("лимит", "мест", "limit", "до ")):
+                    sp["limit"] = n or None
+                elif low.startswith(("номер", "bib", "с ", "№")):
+                    sp["bib_from"] = n or None
+                else:
+                    loose.append(n)
+            for key in [k for k in ("limit", "bib_from") if sp[k] is None]:
+                if loose:
+                    sp[key] = loose.pop(0) or None
+            out.append(sp)
+        return out
+
+    @classmethod
+    def reg_distances(cls, ev: dict) -> list:
+        return [d["name"] for d in cls.dist_specs(ev)]
+
+    @classmethod
+    def solo_distances(cls, ev: dict) -> list:
+        """Дистанции для личной заявки и шаблона Excel — без эстафет."""
+        return [d["name"] for d in cls.dist_specs(ev) if not d["legs"]]
+
+    def dist_info(self, ev: dict) -> list:
+        """Сколько заявлено и сколько мест осталось на каждой дистанции (эстафета — по командам)."""
+        taken: dict = {}
+        for r in self.store.registrations(ev["id"]):
+            if r["status"] != "rejected":
+                taken.setdefault(r["distance"], set()).add(
+                    ("relay", (r.get("relay") or "").lower()) if r.get("relay") else r["id"])
+        out = []
+        for d in self.dist_specs(ev):
+            n = len(taken.get(d["name"], ()))
+            out.append({**d, "taken": n, "left": max(0, d["limit"] - n) if d["limit"] else None})
+        return out
+
+    def next_bib(self, ev: dict, used, distance: str) -> str:
+        """Следующий свободный номер: в диапазоне дистанции («номера с 500») или после самого большого."""
+        specs = self.dist_specs(ev)
+        nums = {int(b) for b in used if str(b).isdigit()}
+        lo = next((d["bib_from"] for d in specs if d["name"] == distance and d["bib_from"]), None)
+        if lo is None:
+            return str(max(nums | {0}) + 1)
+        hi = min([d["bib_from"] for d in specs if d["bib_from"] and d["bib_from"] > lo] or [10 ** 9])
+        inside = [n for n in nums if lo <= n < hi]
+        return str(max(inside) + 1 if inside else lo)
 
     def consent_text(self, ev: dict) -> str:
         if ev.get("reg_consent"):
@@ -3031,7 +3301,8 @@ class Hub:
         return {"name": ev["name"], "date": ev.get("date"), "place": ev.get("place"),
                 "organizer": ev.get("organizer"), "start_clock": ev.get("start_clock"),
                 "deadline": ev.get("reg_deadline"), "open": open_, "reason": why,
-                "distances": self.reg_distances(ev), "info": ev.get("reg_info") or "",
+                "distances": self.solo_distances(ev), "info": ev.get("reg_info") or "",
+                "dist_info": [{k: d[k] for k in ("name", "limit", "left", "legs")} for d in self.dist_info(ev)],
                 "consent": self.consent_text(ev)}
 
     NAME_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё' .-]{0,49}")
@@ -3065,7 +3336,15 @@ class Hub:
             return "Ж"
         return ""
 
-    def check_person(self, ev: dict, d: dict, team_mode: bool = False) -> tuple:
+    def _left_map(self, ev: dict) -> dict:
+        """{дистанция: осталось мест} — только для дистанций с лимитом. Секретарь вносит заявки сверх лимита."""
+        if ev.get("_no_limit"):
+            return {}
+        if ev.get("_left") is not None:
+            return ev["_left"]
+        return {d["name"]: d["left"] for d in self.dist_info(ev) if d["left"] is not None}
+
+    def check_person(self, ev: dict, d: dict, team_mode: bool = False, relay: bool = False) -> tuple:
         """Проверка одного участника. → (ошибки {поле: текст}, чистые данные, [(дистанция, результат)])"""
         c = self._clean
         errs = {}
@@ -3087,7 +3366,8 @@ class Hub:
         team, coach, contact = c(d.get("team"), 80), c(d.get("coach"), 80), c(d.get("contact"), 80)
         if not team:
             errs["team"] = "обязательное поле"
-        allowed = self.reg_distances(ev)
+        allowed = self.reg_distances(ev) if relay else self.solo_distances(ev)
+        relays = [x for x in self.reg_distances(ev) if x not in allowed]
         low = {a.lower().replace(" ", ""): a for a in allowed}
         dists = d.get("distances")
         if not isinstance(dists, list):
@@ -3102,11 +3382,20 @@ class Hub:
                 key = name.lower().replace(" ", "")
                 name = low.get(key) or low.get(key + "м") or ""
                 if not name:
-                    bad.append(c(x.get("distance") if isinstance(x, dict) else x, 20))
+                    raw = c(x.get("distance") if isinstance(x, dict) else x, 20)
+                    if any(raw.lower().replace(" ", "") == r.lower().replace(" ", "") for r in relays):
+                        errs["distances"] = f"«{raw}» — эстафета: заявка командой в разделе «Эстафета»"
+                        continue
+                    bad.append(raw)
                     continue
             if name and name not in [p[0] for p in picks]:
                 picks.append((name, best))
-        if not picks:
+        if not relay:
+            left = self._left_map(ev)
+            full = [n for n, _ in picks if left.get(n) is not None and left[n] <= 0]
+            if full:
+                errs["distances"] = "мест больше нет: " + ", ".join(full)
+        if not picks and "distances" not in errs:
             errs["distances"] = ("нет такой дистанции: " + ", ".join(b for b in bad if b) + ". Есть: " + ", ".join(allowed)) \
                 if any(bad) else "выберите дистанцию"
         for name, best in picks:
@@ -3180,7 +3469,7 @@ class Hub:
                  ("representative", "Родитель / представитель (до 18 лет)", ("родит", "представ")))
 
     def team_template(self, ev: dict) -> bytes:
-        dists = self.reg_distances(ev) or ["60 м"]
+        dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
                           "Обязательны поля со звёздочкой. Команду и тренера можно не заполнять, если они указаны в форме."],
@@ -3246,10 +3535,13 @@ class Hub:
         team = self._clean(data.get("team"), 80)
         coach = self._clean(data.get("coach"), 80)
         res = []
+        ev = {**ev, "_left": dict(self._left_map(ev))}     # места убывают по ходу списка
         for r in rows:
             d = {**r, "team": self._clean(r.get("team"), 80) or team, "coach": self._clean(r.get("coach"), 80) or coach,
                  "contact": data.get("contact"), "distances": [{"distance": r.get("distance"), "best": r.get("best")}]}
             errs, clean, picks = self.check_person(ev, d, team_mode=True)
+            if not errs and picks and picks[0][0] in ev["_left"]:
+                ev["_left"][picks[0][0]] -= 1
             res.append({"row": r.get("_row"), "name": f"{clean['last_name']} {clean['first_name']}".strip(),
                         "birth_date": clean["birth_date"], "sex": clean["sex"], "category": clean["category"] or "",
                         "distance": picks[0][0] if picks else self._clean(r.get("distance"), 20),
@@ -3294,20 +3586,103 @@ class Hub:
                          f"{self._clean(data.get('team'), 80) or '—'}: {added} заявок" + (f", повторов {len(dups)}" if dups else ""))
         return 201, {"ok": True, "added": added, "duplicates": dups, "team": self._clean(data.get("team"), 80)}
 
+    def submit_relay(self, ev: dict, data: dict, status: str = "pending", actor: str = "форма") -> tuple:
+        """Заявка эстафетной команды: название, дистанция-эстафета и участники по этапам. → (код, ответ)"""
+        c = self._clean
+        spec = next((d for d in self.dist_info(ev) if d["legs"] and d["name"] == c(data.get("distance"), 20)), None)
+        if not spec:
+            return 400, {"error": "Выберите эстафету", "fields": {"distance": "выберите эстафету"}}
+        team, coach, contact = c(data.get("team"), 80), c(data.get("coach"), 80), c(data.get("contact"), 80)
+        relay = c(data.get("relay"), 60) or team
+        fe = {}
+        if not team:
+            fe["team"] = "обязательное поле"
+        if actor == "форма":
+            if not coach:
+                fe["coach"] = "укажите ФИО тренера / представителя команды"
+            if not contact:
+                fe["contact"] = "укажите телефон или e-mail для связи"
+            if not data.get("consent"):
+                fe["consent"] = "нужно подтвердить наличие согласий"
+        regs = [r for r in self.store.registrations(ev["id"]) if r["status"] != "rejected" and r["distance"] == spec["name"]]
+        if relay and any((r.get("relay") or "").lower() == relay.lower() for r in regs):
+            fe["relay"] = f"команда «{relay}» уже заявлена — добавьте номер, например «{relay}-2»"
+        if spec["left"] is not None and spec["left"] <= 0 and not ev.get("_no_limit"):
+            return 409, {"error": f"На «{spec['name']}» мест больше нет"}
+        members = [m for m in (data.get("members") or [])[:10] if isinstance(m, dict)]
+        merrs, clean = {}, []
+        for i in range(spec["legs"]):
+            m = members[i] if i < len(members) else {}
+            errs, cl, _ = self.check_person(ev, {**m, "team": team or "—", "coach": coach, "contact": contact,
+                                                 "distances": [spec["name"]]}, team_mode=True, relay=True)
+            errs.pop("team", None)
+            if any((r["last_name"].lower(), r["first_name"].lower(), r["birth_date"]) ==
+                   (cl["last_name"].lower(), cl["first_name"].lower(), cl["birth_date"]) for r in regs):
+                errs["last_name"] = "уже заявлен(а) в другой команде на эту эстафету"
+            if errs:
+                merrs[str(i + 1)] = errs
+            clean.append(cl)
+        if len({(x["last_name"].lower(), x["first_name"].lower(), x["birth_date"]) for x in clean}) < len(clean):
+            fe["members"] = "один и тот же участник указан на двух этапах"
+        if fe or merrs:
+            return 400, {"error": "Проверьте поля формы", "fields": fe, "members": merrs}
+        chash = self._consent_hash(ev)
+        ids = []
+        for i, cl in enumerate(clean, 1):
+            ids.append(self.store.add_registration(ev["id"], {
+                **cl, "team": team, "distance": spec["name"], "relay": relay, "leg": i, "status": status,
+                "note": f"эстафета «{relay}», этап {i}" + (f" · {coach}" if coach and actor == "форма" else ""),
+                "consent_at": fmt_db(now_local()), "consent_hash": chash}))
+        self.store.audit(actor, ev["id"], "Заявка эстафеты", f"{relay} · {spec['name']}: "
+                         + ", ".join(f"{x['last_name']} {x['first_name']}" for x in clean))
+        return 201, {"ok": True, "ids": ids, "relay": relay, "distance": spec["name"],
+                     "members": [f"{x['last_name']} {x['first_name']}" for x in clean]}
+
+    @staticmethod
+    def relay_members(members: list) -> str:
+        """Состав эстафеты для протокола: «1. Иванов Иван (2010); 2. …»"""
+        return "; ".join(f"{m.get('leg') or i}. {m['last_name']} {m['first_name']} ({m['birth_date'][:4]})"
+                         for i, m in enumerate(members, 1))
+
+    def relay_entry(self, members: list) -> dict:
+        """Заявки участников одной эстафетной команды → одна «заявка-команда» для забега."""
+        members = sorted(members, key=lambda r: (r.get("leg") or 0, r["id"]))
+        r0 = members[0]
+        cats = {m.get("category") or "" for m in members}
+        return {**r0, "last_name": r0["relay"], "first_name": "", "birth_date": "    ", "best_sec": None, "best": None,
+                "category": cats.pop() if len(cats) == 1 else (r0.get("category") or None),
+                "members": self.relay_members(members), "_ids": [m["id"] for m in members]}
+
+    def collapse_relays(self, ev: dict, regs: list) -> list:
+        relays = {d["name"] for d in self.dist_specs(ev) if d["legs"]}
+        out, teams = [], {}
+        for r in regs:
+            if r["distance"] in relays and r.get("relay"):
+                key = (r["distance"], r["relay"].lower())
+                if key not in teams:
+                    teams[key] = []
+                    out.append(key)
+                teams[key].append(r)
+            else:
+                out.append(r)
+        return [self.relay_entry(teams[x]) if isinstance(x, tuple) else x for x in out]
+
     @staticmethod
     def _strip_check(chk: dict) -> dict:
         return {**chk, "rows": [{k: v for k, v in x.items() if not k.startswith("_")} for x in chk["rows"]]}
 
     def regs_view(self, ev: dict) -> dict:
         regs = self.store.registrations(ev["id"])
-        bibs = {r["reg_id"]: r for r in self.store.entries_rows(ev["id"]) if r.get("reg_id")}
+        erows = self.store.entries_rows(ev["id"])
+        bibs = {r["reg_id"]: r for r in erows if r.get("reg_id")}
+        by_bib = {r["bib"]: r for r in erows}
         seen: dict = {}
         for r in regs:
             key = (r["last_name"].lower(), r["first_name"].lower(), r["birth_date"], r["distance"])
             r["dup_of"] = seen.get(key) if r["status"] != "rejected" else None
             if r["status"] != "rejected":
                 seen.setdefault(key, r["id"])
-            e = bibs.get(r["id"])
+            e = bibs.get(r["id"]) or (by_bib.get(r["bib"]) if r.get("relay") and r.get("bib") else None)
             r["entry_bib"], r["entry_wave"], r["entry_lane"] = (e["bib"], e["wave"], e["lane"]) if e else ("", "", None)
             r["birth_year"] = r["birth_date"][:4]
         counts = {k: sum(1 for r in regs if r["status"] == k) for k in ("pending", "approved", "rejected")}
@@ -3333,7 +3708,7 @@ class Hub:
         if any(w.get("start_time") for w in self.store.waves(eid)):
             raise ValueError("уже был старт забега — пересобрать нельзя, переносите участников вручную")
         lanes = max(1, min(int(lanes or 8), 50))
-        regs = [r for r in self.store.registrations(eid) if r["status"] == "approved"]
+        regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if r["status"] == "approved"])
         if not regs:
             raise ValueError("нет подтверждённых заявок")
         dist_order = {d: i for i, d in enumerate(self.reg_distances(ev))}
@@ -3343,14 +3718,13 @@ class Hub:
             groups.setdefault((r["distance"], r.get("category") or ""), []).append(r)
         old = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
         used = {e["bib"] for e in old.values()}
-        nxt = [max([int(b) for b in used if b.isdigit()] + [0]) + 1]
 
         def bib_for(r):
             e = old.get(r["id"])
             if e:
                 return e["bib"], e["chip"]
-            b = str(nxt[0])
-            nxt[0] += 1
+            b = self.next_bib(ev, used, r["distance"])   # диапазон номеров дистанции, если задан
+            used.add(b)
             return b, "#" + b
 
         heats, rows, n = [], [], 0
@@ -3372,9 +3746,10 @@ class Hub:
                 for i, r in enumerate(chunk):
                     bib, chip = bib_for(r)
                     full = " ".join(x for x in (r["last_name"], r["first_name"]) if x)
-                    rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4],
+                    rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
                                  "team": r.get("team"), "category": r.get("category"), "lane": order[i],
-                                 "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex")})
+                                 "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
+                                 "members": r.get("members"), "_ids": r.get("_ids") or [r["id"]]})
         self.store.con.execute("BEGIN")
         try:
             self.store.con.execute("DELETE FROM waves WHERE event_id = ?", (eid,))
@@ -3386,7 +3761,8 @@ class Hub:
         for h in heats:
             self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=h["distance"])
         for r in rows:
-            self.store.update_registration(r["reg_id"], bib=r["bib"])
+            for rid in r["_ids"]:
+                self.store.update_registration(rid, bib=r["bib"])
         return {"heats": heats, "entries": len(rows)}
 
     def startlist(self, ev: dict) -> dict:
@@ -4971,6 +5347,16 @@ class Hub:
             data = self.calendar(int(y) if y.isdigit() else None)
             return 200, J, json.dumps(data, ensure_ascii=False), {"Access-Control-Allow-Origin": "*",
                                                                   "Cache-Control": "public, max-age=60"}
+        if method == "GET" and path == "/r/api/series":
+            n = str((qs or {}).get("name", "")).strip()
+            data = self.series_standings(n) if n else {"series": self.series_names()}
+            if n and not data["stages"]:
+                return js({"error": "серия не найдена"}, 404)
+            return 200, J, json.dumps(data, ensure_ascii=False), {"Access-Control-Allow-Origin": "*",
+                                                                  "Cache-Control": "public, max-age=60"}
+        if method == "GET" and path in ("/r/series", "/r/series/"):
+            page = self._ui_file("series.html")
+            return 200, "text/html; charset=utf-8", page or "нет series.html", None
         if method == "GET" and path == "/r/api/open":
             out = []
             for e in self.store.list_events():
@@ -4978,7 +5364,7 @@ class Hub:
                     out.append({"name": e["name"], "date": e.get("date"), "place": e.get("place"),
                                 "deadline": e.get("reg_deadline"), "slug": e["reg_slug"]})
             return js({"events": out})
-        m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/results\.json|/startlist\.json"
+        m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json"
                          r"|/protocol|/files/\d+)?/?", path)
         if not m:
             return 404, "text/plain; charset=utf-8", "нет такой страницы", None
@@ -5014,6 +5400,23 @@ class Hub:
             disp = "inline" if ctype in ("application/pdf",) or ctype.startswith("image/") else "attachment"
             return 200, ctype, blob, {"Content-Disposition": f"{disp}; filename*=UTF-8''{quote(f['name'])}",
                                       "Cache-Control": "public, max-age=300"}
+        if method == "POST" and sub == "/relay":
+            open_, why = self.reg_state(ev)
+            if not open_:
+                return js({"error": why}, 403)
+            ip_ok = client in ("127.0.0.1", "::1", "?") or self._rate_ok("ip:" + client, 40, 600)
+            if not (ip_ok and self._rate_ok("ev:" + m.group(1), 300, 600) and self._rate_ok("all", 600, 600)):
+                return js({"error": "Слишком много заявок подряд, попробуйте через несколько минут"}, 429)
+            try:
+                data = json.loads(body.decode("utf-8"))
+                if not isinstance(data, dict):
+                    raise ValueError
+            except (ValueError, UnicodeDecodeError):
+                return js({"error": "неверные данные"}, 400)
+            if str(data.get("website") or "").strip():
+                return js({"ok": True, "ids": []}, 201)
+            code, out = self.submit_relay(ev, data)
+            return js(out, code)
         if method == "POST" and sub in ("/team-check", "/team"):
             open_, why = self.reg_state(ev)
             if not open_:

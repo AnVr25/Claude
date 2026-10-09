@@ -209,6 +209,11 @@ tr.rej td{opacity:.55}
 .checkbig .num.unknown{color:var(--track);font-size:clamp(36px,7vw,72px)}
 .checkbig .sub{color:var(--muted);margin-top:8px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+table.pick td{padding:8px 10px;vertical-align:middle}
+table.pick td.b{font:600 22px/1 var(--head,inherit);width:70px}
+table.pick tr.got td{opacity:.6}
+table.pick tr.got td.act{opacity:1}
+table.pick td.act{text-align:right;white-space:nowrap}
 .chips span{font:600 15px var(--head);padding:3px 11px;border-radius:4px;background:var(--panel);border:1px solid var(--line)}
 #chkUnk span{border-color:var(--track);color:var(--track)}
 
@@ -491,6 +496,8 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="row" style="margin-top:14px">
       <button class="primary" id="btnSave">Сохранить</button>
       <button id="btnCancel">Отмена</button>
+      <span class="spacer"></span>
+      <button id="btnCopy" class="hide" title="Новое соревнование с теми же настройками, дистанциями и правилами — без участников и заявок, дата +1 год">Копия на следующий год</button>
 
     </div>
   </div>
@@ -509,12 +516,23 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <div><label for="sPhoto">Фото (ссылка на альбом)</label><input id="sPhoto" placeholder="https://disk.yandex.ru/…"></div>
       </div>
       <label class="check"><input type="checkbox" id="sAdaptive"> Адаптивный спорт</label>
+      <div class="sitegrid" style="margin-top:6px">
+        <div><label for="sCoverFile">Обложка страницы</label>
+          <select id="sCoverFile"><option value="">нет</option></select>
+          <input id="sCoverUrl" placeholder="или ссылка на картинку https://…" style="margin-top:6px"></div>
+        <div><label for="sSeries">Серия / кубок <span class="muted">(сумма очков за этапы)</span></label><input id="sSeries" list="seriesList" maxlength="80" placeholder="Кубок Сахалина по бегу 2026"><datalist id="seriesList"></datalist>
+          <div class="small muted" id="sSeriesLink" style="margin-top:4px"></div></div>
+        <div><label for="sProgram">Программа — строки <span class="mono">18:30 | Выдача номеров</span></label><textarea id="sProgram" style="min-height:90px" placeholder="17:00 | Выдача стартовых пакетов&#10;18:45 | Разминка&#10;19:00 | Старт 5 км&#10;20:15 | Награждение"></textarea></div>
+        <div><label for="sContacts">Контакты организатора — по одной в строке</label><textarea id="sContacts" style="min-height:90px" placeholder="Секретарь: Петрова Анна, +7 924 000-00-00&#10;fla65@mail.ru&#10;https://t.me/fla65"></textarea></div>
+      </div>
+      <p class="small muted" style="margin:4px 0 0">Обложка — фото из «Документов» с галочкой «на сайте» или ссылка. Телефоны и почта на странице станут кнопками «позвонить» и «написать».</p>
       <div class="regsite">
         <label class="switch" style="margin-top:14px"><input type="checkbox" id="sReg"><i></i>Приём заявок на сайте открыт</label>
         <div class="sitegrid">
           <div><label for="sRegTill">Принимать до</label><input id="sRegTill" type="datetime-local"></div>
-          <div><label for="sDist">Дистанции — по одной в строке *</label><textarea id="sDist" style="min-height:70px" placeholder="60 м&#10;5 км"></textarea></div>
+          <div><label for="sDist">Дистанции — по одной в строке *</label><textarea id="sDist" style="min-height:70px" placeholder="5 км | лимит 300 | номера с 1&#10;10 км | лимит 200 | номера с 500"></textarea></div>
         </div>
+        <p class="small muted" style="margin:6px 0 0">После названия через «|» можно указать: <span class="mono">лимит 300</span> — сколько мест (на странице будет «осталось N мест», при нуле приём закрывается); <span class="mono">номера с 500</span> — с какого номера выдавать; <span class="mono">эстафета 4</span> — командная заявка на 4 этапа.</p>
         <p class="small muted" style="margin:6px 0 0">На странице события появится форма: спортсмен записывается сам, тренер — командой списком (Excel). Заявки приходят на этап «Регистрация»; там же их подтверждают, вносят спортсмена вручную и задают категории.</p>
       </div>
       <label for="sLinks">Дополнительные ссылки — по одной в строке: <span class="mono">Название | https://…</span></label>
@@ -623,7 +641,8 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <a class="btn sm" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR для афиши</a>
       </div>
       <details class="panel" id="gSettings"><summary><b>Настройки формы</b> <span class="small muted">дистанции, категории, текст</span></summary>
-        <label for="gDist">Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:110px" placeholder="60 м&#10;100 м&#10;400 м&#10;1000 м"></textarea>
+        <label for="gDist">Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:110px" placeholder="60 м&#10;100 м | лимит 40&#10;1000 м | номера с 300&#10;4×200 м | эстафета 4"></textarea>
+        <div class="small muted">Через «|»: <span class="mono">лимит 40</span> — мест; <span class="mono">номера с 300</span> — диапазон номеров; <span class="mono">эстафета 4</span> — команда на 4 этапа.</div>
         <label for="gRules">Категории: название;пол;год с;год по · <a href="#" id="gRulesDefault" style="color:var(--track)">образец</a></label><textarea id="gRules" style="min-height:110px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea>
         <label for="gLanes">Дорожек на стадионе</label><input id="gLanes" type="number" min="1" max="50" value="8">
         <label for="gInfo">Пояснение для участников</label><input id="gInfo" placeholder="Выдача номеров с 9:30 у секретариата.">
@@ -648,6 +667,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <!-- 3. ЧИПЫ -->
 <section id="tab-check" class="hide">
+  <div id="chipSect">
   <div class="pagehead">
     <div><h1>Проверка чипов</h1><p class="lead">Проносите чип над ковриком при выдаче номера — экран покажет, чей он. Неизвестные чипы подсвечиваются красным.</p></div>
     <div class="progress"><b id="chkDone">0 / 0</b> проверено<div class="pbar"><i id="chkBar" style="width:0"></i></div></div>
@@ -660,6 +680,19 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <div class="checkbig" id="chkBig"><div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div></div>
   <h2>Ещё не проверены</h2><div class="chips" id="chkLeft"></div>
   <h2>Чипы не из списка <span class="small muted" id="chkUnknown"></span></h2><div class="chips" id="chkUnk"></div>
+  </div>
+  <div class="sect" id="pickSect">
+    <div class="pagehead">
+      <div><h2 style="margin:0" id="pkTitle">Выдача стартовых пакетов</h2><p class="lead small">Найдите участника по номеру или фамилии и нажмите «Выдать». Enter — выдать, если найден один. Отметки видят все компьютеры на выдаче.</p></div>
+      <div class="progress"><b id="pkDone">0 / 0</b> выдано<div class="pbar"><i id="pkBar" style="width:0"></i></div></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <input id="pkSearch" placeholder="Номер или фамилия" autocomplete="off" style="max-width:320px;font-size:20px;padding:10px 12px">
+      <label class="check" style="margin:0 0 0 8px"><input type="checkbox" id="pkLeftOnly"> только кто ещё не получил</label>
+      <span class="spacer"></span><span class="small muted" id="pkLeft"></span>
+    </div>
+    <div class="tbl"><table class="pick"><tbody id="pkBody"></tbody></table></div>
+  </div>
 </section>
 
 <!-- 4. СТАРТ И ФИНИШ -->
@@ -980,7 +1013,7 @@ function showTab(){
   if (tab === "users") loadUsers();
   if (tab === "prep") renderSite();
   if (tab === "files") renderPub();
-  if (tab === "check") loadCheck();
+  if (tab === "check") { loadCheck(); loadPickup(); }
   if (tab === "log") loadLog();
   if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); loadLast(); }
   if (tab === "files") renderFilesTab();
@@ -1100,7 +1133,8 @@ function setStep(id, cls, text){ const a = $(id); const hid = a.classList.contai
 function renderLane(){
   const ev = curEvent(); if (!ev) return;
   const stadium = ev.kind === "stadium", entry = isEntryMode(ev);
-  $("stCheck").classList.toggle("hide", stadium);
+  $("stCheck").querySelector("b").textContent = stadium ? "Выдача номеров" : "Номера и чипы";
+  $("chipSect").classList.toggle("hide", stadium);
   $("stTiming").querySelector("b").textContent = entry ? "Ввод результатов" : stadium ? "Забеги" : "Старт и финиш";
   let n = 0; document.querySelectorAll(".lane .st").forEach(a => { if (!a.classList.contains("hide")) a.querySelector(".pin").textContent = ++n; });
   const w = ev.waves.length, rp = ev.regs_pending || 0, rc = ev.regs_count || 0;
@@ -1108,7 +1142,10 @@ function renderLane(){
     [ev.entries_count ? `${ev.entries_count} в списке` : "список пуст", w ? `${w} ${plural(w, ["забег","забега","забегов"])}` : ""].filter(Boolean).join(" · "));
   setStep("stReg", rp ? "warn" : rc ? "done" : "", rp ? `${rp} ждут проверки` : rc ? `${rc} ${plural(rc, ["заявка","заявки","заявок"])}` : ev.reg_open ? "приём открыт" : "приём не открыт");
   const c = chkCache && chkCache.ev === ev.id ? chkCache : null;
-  setStep("stCheck", c && c.total ? (c.checked >= c.total ? "done" : c.since ? "warn" : "") : "",
+  const pk = pkCache && pkCache.ev === ev.id ? pkCache : null;
+  if (stadium || (pk && pk.picked && !(c && c.since))) setStep("stCheck", pk && pk.total && pk.picked >= pk.total ? "done" : "",
+    pk && pk.total ? (pk.picked ? `выдано ${pk.picked} из ${pk.total}` : "номера не выданы") : "перед стартом");
+  else setStep("stCheck", c && c.total ? (c.checked >= c.total ? "done" : c.since ? "warn" : "") : "",
     c && c.total ? (c.checked >= c.total ? "все проверены" : `${c.total - c.checked} не проверены`) : "перед стартом");
   const run = ev.waves.filter(x => x.state === "running").map(x => x.name);
   setStep("stTiming", ev.status === "running" ? "live" : ev.status === "finished" ? "done" : "",
@@ -1156,7 +1193,7 @@ function selectEvent(id){
   if (id === curId) return;
   curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
   lastId = 0; $("feedBody").innerHTML = "";
-  renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") loadCheck();
+  renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
   regLoaded = null; renderRegHead(true); if (tabName()==="reg") loadRegs();
   if (tabName()==="prep") openForm(curEvent(), "prep");
 }
@@ -1182,8 +1219,16 @@ async function openForm(ev, where){
   const kind = ev?.kind || "mass";
   document.querySelectorAll('input[name=fKind]').forEach(r => r.checked = r.value === kind);
   setTimingOptions(kind, ev?.timing);
+  $("btnCopy").classList.toggle("hide", !ev);
   $("evForm").classList.remove("hide"); if (!ev) $("fName").focus();
 }
+$("btnCopy").onclick = async () => {
+  const ev = curEvent(); if (!ev || !editId) return;
+  if (!confirm(`Создать копию «${ev.name}» на следующий год?\n\nПеренесутся настройки, дистанции, правила категорий, забеги, программа и контакты. Участников, заявок и результатов в копии не будет. Приём заявок и показ на сайте — выключены.`)) return;
+  try{ const n = await api(`/api/events/${ev.id}/copy`, {}); loadEvents._sig = null; await loadEvents(); selectEvent(n.id);
+    toast(`Создано: ${n.name}${n.date ? " · " + fmtDate(n.date) : ""}`); location.hash = "#prep"; }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
 const TIMINGS = {
   mass: [["chips", "Чипы IPICO и ридеры"], ["judge", "Судья с телефоном"]],
   stadium: [["judge", "Судья с телефоном"], ["manual", "Ручной секундомер"], ["lynx", "FinishLynx (скоро)"]]};
@@ -1321,6 +1366,11 @@ async function readFile(f){
 }
 
 /* ---------- регистрация ---------- */
+// дистанции из настроек: «5 км | лимит 300 | номера с 1» → «5 км»; solo — без эстафет
+function distNames(ev, solo){
+  return (ev.reg_distances||"").split("\n").filter(x => x.trim() && !(solo && /\|\s*(эстаф|relay)/i.test(x)))
+    .map(x => x.split("|")[0].trim().slice(0, 20)).filter(Boolean);
+}
 let regData = null, regLoaded = null, regDefaults = "";
 const stName = {pending:"на рассмотрении", approved:"подтверждена", rejected:"отклонена"};
 function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
@@ -1345,7 +1395,7 @@ function renderRegHead(force){
   $("lnkWiclax").href = `/api/events/${ev.id}/wiclax.csv`;
   $("lnkClax").href = `/api/events/${ev.id}/event.clax`;
   $("gStartList").href = `/protocol?event=${ev.id}&kind=start`;
-  const dists = (ev.reg_distances||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const dists = distNames(ev, true);
   $("mDist").innerHTML = dists.map(d => `<option>${esc(d)}</option>`).join("") || "<option value=\"\">сначала задайте дистанции</option>";
 }
 let qrFor = null;
@@ -1387,8 +1437,9 @@ function renderRegs(){
   const fcur = $("gFilter").value;
   $("gTabs").innerHTML = [["", "Все", c.pending + c.approved + c.rejected], ["pending", "Ждут проверки", c.pending], ["approved", "Подтверждены", c.approved], ["rejected", "Отклонены", c.rejected]]
     .map(([v, t, n]) => `<button data-f="${v}" class="${v===fcur?"on":""}">${t}<i>${n}</i></button>`).join("");
-  $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "") + (r.unassigned ? `<span>подтверждены, но не в забеге: ${r.unassigned}</span>` : "");
-  const dists = (ev.reg_distances||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "") + (r.unassigned ? `<span>подтверждены, но не в забеге: ${r.unassigned}</span>` : "")
+    + (r.dist_info||[]).filter(d => d.limit || d.legs).map(d => `<span${d.left === 0 ? ' style="color:var(--track)"' : ""}>${esc(d.name)}: ${d.taken}${d.limit ? " из " + d.limit : ""}${d.legs ? " команд" : ""}${d.left === 0 ? " — мест нет" : ""}</span>`).join("");
+  const dists = distNames(ev);
   const cats = [...new Set(((ev.reg_rules||"").split("\n").map(l=>l.split(";")[0].trim()).filter(Boolean)).concat(r.regs.map(x=>x.category).filter(Boolean)))];
   $("gCats").innerHTML = cats.map(x => `<option>${esc(x)}</option>`).join("");
   const f = $("gFilter").value, q = $("gSearch").value.trim().toLowerCase();
@@ -1528,6 +1579,49 @@ async function loadCheck(){
     if (last.id !== chkSeen) { if (chkSeen && $("chkSound").checked) beep(last.known?1200:300, last.known?.1:.4); chkSeen = last.id; }
   }catch(e){}
 }
+/* ---------- выдача стартовых пакетов ---------- */
+var pkCache = null;
+async function loadPickup(){
+  if (curId == null) return;
+  try{ const r = await api(`/api/events/${curId}/pickup`); pkCache = Object.assign({ev: curId}, r); renderPickup(); renderLane(); }catch(e){}
+}
+function pkMatches(){
+  const r = pkCache; if (!r) return [];
+  const q = $("pkSearch").value.trim().toLowerCase(), left = $("pkLeftOnly").checked;
+  return r.rows.filter(x => (!left || !x.picked_at) && (!q || (/^\d+$/.test(q) ? x.bib === q || x.bib.startsWith(q)
+    : (x.name + " " + x.team + " " + x.members).toLowerCase().includes(q))))
+    .sort((a, b) => (q && /^\d+$/.test(q) ? (b.bib === q) - (a.bib === q) : 0));
+}
+function renderPickup(){
+  const r = pkCache; if (!r) return;
+  $("pkDone").textContent = `${r.picked} / ${r.total}`;
+  $("pkBar").style.width = (r.total ? Math.round(100 * r.picked / r.total) : 0) + "%";
+  $("pkLeft").textContent = r.total ? (r.left ? `не получили: ${r.left}` : "все получили ✓") : "";
+  const list = pkMatches(), shown = list.slice(0, 60);
+  $("pkBody").innerHTML = !r.total ? '<tr><td class="empty">Стартовый список пуст — сначала сформируйте забеги или загрузите участников</td></tr>'
+    : shown.map(x => `<tr class="${x.picked_at ? "got" : ""}" data-bib="${esc(x.bib)}"><td class="b">${esc(x.bib)}</td>
+      <td><b>${esc(x.name)}</b> <span class="small muted">${esc(x.birth_year)}</span>${x.members ? `<div class="small muted">${esc(x.members)}</div>` : ""}</td>
+      <td class="small">${esc(x.team)}</td><td class="small">${esc([x.distance, x.category, x.wave].filter(Boolean).join(" · "))}</td>
+      <td class="act">${x.picked_at ? `<span class="small" style="color:var(--ok)">✓ выдан ${esc(x.picked_at.slice(11, 16))}</span> <button class="sm" data-pk="undo">отменить</button>`
+        : '<button class="sm ok" data-pk="give">Выдать</button>'}</td></tr>`).join("")
+      + (list.length > shown.length ? `<tr><td colspan="5" class="small muted">ещё ${list.length - shown.length} — уточните поиск</td></tr>` : "")
+      || '<tr><td class="empty">Никого не нашли</td></tr>';
+}
+async function pickGive(bib, undo){
+  try{ const r = await api(`/api/events/${curId}/pickup`, {bib, undo: !!undo});
+    const x = pkCache && pkCache.rows.find(y => y.bib === bib); if (x) x.picked_at = r.picked_at;
+    if (pkCache) { pkCache.picked = r.picked; pkCache.left = r.total - r.picked; }
+    renderPickup(); renderLane(); if (!undo) { toast(`№${bib} — выдан`); $("pkSearch").select(); }
+  }catch(e){ toast("Ошибка: " + e.message); }
+}
+$("pkSearch").oninput = renderPickup; $("pkLeftOnly").onchange = renderPickup;
+$("pkSearch").onkeydown = (e) => { if (e.key !== "Enter") return; const l = pkMatches().filter(x => !x.picked_at);
+  const q = $("pkSearch").value.trim(); const exact = l.find(x => x.bib === q);
+  if (exact || l.length === 1) pickGive((exact || l[0]).bib); else toast(l.length ? "Найдено несколько — выберите в списке" : "Не найден или уже выдан"); };
+$("pkBody").addEventListener("click", (e) => { const b = e.target.closest("[data-pk]"); if (!b) return;
+  const bib = b.closest("tr").dataset.bib;
+  if (b.dataset.pk === "undo" && !confirm(`Отменить выдачу номера ${bib}?`)) return;
+  pickGive(bib, b.dataset.pk === "undo"); });
 $("btnCheckStart").onclick = async () => { chkSeen = 0; await api(`/api/events/${curId}/check`, {}); loadCheck(); };
 $("btnCheckStop").onclick = async () => { await api(`/api/events/${curId}/check`, {stop:true}); loadCheck(); };
 
@@ -2084,6 +2178,17 @@ function renderSite(){
   $("sLinks").value = ev.links || ""; $("sPubStart").checked = !!ev.pub_start; $("sPubRes").checked = !!ev.pub_results;
   $("sReg").checked = !!ev.reg_open; $("sRegTill").value = (ev.reg_deadline || "").slice(0, 16); $("sDist").value = ev.reg_distances || "";
   $("sPage").innerHTML = pageLinkHtml(ev); $("sPage").classList.toggle("hide", !ev.page_url);
+  $("sProgram").value = ev.program || ""; $("sContacts").value = ev.contacts || ""; $("sSeries").value = ev.series || "";
+  $("seriesList").innerHTML = [...new Set(events.map(x => x.series).filter(Boolean))].map(x => `<option>${esc(x)}</option>`).join("");
+  $("sSeriesLink").innerHTML = ev.series && ev.reg_url ? `Зачёт серии: <a href="${esc(ev.reg_url.replace(/\/r\/[^/]+$/, "/r/series?name=" + encodeURIComponent(ev.series)))}" target="_blank">открыть ↗</a>` : "";
+  const cov = ev.cover || "", fileCov = /^file:\d+$/.test(cov);
+  $("sCoverUrl").value = fileCov ? "" : cov;
+  api(`/api/events/${ev.id}/files`).then(r => {
+    const imgs = (r.files||[]).filter(f => f.public && /\.(jpe?g|png|webp|gif)$/i.test(f.name));
+    $("sCoverFile").innerHTML = '<option value="">нет</option>' + imgs.map(f => `<option value="file:${f.id}">${esc(f.name)}</option>`).join("")
+      + (fileCov && !imgs.some(f => "file:" + f.id === cov) ? `<option value="${esc(cov)}">файл №${esc(cov.slice(5))} (не на сайте)</option>` : "");
+    $("sCoverFile").value = fileCov ? cov : "";
+  }).catch(() => {});
 }
 function renderPub(){
   const ev = curEvent(); if (!ev) return;
@@ -2096,7 +2201,10 @@ $("sSave").onclick = async () => {
   const body = {pub_site:$("sSite").checked, ours:$("sOurs").checked, level:$("sLevel").value, note:$("sNote").value.trim(),
     live_url:$("sLive").value.trim(), photo_url:$("sPhoto").value.trim(), adaptive:$("sAdaptive").checked,
     links:$("sLinks").value.trim(), pub_start:$("sPubStart").checked, pub_results:$("sPubRes").checked,
-    reg_open:$("sReg").checked, reg_deadline:$("sRegTill").value || null, reg_distances:$("sDist").value.trim()};
+    reg_open:$("sReg").checked, reg_deadline:$("sRegTill").value || null, reg_distances:$("sDist").value.trim(),
+    program:$("sProgram").value.trim(), contacts:$("sContacts").value.trim(), series:$("sSeries").value.trim(),
+    cover:$("sCoverFile").value || $("sCoverUrl").value.trim()};
+  if (body.cover && !/^(file:\d+|https?:\/\/\S+)$/.test(body.cover)) { $("sCoverUrl").focus(); return toast("Обложка: ссылка должна начинаться с https://"); }
   if (body.reg_open && !body.reg_distances) { $("sDist").focus(); return toast("Чтобы открыть приём заявок, укажите хотя бы одну дистанцию"); }
   try{ await api(`/api/events/${ev.id}`, body); loadEvents._sig = null; regLoaded = null; await loadEvents(); renderSite();
     toast(body.reg_open ? "Сохранено — приём заявок открыт на странице события" : body.pub_site ? "Сохранено — событие в календаре fla65.ru" : "Сохранено"); }
@@ -2110,8 +2218,8 @@ $("sSave").onclick = async () => {
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-copy]"); if (!b) return;
   navigator.clipboard?.writeText(b.dataset.copy).then(() => toast("Ссылка скопирована"), () => toast(b.dataset.copy)); });
 $("calImport").onclick = async () => {
-  if (!confirm("Перенести календарь ФЛАСО 2026 (36 стартов) с сайта fla65.ru?\n\nПрошедшие попадут сразу в архив, будущие — в список. Все будут отмечены «на сайте». Повторно одинаковые не добавятся.")) return;
-  try{ const r = await api("/api/calendar", {import:true, year:2026}); toast(`Добавлено событий: ${r.added} из ${r.total}`); loadEvents._sig = null; await loadEvents(); }
+  if (!confirm("Перенести календарь ФЛАСО 2026 (36 стартов) с сайта fla65.ru?\n\nПрошедшие попадут сразу в архив, будущие — в список. Все будут отмечены «на сайте». Повторно одинаковые не добавятся, перенесённые старты обновятся.")) return;
+  try{ const r = await api("/api/calendar", {import:true, year:2026}); toast(`Добавлено событий: ${r.added} из ${r.total}` + (r.updated ? `, обновлено: ${r.updated}` : "")); loadEvents._sig = null; await loadEvents(); }
   catch(e){ toast("Ошибка: "+e.message); }
 };
 
@@ -2259,7 +2367,7 @@ $("uSave").onclick = async () => {
   setInterval(loadHw, 10000);
   loadHw();
   setInterval(pollFeed, 1000);
-  setInterval(() => { const t=tabName(); if (t==="check") loadCheck(); if (t==="timing") { loadManual(); if (isEntryMode(curEvent())) loadEntry(); } if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
+  setInterval(() => { const t=tabName(); if (t==="check") { loadCheck(); loadPickup(); } if (t==="timing") { loadManual(); if (isEntryMode(curEvent())) loadEntry(); } if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
   setInterval(async () => { try{ const id=curId; await loadEvents(); if (id!==curId) loadEntries(); }catch(e){} }, 15000);
   pollFeed();
 })();

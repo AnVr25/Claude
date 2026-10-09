@@ -59,3 +59,23 @@ HTML-блок (T123) на странице «Соревнования»:
 <div id="sakhstart-calendar"></div>
 <script src="https://reg.fla65.ru/r/assets/calendar.js" defer></script>
 ```
+
+## Версия 2.8
+
+Карточка события (`/r/api/calendar`, `/r/<slug>/info` → `card`) получила поля:
+
+- `cover` — адрес обложки (картинка из «Документов» с галочкой «на сайте» или внешняя ссылка), иначе `null`;
+- `program` — `[{time, title}]`, программа дня;
+- `contacts` — `[{text, href}]`, `href` — `tel:`, `mailto:` или ссылка;
+- `series` — `{name, url}`, если событие входит в серию;
+- `places` — `[{distance, limit, left}]`, лимит мест по дистанциям (только пока открыт приём).
+
+`/r/<slug>/info` → `dist_info`: `[{name, limit, left, legs}]`; `legs` — число этапов эстафеты.
+
+Дистанции в настройках: `5 км | лимит 300 | номера с 1`, `4×100 м | эстафета 4 | лимит 10`.
+
+Новые адреса:
+
+- `GET /r/api/series` — список серий; `?name=…` — зачёт серии (этапы, таблицы по категориям, сумма очков);
+- `GET /r/series?name=…` — страница зачёта серии;
+- `POST /r/<slug>/relay` — заявка эстафетной команды (`distance`, `team`, `relay`, `coach`, `contact`, `consent`, `members[]`).

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0B1D37">
+<title>Зачёт серии</title>
+<link rel="icon" type="image/png" href="/r/assets/flaso-mark.png">
+<link rel="stylesheet" href="/r/assets/brand.css">
+<style>
+/* Зачёт серии / кубка — сумма очков за этапы (переменные и шрифты — в brand.css) */
+:root{color-scheme:light dark;--bad:#C8161C;--soft:#F7F9FC;--shadow:0 1px 2px rgba(11,29,55,.06);--field:#fff;--field-line:#C3CDDA}
+@media (prefers-color-scheme:dark){:root{--bad:#FF6B66;--soft:#0C182D;--shadow:none;--field:#0A1628;--field-line:#2E4570}}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{margin:0;background:var(--ice);color:var(--ink);font:16px/1.45 var(--body)}
+body{min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
+h1,h2{font-family:var(--head);font-weight:600;letter-spacing:.1px;margin:0}
+a{color:inherit}
+#root{flex:1 0 auto;padding-bottom:28px}
+#root>*:not(.band){width:min(900px,calc(100% - 32px));margin-left:auto;margin-right:auto}
+.band{background:var(--night);color:#fff;border-bottom:3px solid var(--track)}
+.band .in{width:min(900px,calc(100% - 32px));margin:0 auto;padding:14px 0 20px}
+.band .logos{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.band .logos img{height:30px;width:auto}
+.band .logos .lg-ss{margin-left:auto}
+.band .k{margin-top:18px;font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--night-muted)}
+.band h1{font-size:30px;line-height:1.12;margin-top:4px;overflow-wrap:anywhere}
+.band .meta{margin-top:8px;font-size:14px;color:var(--night-muted)}
+@media (min-width:600px){.band h1{font-size:38px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-top:12px;box-shadow:var(--shadow)}
+.card h2{font-size:20px;margin:0 0 10px}
+.stages{list-style:none;margin:0;padding:0;counter-reset:st}
+.stages li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.stages li:first-child{border-top:0}
+.stages .n{font:600 16px var(--head);color:var(--bad);min-width:34px}
+.stages .t{flex:1 1 220px;font-weight:700}
+.stages .d{color:var(--muted);font-size:14px}
+.stages a{font-size:14px;font-weight:700;color:var(--bad);text-underline-offset:3px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px}
+.tools select,.tools input{font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:9px 12px;min-height:44px}
+.tools input{flex:1 1 200px}
+.grp{margin-top:18px}
+.grp h2{font-size:22px;margin-bottom:8px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th{font:500 13px var(--head);letter-spacing:.3px;color:var(--muted);background:var(--soft)}
+td.c,th.c{text-align:center}
+td.pl{font:600 17px var(--head);width:44px;text-align:center}
+tr.p1 td.pl{color:#C9A227}tr.p2 td.pl{color:#8E9AAB}tr.p3 td.pl{color:#B4703A}
+td.tot{font:600 17px var(--head)}
+td.nm{white-space:normal;min-width:160px}
+td.nm small{color:var(--muted)}
+td.z{color:var(--muted)}
+.note{margin-top:14px;font-size:13px;color:var(--muted);line-height:1.5}
+.list a{display:block;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);text-decoration:none;box-shadow:var(--shadow)}
+.list a b{font:600 20px var(--head)}
+.list a:hover{border-color:var(--track)}
+.muted{color:var(--muted)}
+.sig{flex:none;padding:18px 16px 24px;text-align:center;font-size:12px;color:var(--muted)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main id="root"></main>
+<div class="sig">SakhStart · ФЛАСО</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const dRu=d=>{const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d||"");return m?`${+m[3]} ${months[+m[2]-1]} ${m[1]}`:"";};
+const href=u=>{if(!u)return"";try{const x=new URL(u,location.href);if(!/^https?:$/.test(x.protocol))return"";return x.origin===location.origin?x.pathname+x.search:x.href;}catch(e){return"";}};
+const band=inner=>`<header class="band"><div class="in"><div class="logos"><img src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img src="/r/assets/flaso-dark.png" alt="ФЛАСО" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div>${inner}</div></header>`;
+const name=new URLSearchParams(location.search).get("name")||"";
+let D=null;
+async function main(){
+  if(!name) return list();
+  try{
+    const r=await fetch(`/r/api/series?name=${encodeURIComponent(name)}`); D=await r.json();
+    if(!r.ok) throw new Error(D.error||"ошибка");
+  }catch(e){ $("root").innerHTML=band(`<h1>Серия не найдена</h1>`)+`<div class="card muted">Проверьте ссылку или откройте <a href="/r/series">все серии</a>.</div>`; return; }
+  document.title="Зачёт серии — "+D.name;
+  const done=D.stages.filter(s=>s.done).length;
+  $("root").innerHTML=band(`<div class="k">Зачёт серии</div><h1>${esc(D.name)}</h1><div class="meta">Этапов: ${D.stages.length} · с результатами: ${done}</div>`)
+    +`<div class="card"><h2>Этапы</h2><ol class="stages">${D.stages.map((s,i)=>`<li><span class="n">${i+1}</span><span class="t">${esc(s.name)}</span><span class="d">${esc(dRu(s.date))}</span>${href(s.results)?`<a href="${esc(href(s.results))}">Результаты</a>`:href(s.page)?`<a href="${esc(href(s.page))}">Страница</a>`:""}</li>`).join("")}</ol></div>`
+    +(D.groups.length?`<div class="tools"><select id="grp" aria-label="Категория"><option value="">Все категории</option>${D.groups.map((g,i)=>`<option value="${i}">${esc(g.group)}</option>`).join("")}</select><input id="q" placeholder="Поиск: фамилия или команда" aria-label="Поиск"></div><div id="tables"></div>`
+      :`<div class="card muted">Очки появятся, когда будут опубликованы результаты первого этапа.</div>`)
+    +`<div class="note">Очки за этап — из протокола (колонка «Очки»), а если её нет — по месту в категории: 1 место — 20, 2 — 17, 3 — 15, 4 — 14 … 17 и ниже — 1. Итог — сумма по всем этапам. Обновлено: ${esc((D.updated||"").replace("T"," "))}.</div>`;
+  if(D.groups.length){ $("grp").onchange=draw; $("q").oninput=draw; draw(); }
+}
+function draw(){
+  const g=$("grp").value, q=$("q").value.trim().toLowerCase();
+  $("tables").innerHTML=D.groups.map((x,i)=>{
+    if(g!==""&&+g!==i) return "";
+    const rows=x.rows.filter(p=>!q||(p.name+" "+p.team).toLowerCase().includes(q));
+    if(!rows.length) return "";
+    return `<section class="grp"><h2>${esc(x.group)}</h2><div class="tw"><table><thead><tr><th class="c">Место</th><th>Участник</th><th>Команда</th>${D.stages.map((s,j)=>`<th class="c" title="${esc(s.name)}">Э${j+1}</th>`).join("")}<th class="c">Сумма</th></tr></thead><tbody>
+      ${rows.map(p=>`<tr class="p${p.place}"><td class="pl">${p.place}</td><td class="nm"><b>${esc(p.name)}</b>${p.birth_year?` <small>${esc(p.birth_year)}</small>`:""}</td><td>${esc(p.team)}</td>
+        ${D.stages.map(s=>{const v=p.by[String(s.id)]; return v!=null?`<td class="c">${esc(v)}</td>`:`<td class="c z">—</td>`;}).join("")}<td class="c tot">${esc(p.total)}</td></tr>`).join("")}
+    </tbody></table></div></section>`;}).join("")||'<div class="card muted">Никого не нашли.</div>';
+}
+async function list(){
+  const d=await fetch("/r/api/series").then(r=>r.json()).catch(()=>({series:[]}));
+  $("root").innerHTML=band(`<h1>Серии и кубки</h1>`)+`<div class="list">${(d.series||[]).map(s=>`<a href="/r/series?name=${encodeURIComponent(s.name)}"><b>${esc(s.name)}</b><div class="muted">этапов: ${s.events}</div></a>`).join("")||'<div class="card muted">Серий пока нет.</div>'}</div>`;
+}
+main();
+</script>
+</body>
+</html>

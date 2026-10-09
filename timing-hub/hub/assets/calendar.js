@@ -300,6 +300,7 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
     if (st !== 'past') acts.push(res);
     acts.push(link(e.live, 'Трансляция' + (st === 'run' ? `<span class="on">${DOT}эфир</span>` : ''), 'btn'));
     acts.push(link(e.photo, 'Фото', 'btn'));
+    if (e.series && e.series.url) acts.push(link(e.series.url, 'Зачёт серии', 'btn'));
     (Array.isArray(e.links) ? e.links : []).forEach(l => {
       if (!l || !l.url) return;
       if (ours) acts.push(link(l.url, esc(l.title || 'Ссылка'), 'btn'));
@@ -314,9 +315,13 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
       return `<li>${link(f.url, DOC + `<span>${esc(t)}</span>` + (meta ? `<em>${esc(meta)}</em>` : ''), '')}</li>`;
     });
     const a = acts.filter(Boolean);
+    // лимит мест на дистанциях: «5 км — осталось 120 мест · 10 км — мест нет»
+    const places = (e.reg && e.reg.open && Array.isArray(e.places) ? e.places : []).filter(p => p && p.limit)
+      .map(p => esc(p.distance) + ' — ' + (p.left ? 'осталось ' + p.left + ' ' + plural(p.left, 'место', 'места', 'мест') : '<b>мест нет</b>'));
     return `<li class="ev l-${e._lv} is-${st}"><div class="d"><b>${esc(w.big)}</b><span>${esc(w.small)}</span></div><div class="b">` +
       `<div class="tags"><span class="tag ${e._lv}">${LV[e._lv][0]}</span>${e.adaptive ? '<span class="tag ad">Адаптивный спорт</span>' : ''}${stt}</div>` +
       `<h4 class="t">${esc(e.name)}</h4>${pl ? `<p class="pl">${pl}</p>` : ''}${e.note ? `<p class="x">${esc(e.note)}</p>` : ''}` +
+      (places.length ? `<p class="x">${places.join(' · ')}</p>` : '') +
       (a.length ? `<div class="acts">${a.join('')}</div>` : '') + (files.length ? `<ul class="files" aria-label="Документы">${files.join('')}</ul>` : '') +
       `</div>${side.filter(Boolean).length ? `<div class="a">${side.join('')}</div>` : ''}</li>`;
   };
