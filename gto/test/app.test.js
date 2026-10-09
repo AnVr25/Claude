@@ -111,7 +111,8 @@ test('API: роли и ввод результатов', async (t) => {
   assert.equal((await res.json()).value, 8.1);
 
   res = await ed('PUT', '/api/results', { student_id: st.id, test_id: 'pullLow', value: '20' });
-  assert.equal(res.status, 400, 'испытания нет в ступени юношей');
+  assert.equal(res.status, 200, 'испытание не своей ступени можно внести — на знак оно не влияет');
+  assert.equal((await ed('PUT', '/api/results', { student_id: st.id, test_id: 'nope', value: '1' })).status, 400);
   res = await ed('PUT', '/api/results', { student_id: st.id, test_id: 'run60', value: '8,1', test_date: '2999-01-01' });
   assert.equal(res.status, 400, 'дата из будущего');
 
@@ -119,7 +120,7 @@ test('API: роли и ввод результатов', async (t) => {
   res = await viewer('GET', '/api/data');
   const data = await res.json();
   assert.equal(data.students.length, 1);
-  assert.equal(data.results[0].test_date, '2026-09-15');
+  assert.equal(data.results.find((r) => r.test_id === 'run60').test_date, '2026-09-15');
   assert.equal((await viewer('PUT', '/api/results', { student_id: st.id, test_id: 'run60', value: '7' })).status, 403);
   assert.equal((await viewer('POST', '/api/students', { last_name: 'Х', first_name: 'У', sex: 'M', stage: 7 })).status, 403);
   assert.equal((await viewer('DELETE', `/api/students/${st.id}`)).status, 403);
@@ -146,12 +147,12 @@ test('API: роли и ввод результатов', async (t) => {
   res = await fetch(base + `/api/students/${st.id}`, { method: 'DELETE', headers: { Cookie: c } });
   assert.equal(res.status, 403);
 
-  // смена ступени удаляет неподходящие результаты
+  // смена ступени результаты не удаляет: испытания не своей ступени остаются, но на знак не влияют
   await ed('PUT', '/api/results', { student_id: st.id, test_id: 'pullHigh', value: '12' });
   res = await ed('PUT', `/api/students/${st.id}`, { last_name: 'Иванова', first_name: 'Петра', sex: 'F', stage: 7 });
   assert.equal(res.status, 200);
   const after = await (await ed('GET', '/api/data')).json();
-  assert.deepEqual(after.results.filter((r) => r.student_id === st.id).map((r) => r.test_id), ['run60']);
+  assert.deepEqual(after.results.filter((r) => r.student_id === st.id).map((r) => r.test_id).sort(), ['pullHigh', 'pullLow', 'run60']);
 });
 
 test('API: администратор управляет пользователями', async (t) => {
@@ -188,7 +189,10 @@ test('УИН, даты, ступень по возрасту', () => {
   assert.equal(GTO.ageOn('2006-10-08', '2026-10-08'), 20);
   assert.equal(GTO.stageForAge(19), 7);
   assert.equal(GTO.stageForAge(20), 8);
-  assert.equal(GTO.stageForAge(30), null);
+  assert.equal(GTO.stageForAge(30), 10);
+  assert.equal(GTO.stageForAge(6), 1);
+  assert.equal(GTO.stageForAge(75), 18);
+  assert.equal(GTO.stageForAge(5), null);
 });
 
 test('шаблон .xlsx читается обратно', () => {
@@ -253,7 +257,7 @@ test('API: УИН, дата рождения, маскировка для про
   const text = 'Группа;Фамилия;Имя;Пол;Дата рождения;УИН;Институт\n' +
     'Б-22;Ёлкина;Анна;Ж;05.03.2006;23-65-0012345;ИЕН\n' +
     'Б-22;Новиков;Олег;М;01.09.2007;;ИЕН\n' +
-    'Б-22;Старый;Дед;М;01.01.1980;;ИЕН\n';
+    'Б-22;Малыш;Совсем;М;01.01.2023;;ИЕН\n';
   const parsed = (await (await ed('POST', '/api/import/parse', { text })).json()).rows;
   assert.equal(parsed[0].action, 'update');
   assert.equal(parsed[1].action, 'create');
@@ -440,4 +444,79 @@ test('база со старым ограничением ступеней V–I
   db.prepare('DELETE FROM students WHERE id = 7').run();
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM results').get().n, 0, 'каскадное удаление работает после переноса');
   db.close();
+});
+
+test('все ступени I–XVIII: нормативы, требования, знак и его дата', () => {
+  for (const stage of GTO.STAGE_LIST) {
+    for (const sex of ['M', 'F']) {
+      const n = GTO.normsFor(stage, sex);
+      assert.ok(n && Object.keys(n).length >= 6, `${stage}${sex}`);
+      const req = GTO.requiredFor(stage, sex);
+      assert.ok(req[0] <= req[1] && req[1] <= req[2], `${stage}${sex} требования`);
+      for (const c of GTO.mandatoryFor(stage, sex)) assert.ok(GTO.testsFor(stage, sex).some((t) => t.cat === c), `${stage}${sex} ${c}`);
+    }
+  }
+  // XVIII ступень, мужчины: обязательны выносливость, гибкость, сила; на золото 5 качеств
+  assert.deepEqual(GTO.mandatoryFor(18, 'M'), ['endurance', 'flex', 'strength']);
+  assert.deepEqual(GTO.requiredFor(18, 'M'), [4, 4, 5]);
+  assert.equal(GTO.levelFor(18, 'M', 'flex', -6), 3, 'отрицательные значения наклона');
+  assert.equal(GTO.levelFor(1, 'M', 'run6min', 800), 3, 'шестиминутный бег: больше — лучше');
+  // испытание не своей ступени на знак не влияет
+  const four = { walk3: 1700, flex: -6, pushChair: 8, situps: 15 };
+  assert.equal(GTO.badgeFor(18, 'M', four).badge, 2, 'серебро: 4 качества');
+  assert.equal(GTO.badgeFor(18, 'M', { ...four, run60: 7 }).badge, 2, 'бег 60 м не входит в XVIII ступень');
+  // дата знака — день последнего норматива, без которого знака бы не было
+  const r = (value, d) => ({ value, test_date: d });
+  const res = { walk3: r(1700, '2026-05-01'), flex: r(-6, '2026-05-10'), pushChair: r(8, '2026-06-01'), situps: r(15, '2026-09-01'), swim25: r(200, '2026-10-01') };
+  const b = GTO.badgeWithDate(18, 'M', res);
+  assert.equal(b.badge, 2);
+  assert.equal(b.date, '2026-09-01');
+  assert.equal(GTO.badgeWithDate(18, 'M', { flex: r(-6, '2026-05-10') }).date, '');
+});
+
+test('загрузка прошлых результатов из Excel: только администратор, после подтверждения', async (t) => {
+  const { zip, sheetXml } = require('../xlsx');
+  const book = (sheets) => zip({
+    '[Content_Types].xml': '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/></Types>',
+    'xl/workbook.xml': `<workbook xmlns:r="r"><sheets>${sheets.map((s, i) => `<sheet name="${s[0]}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<Relationships>${sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`,
+    ...Object.fromEntries(sheets.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s[1])])),
+  }).toString('base64');
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const admin = await login(base, 'admin');
+  const ed = await login(base, 'ed');
+  const xlsx = book([
+    ['Студенты', [['Фамилия', 'Имя', 'Отчество', 'Дата рождения', 'Пол', 'УИН', 'Институт', 'Группа', 'Ступень'],
+      ['Петров', 'Пётр', '', '10.10.2007', 'М', '', 'ИФК', '1', '']]],
+    ['Результаты', [['УИН ГТО', 'Фамилия', 'Имя', 'Отчество', 'Дата рождения', 'Испытание', 'Результат', 'Дата выполнения'],
+      ['', 'Петров', 'Пётр', '', '10.10.2007', 'Бег на 60 м', '7,8', '15.05.2025'],
+      ['', 'Петров', 'Пётр', '', '10.10.2007', 'Сгибание и разгибание рук в упоре лёжа на полу', '45', '20.05.2025'],
+      ['', 'Петров', 'Пётр', '', '10.10.2007', 'Плавание на 25 м', '0:30', '21.05.2025'],
+      ['', 'Сидоров', 'Нет', '', '01.01.2007', 'Бег на 60 м', '8', '01.05.2025'],
+      ['', 'Петров', 'Пётр', '', '10.10.2007', 'Прыжок выше головы', '1', '01.05.2025']]],
+  ]);
+  const p = await (await ed('POST', '/api/import/parse', { xlsx })).json();
+  assert.equal(p.rows.length, 1);
+  assert.equal(p.can_import_results, false);
+  assert.equal(p.results.length, 5);
+  assert.equal(p.results[0].level, 3);
+  assert.equal(p.results[2].in_stage, false, 'плавание 25 м — не своей ступени');
+  assert.match(p.results[3].error, /нет ни в базе/);
+  assert.match(p.results[4].error, /не знаю испытание/);
+  const good = p.results.filter((r) => !r.error);
+  assert.equal((await ed('POST', '/api/students/import', { rows: p.rows, results: good })).status, 403, 'результаты — только администратор');
+  const r = await (await admin('POST', '/api/students/import', { rows: p.rows, results: good })).json();
+  assert.equal(r.created, 1);
+  assert.equal(r.results, 3);
+  const data = await (await admin('GET', '/api/data')).json();
+  assert.equal(data.results.length, 3);
+  // повторная загрузка более старого результата не затирает новый
+  const p2 = await (await admin('POST', '/api/import/parse', { xlsx: book([['Студенты', [['Фамилия']]], ['Результаты', [
+    ['Фамилия', 'Имя', 'Дата рождения', 'Испытание', 'Результат', 'Дата выполнения'],
+    ['Петров', 'Пётр', '10.10.2007', 'Бег на 60 м', '9,9', '01.01.2024']]]]) })).json();
+  assert.equal(p2.results[0].action, 'skip');
+  const r2 = await (await admin('POST', '/api/students/import', { rows: [], results: p2.results })).json();
+  assert.equal(r2.results, 0);
+  assert.equal(r2.results_skipped, 1);
 });

@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { open, hashPassword, verifyPassword } = require('./db');
 const GTO = require('./public/norms');
-const { buildTemplate, readFirstSheet } = require('./xlsx');
+const { buildTemplate, readSheets } = require('./xlsx');
 const { makeUpdater } = require('./update');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -127,7 +127,7 @@ function createApp({
     if (/^(m|м|муж\S*|ю|юн\S*)$/.test(x)) return 'M';
     return '';
   }
-  const ROMAN_STAGE = { v: 5, vi: 6, vii: 7, viii: 8, ix: 9 };
+  const ROMAN_STAGE = Object.fromEntries(Object.entries(GTO.ROMAN).map(([n, r]) => [r.toLowerCase(), Number(n)]));
 
   function cleanStudent(b) {
     const s = {
@@ -149,9 +149,9 @@ function createApp({
     if (!s.stage && s.birth_date) {
       const age = GTO.ageOn(s.birth_date, today());
       s.stage = GTO.stageForAge(age);
-      if (!s.stage) throw new HttpError(400, `Возраст ${age} лет не подходит для ступеней V–IX (14–29 лет)`);
+      if (!s.stage) throw new HttpError(400, `Возраст ${age} лет: комплекс ГТО — с 6 лет`);
     }
-    if (!(s.stage >= 5 && s.stage <= 9)) throw new HttpError(400, 'Укажите ступень (5–9) или дату рождения');
+    if (!(s.stage >= 1 && s.stage <= 18)) throw new HttpError(400, 'Укажите ступень (1–18) или дату рождения');
     return s;
   }
 
@@ -223,6 +223,77 @@ function createApp({
       if (r) return r.id;
     }
     return null;
+  }
+
+  // ---------- прошлые результаты из файла (лист «Результаты») ----------
+  const RESULT_HEADERS = [
+    [/уин|uin/, 'uin'], [/^фио|ф\.и\.о/, 'fio'], [/фамил/, 'last_name'], [/^имя/, 'first_name'], [/отчеств/, 'middle_name'],
+    [/рожд/, 'birth_date'], [/испыт|дисципл|норматив/, 'test'], [/^результ/, 'value'], [/выполн|^дата/, 'date'],
+  ];
+  const normName = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
+  const TEST_LOOKUP = new Map();
+  for (const t of GTO.TESTS) for (const k of [t.id, t.name, t.short, `${t.name}, ${t.unit}`]) TEST_LOOKUP.set(normName(k), t.id);
+  const studentKey = (x) => x.uin ? 'u:' + x.uin : 'n:' + [x.last_name, x.first_name, x.middle_name].map(normName).join(' ') + '|' + x.birth_date;
+
+  // Строки листа → результаты с проверкой; students — уже разобранные строки листа «Студенты» (могут быть новыми).
+  function parseResults(table, students) {
+    table = table.filter((r) => r.some((c) => String(c).trim()));
+    if (table.length < 2) return [];
+    const fields = table[0].map((h) => {
+      const x = String(h).trim().toLowerCase();
+      const hit = RESULT_HEADERS.find(([re]) => re.test(x));
+      return hit ? hit[1] : null;
+    });
+    const fromFile = new Map(students.filter((st) => !st.error).map((st) => [studentKey(st), st]));
+    const getDbResult = db.prepare('SELECT value, test_date FROM results WHERE student_id = ? AND test_id = ?');
+    return table.slice(1).map((r) => {
+      const o = {};
+      fields.forEach((f, i) => { if (f && o[f] === undefined) o[f] = String(r[i] ?? '').trim(); });
+      if (o.fio) {
+        const p = o.fio.split(/\s+/);
+        o.last_name = o.last_name || p[0] || '';
+        o.first_name = o.first_name || p[1] || '';
+        o.middle_name = o.middle_name || p.slice(2).join(' ');
+      }
+      const out = { last_name: o.last_name || '', first_name: o.first_name || '', middle_name: o.middle_name || '',
+        birth_date_raw: o.birth_date || '', test_raw: o.test || '', value_raw: o.value || '', date_raw: o.date || '' };
+      try {
+        const uin = GTO.normalizeUin(o.uin || '');
+        if (uin === null) throw new Error('УИН — 11 цифр, например 23-65-0012345');
+        const bd = GTO.parseDate(o.birth_date || '');
+        if (bd === null) throw new Error('дата рождения — ДД.ММ.ГГГГ');
+        if (!uin && (!out.last_name || !out.first_name || !bd)) throw new Error('нужен УИН или фамилия, имя и дата рождения');
+        const key = { uin, last_name: out.last_name, first_name: out.first_name, middle_name: out.middle_name, birth_date: bd };
+        let st = fromFile.get(studentKey(key));
+        let id = null;
+        if (!st && uin) st = [...fromFile.values()].find((x) => x.uin === uin);
+        if (!st) {
+          id = findExisting(key);
+          if (id) st = getStudent(id);
+        } else {
+          id = findExisting(st);
+        }
+        if (!st) throw new Error('участника нет ни в базе, ни на листе «Студенты»');
+        const testId = TEST_LOOKUP.get(normName(o.test));
+        if (!testId) throw new Error(`не знаю испытание «${o.test || '—'}» — выберите из списка`);
+        const value = GTO.parseValue(testId, o.value);
+        if (value == null) throw new Error(`результат «${o.value || '—'}» не похож на ${GTO.TEST_BY_ID[testId].unit}`);
+        const date = GTO.parseDate(o.date || '');
+        if (!date) throw new Error('дата выполнения — ДД.ММ.ГГГГ');
+        if (date > today()) throw new Error('дата выполнения в будущем');
+        const inStage = !!(GTO.normsFor(st.stage, st.sex) || {})[testId];
+        const level = inStage ? GTO.levelFor(st.stage, st.sex, testId, value) : null;
+        let action = 'set';
+        let note = '';
+        if (id) {
+          const old = getDbResult.get(id, testId);
+          if (old && old.test_date > date) { action = 'skip'; note = `в базе более поздний результат от ${old.test_date.split('-').reverse().join('.')}`; }
+          else if (old) note = 'заменит прежний';
+        }
+        return { ...out, uin: st.uin || uin, last_name: st.last_name, first_name: st.first_name, middle_name: st.middle_name,
+          birth_date: st.birth_date, stage: st.stage, sex: st.sex, test_id: testId, value, test_date: date, in_stage: inStage, level, action, note };
+      } catch (e) { return { ...out, error: e.message }; }
+    });
   }
 
   function getStudent(id) {
@@ -312,7 +383,7 @@ function createApp({
         'Content-Disposition': `attachment; filename="gto-shablon-spiska.xlsx"; filename*=UTF-8''${encodeURIComponent('ГТО — шаблон списка студентов.xlsx')}`,
         'Cache-Control': 'no-store',
       });
-      return res.end(buildTemplate());
+      return res.end(buildTemplate(GTO.TESTS));
     }
 
     // --- студенты (admin, editor) ---
@@ -332,8 +403,14 @@ function createApp({
       requireRole(user, 'admin', 'editor');
       const b = await readBody(req);
       let table;
+      let resultTable = null;
       try {
-        table = b.xlsx ? readFirstSheet(Buffer.from(String(b.xlsx), 'base64')) : parseCsvText(b.text || '');
+        if (b.xlsx) {
+          const sheets = readSheets(Buffer.from(String(b.xlsx), 'base64'));
+          const studs = sheets.find((x) => /студ|участ|спис/i.test(x.name)) || sheets[0];
+          table = studs.rows;
+          resultTable = (sheets.find((x) => /результ/i.test(x.name)) || {}).rows || null;
+        } else table = parseCsvText(b.text || '');
       } catch (e) { throw new HttpError(400, e.message || 'Не удалось прочитать файл'); }
       const rows = tableToRows(table);
       if (rows.length > 5000) throw new HttpError(400, 'Не больше 5000 строк за раз');
@@ -348,7 +425,9 @@ function createApp({
           return { ...s, action: existing ? 'update' : 'create' };
         } catch (e) { return { ...row, error: e.message }; }
       });
-      return send(res, 200, { rows: out });
+      const results = resultTable ? parseResults(resultTable, out) : [];
+      if (results.length > 20000) throw new HttpError(400, 'Не больше 20000 результатов за раз');
+      return send(res, 200, { rows: out, results, can_import_results: user.role === 'admin' });
     }
 
     // Загрузка: новые добавляются, существующие (по УИН или ФИО + дате рождения) обновляются.
@@ -356,7 +435,9 @@ function createApp({
       requireRole(user, 'admin', 'editor');
       const b = await readBody(req);
       const rows = Array.isArray(b.rows) ? b.rows : [];
-      if (!rows.length) throw new HttpError(400, 'Нет строк для импорта');
+      const resultsIn = Array.isArray(b.results) ? b.results : [];
+      if (resultsIn.length) requireRole(user, 'admin');   // прошлые результаты загружает только администратор
+      if (!rows.length && !resultsIn.length) throw new HttpError(400, 'Нет строк для импорта');
       if (rows.length > 5000) throw new HttpError(400, 'Не больше 5000 строк за раз');
       const errors = [];
       const clean = [];
@@ -376,6 +457,13 @@ function createApp({
         uin=CASE WHEN ? <> '' THEN ? ELSE uin END, stage=?, institute=?, grp=?, updated_at=datetime('now') WHERE id=?`);
       let created = 0;
       let updated = 0;
+      let resultsSet = 0;
+      let resultsSkipped = 0;
+      const upsert = db.prepare(`INSERT INTO results (student_id, test_id, value, test_date, entered_by, entered_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (student_id, test_id) DO UPDATE SET value=excluded.value, test_date=excluded.test_date,
+          entered_by=excluded.entered_by, entered_at=excluded.entered_at
+        WHERE excluded.test_date >= results.test_date`);
       db.exec('BEGIN');
       try {
         clean.forEach((s, i) => {
@@ -391,14 +479,30 @@ function createApp({
             }
           } catch (e) { e.row = i + 1; throw e; }
         });
+        resultsIn.forEach((r, i) => {
+          const testId = str(r.test_id, 40);
+          const value = GTO.TEST_BY_ID[testId] ? GTO.parseValue(testId, r.value) : null;
+          const date = GTO.parseDate(str(r.test_date, 10));
+          const key = { uin: GTO.normalizeUin(str(r.uin, 30)) || '', last_name: str(r.last_name, 80), first_name: str(r.first_name, 80),
+            middle_name: str(r.middle_name, 80), birth_date: GTO.parseDate(str(r.birth_date, 10)) || '' };
+          const id = findExisting(key);
+          if (value == null || !date || date > today() || !id) {
+            const e = new HttpError(400, `результат ${i + 1}: участник, испытание, значение или дата не подходят — проверьте файл ещё раз`);
+            e.row = i + 1;
+            throw e;
+          }
+          if (upsert.run(id, testId, value, date, user.id).changes) resultsSet++; else resultsSkipped++;
+        });
         db.exec('COMMIT');
       } catch (e) {
         db.exec('ROLLBACK');
         if (e instanceof HttpError) return send(res, e.status, { error: e.message, errors: [{ row: e.row, error: e.message }] });
         throw e;
       }
-      audit(user, 'student.import', { created, updated });
-      return send(res, 200, { imported: created + updated, created, updated });
+      audit(user, 'student.import', { created, updated, results: resultsSet, results_skipped: resultsSkipped });
+      const out = { imported: created + updated, created, updated };
+      if (resultsIn.length) Object.assign(out, { results: resultsSet, results_skipped: resultsSkipped });
+      return send(res, 200, out);
     }
 
     // Массовое удаление (только администратор): выбранные или все найденные по фильтру.
@@ -434,11 +538,7 @@ function createApp({
         db.prepare(`UPDATE students SET last_name=?, first_name=?, middle_name=?, sex=?, birth_date=?, uin=?, stage=?, institute=?, grp=?,
           updated_at=datetime('now') WHERE id=?`)
           .run(s.last_name, s.first_name, s.middle_name, s.sex, s.birth_date, s.uin, s.stage, s.institute, s.grp, old.id);
-        // Результаты испытаний, которых нет в новой ступени/поле, удаляем.
-        const allowed = new Set(GTO.testsFor(s.stage, s.sex).map((x) => x.id));
-        for (const r of db.prepare('SELECT test_id FROM results WHERE student_id = ?').all(old.id)) {
-          if (!allowed.has(r.test_id)) db.prepare('DELETE FROM results WHERE student_id = ? AND test_id = ?').run(old.id, r.test_id);
-        }
+        // Результаты сохраняются и при смене ступени: испытания не своей ступени видны, но на знак не влияют.
         audit(user, 'student.update', { id: old.id, before: old, after: s });
         return send(res, 200, getStudent(old.id));
       }
@@ -455,7 +555,7 @@ function createApp({
       const b = await readBody(req);
       const st = getStudent(b.student_id);
       const testId = str(b.test_id, 40);
-      if (!GTO.normsFor(st.stage, st.sex)?.[testId]) throw new HttpError(400, 'Это испытание не входит в ступень студента');
+      if (!GTO.TEST_BY_ID[testId]) throw new HttpError(400, 'Нет такого испытания');
       const value = GTO.parseValue(testId, b.value);
       if (value == null) throw new HttpError(400, `Не понял результат «${str(b.value, 20)}». Формат: ${GTO.TEST_BY_ID[testId].unit}`);
       const date = str(b.test_date || today(), 10);
@@ -572,18 +672,17 @@ function createApp({
       return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
     const head = [...(full ? ['УИН', 'Фамилия', 'Имя', 'Отчество', 'Дата рождения'] : ['Фамилия', 'Имя']), 'Пол', 'Ступень', 'Институт', 'Группа',
-      ...GTO.TESTS.flatMap((x) => [x.short, x.short + ' (дата)']), 'Знак'];
+      ...GTO.TESTS.flatMap((x) => [x.short, x.short + ' (дата)']), 'Знак', 'Дата знака'];
     const lines = [head.map(esc).join(';')];
     for (const s of students) {
       const rs = byStudent.get(s.id) || {};
-      const values = Object.fromEntries(Object.entries(rs).map(([k, r]) => [k, r.value]));
-      const badge = GTO.badgeFor(s.stage, s.sex, values).badge;
+      const { badge, date } = GTO.badgeWithDate(s.stage, s.sex, rs);
       lines.push([
         ...(full ? [s.uin, s.last_name, s.first_name, s.middle_name, s.birth_date ? s.birth_date.split('-').reverse().join('.') : '']
           : [s.last_name, s.first_name]),
         s.sex === 'M' ? 'М' : 'Ж', s.stage, s.institute, s.grp,
         ...GTO.TESTS.flatMap((x) => rs[x.id] ? [GTO.formatValue(x.id, rs[x.id].value), rs[x.id].test_date] : ['', '']),
-        badge ? GTO.LEVEL_NAMES[GTO.LEVELS[badge - 1]] : '',
+        badge ? GTO.LEVEL_NAMES[GTO.LEVELS[badge - 1]] : '', date ? date.split('-').reverse().join('.') : '',
       ].map(esc).join(';'));
     }
     // BOM, чтобы Excel открыл кириллицу корректно

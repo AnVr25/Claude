@@ -13,7 +13,7 @@ const state = {
   selected: new Set(), // выбранные для массового удаления (только администратор)
 };
 
-const ROMAN = { 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX' };
+const ROMAN = GTO.ROMAN;
 const ROLE_NAMES = { admin: 'Администратор', editor: 'Ввод результатов', viewer: 'Просмотр' };
 const BADGE_TEXT = { 3: 'Золото', 2: 'Серебро', 1: 'Бронза' };
 
@@ -81,8 +81,7 @@ function recompute(studentId) {
   const s = state.students.find((x) => x.id === studentId);
   if (!s) { state.computed.delete(studentId); return; }
   const rs = state.results.get(studentId) || {};
-  const values = Object.fromEntries(Object.entries(rs).map(([k, r]) => [k, r.value]));
-  state.computed.set(studentId, GTO.badgeFor(s.stage, s.sex, values));
+  state.computed.set(studentId, GTO.badgeWithDate(s.stage, s.sex, rs));
 }
 
 async function loadData() {
@@ -122,6 +121,9 @@ function fillFilterOptions() {
   $('#f-grp').innerHTML = '<option value="">Все группы</option>' +
     grps.map((g) => `<option${g === f.grp ? ' selected' : ''}>${esc(g)}</option>`).join('');
   $('#f-q').value = f.q;
+  if ($('#f-stage').options.length < 2) {
+    $('#f-stage').insertAdjacentHTML('beforeend', GTO.STAGE_LIST.map((n) => `<option value="${n}">${ROMAN[n]} ступень · ${GTO.STAGES[n].replace(' лет', '')}</option>`).join(''));
+  }
   $('#f-stage').value = f.stage;
   $('#f-sex').value = f.sex;
   $('#f-badge').value = f.badge;
@@ -145,8 +147,10 @@ function filtered() {
 }
 
 // ---------- таблица ----------
-function badgeHtml(level) {
-  return level ? `<span class="badge lvl-${level}">${BADGE_TEXT[level]}</span>` : '<span class="badge none">—</span>';
+function badgeHtml(level, date) {
+  return level
+    ? `<span class="badge lvl-${level}">${BADGE_TEXT[level]}</span>${date ? `<span class="badge-date" title="Дата выполнения последнего норматива на этот знак">${fmtDate(date)}</span>` : ''}`
+    : '<span class="badge none">—</span>';
 }
 
 function render() {
@@ -158,8 +162,12 @@ function render() {
 
   // колонки — только испытания, которые есть хотя бы у одного найденного студента
   const used = new Set();
-  const combos = new Set(rows.map((s) => s.stage + s.sex));
-  for (const c of combos) for (const t of GTO.testsFor(Number(c.slice(0, -1)), c.slice(-1))) used.add(t.id);
+  const combos = [...new Set(rows.map((s) => s.stage + s.sex))].map((c) => [Number(c.slice(0, -1)), c.slice(-1)]);
+  for (const [st, sx] of combos) for (const t of GTO.testsFor(st, sx)) used.add(t.id);
+  // испытания не своей ступени, которые кому-то всё же внесли, тоже показываем
+  for (const s of rows) for (const id of Object.keys(state.results.get(s.id) || {})) used.add(id);
+  // категория обязательна, если обязательна во всех ступенях на экране
+  const mandAll = (cat) => combos.length > 0 && combos.every(([st, sx]) => GTO.mandatoryFor(st, sx).includes(cat));
   const tests = GTO.TESTS.filter((t) => used.has(t.id));
 
   const empty = $('#empty');
@@ -189,7 +197,8 @@ function render() {
     '<th class="info left" rowspan="2">Институт</th><th rowspan="2">Группа</th><th rowspan="2">Ступ.</th><th rowspan="2">Знак</th>';
   for (const g of groups) {
     const c = GTO.CAT_BY_ID[g.cat];
-    head += `<th colspan="${g.span}" class="${c.mandatory ? 'cat-mand' : ''}" title="${esc(c.name)}${c.mandatory ? ' — обязательное' : ' — по выбору'}">${esc(shortCat(c))}</th>`;
+    const mand = mandAll(c.id);
+    head += `<th colspan="${g.span}" class="${mand ? 'cat-mand' : ''}" title="${esc(c.name)}${mand ? ' — обязательное' : ''}">${esc(shortCat(c))}</th>`;
   }
   head += '</tr><tr class="test-row">';
   for (const t of tests) head += `<th title="${esc(t.name)}, ${esc(t.unit)}">${esc(t.short)}</th>`;
@@ -208,10 +217,15 @@ function render() {
       `<span class="name-sub nm-short">${esc(initials(s))}</span></button>${sel ? '</span>' : ''}</td>` +
       (full ? `<td class="info mono">${esc(s.uin) || '<span class="name-sub">—</span>'}</td><td class="info" title="${esc(ageText(s.birth_date))}">${fmtDate(s.birth_date)}</td>` : '') +
       `<td class="info" title="${esc(s.institute)}">${esc(s.institute)}</td><td>${esc(s.grp)}</td>` +
-      `<td title="${s.sex === 'M' ? 'юноша' : 'девушка'}">${ROMAN[s.stage]} <span class="name-sub">${s.sex === 'M' ? 'м' : 'ж'}</span></td><td>${badgeHtml(comp?.badge)}</td>`;
+      `<td title="${s.sex === 'M' ? 'юноша' : 'девушка'}">${ROMAN[s.stage]} <span class="name-sub">${s.sex === 'M' ? 'м' : 'ж'}</span></td><td class="badge-cell">${badgeHtml(comp?.badge, comp?.date)}</td>`;
     for (const t of tests) {
-      if (!n[t.id]) { tr += '<td class="res na" title="Не входит в ступень"></td>'; continue; }
       const r = rs[t.id];
+      if (!n[t.id]) {
+        const tip = `${t.name}: не входит в ${ROMAN[s.stage]} ступень — результат можно внести, на знак он не влияет` +
+          (r ? `\n${GTO.formatValue(t.id, r.value)} ${t.unit}, ${fmtDate(r.test_date)}` : '');
+        tr += `<td class="res na${r ? ' extra' : ''}" data-t="${t.id}" title="${esc(tip)}"${canEdit() ? ' tabindex="0"' : ''}>${r ? esc(GTO.formatValue(t.id, r.value)) : ''}</td>`;
+        continue;
+      }
       if (!r) { tr += `<td class="res empty" data-t="${t.id}"${canEdit() ? ' tabindex="0"' : ''}></td>`; continue; }
       const lvl = GTO.levelFor(s.stage, s.sex, t.id, r.value);
       const title = `${t.name}: ${GTO.formatValue(t.id, r.value)} ${t.unit} — ${lvl ? BADGE_TEXT[lvl].toLowerCase() : 'норматив не выполнен'}\nДата испытания: ${fmtDate(r.test_date)}`;
@@ -298,13 +312,14 @@ function renderDrawer() {
   const comp = state.computed.get(s.id) || { badge: 0, byCategory: {} };
   const tests = GTO.testsFor(s.stage, s.sex);
   const n = GTO.normsFor(s.stage, s.sex);
+  const mandatory = GTO.mandatoryFor(s.stage, s.sex);
 
-  const done = Object.keys(rs).length;
+  const done = tests.filter((t) => rs[t.id]).length;
   let badgeNote;
   if (comp.badge) {
     badgeNote = { 3: 'Выполнены требования на золотой знак отличия.', 2: 'Выполнены требования на серебряный знак отличия.', 1: 'Выполнены требования на бронзовый знак отличия.' }[comp.badge];
   } else {
-    const missing = GTO.CATEGORIES.filter((c) => c.mandatory && !(comp.byCategory[c.id] >= 1)).map((c) => c.name.toLowerCase());
+    const missing = GTO.CATEGORIES.filter((c) => mandatory.includes(c.id) && !(comp.byCategory[c.id] >= 1)).map((c) => c.name.toLowerCase());
     badgeNote = missing.length
       ? `Для бронзы не хватает обязательных: ${missing.join(', ')}.`
       : 'Обязательные выполнены — для бронзы нужно ещё одно испытание по выбору.';
@@ -312,7 +327,7 @@ function renderDrawer() {
   const cats = GTO.CATEGORIES.filter((c) => tests.some((t) => t.cat === c.id)).map((c) => {
     const lvl = comp.byCategory[c.id];
     const cls = lvl === undefined ? 'na-chip' : `lvl-${lvl}`;
-    return `<span class="chip ${cls}" title="${esc(c.name)}">${esc(shortCat(c))}${c.mandatory ? ' *' : ''}</span>`;
+    return `<span class="chip ${cls}" title="${esc(c.name)}">${esc(shortCat(c))}${mandatory.includes(c.id) ? ' *' : ''}</span>`;
   }).join('');
 
   let html = `<h2>${esc(fullName(s))}</h2>
@@ -320,7 +335,7 @@ function renderDrawer() {
       ? `<br>УИН: <strong>${esc(s.uin) || 'не указан'}</strong> · дата рождения: <strong>${s.birth_date ? fmtDate(s.birth_date) + '</strong> (' + ageText(s.birth_date) + ')' : 'не указана</strong>'}`
       : ''}</div>
     <div class="badge-box${comp.badge ? ' lvl-' + comp.badge : ''}">
-      <div class="badge-title">${comp.badge ? 'Знак: ' + BADGE_TEXT[comp.badge] : 'Знак пока не выполнен'}</div>
+      <div class="badge-title">${comp.badge ? 'Знак: ' + BADGE_TEXT[comp.badge] + (comp.date ? ` · выполнен ${fmtDate(comp.date)}` : '') : 'Знак пока не выполнен'}</div>
       <div class="badge-note">${esc(badgeNote)} Сдано испытаний: ${done} из ${tests.length}.</div>
       <div class="cats">${cats}</div>
     </div>`;
@@ -328,7 +343,7 @@ function renderDrawer() {
   for (const c of GTO.CATEGORIES) {
     const ts = tests.filter((t) => t.cat === c.id);
     if (!ts.length) continue;
-    html += `<h3>${esc(c.name)}${c.mandatory ? '<span class="req">обязательное</span>' : ''}</h3><table class="tests"><tbody>`;
+    html += `<h3>${esc(c.name)}${mandatory.includes(c.id) ? '<span class="req">обязательное</span>' : ''}</h3><table class="tests"><tbody>`;
     for (const t of ts) {
       const r = rs[t.id];
       const thr = n[t.id];
@@ -345,6 +360,26 @@ function renderDrawer() {
         <td class="t-act">${canEdit() ? `<button class="btn btn-outline btn-sm" data-edit-result="${t.id}">${r ? 'Изменить' : 'Внести'}</button>` : ''}</td></tr>`;
     }
     html += '</tbody></table>';
+  }
+
+  // испытания не своей ступени: можно внести, в протокол попадают, на знак не влияют
+  const extra = GTO.TESTS.filter((t) => !n[t.id]);
+  const extraDone = extra.filter((t) => rs[t.id]);
+  if (extraDone.length || canEdit()) {
+    html += '<h3>Другие испытания<span class="req muted-req">не входят в ступень — на знак не влияют</span></h3>';
+    if (extraDone.length) {
+      html += '<table class="tests"><tbody>' + extraDone.map((t) => {
+        const r = rs[t.id];
+        return `<tr><td class="t-name">${esc(t.name)}, ${esc(t.unit)}</td><td class="t-val">${esc(GTO.formatValue(t.id, r.value))}</td>
+          <td class="t-date"><strong>${fmtDate(r.test_date)}</strong></td>
+          <td class="t-act">${canEdit() ? `<button class="btn btn-outline btn-sm" data-edit-result="${t.id}">Изменить</button>` : ''}</td></tr>`;
+      }).join('') + '</tbody></table>';
+    }
+    const free = extra.filter((t) => !rs[t.id]);
+    if (canEdit() && free.length) {
+      html += `<div class="extra-add"><select id="extra-test" aria-label="Испытание">${free.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+        <button class="btn btn-outline btn-sm" data-extra-add>Внести</button></div>`;
+    }
   }
 
   if (canEdit()) {
@@ -379,7 +414,7 @@ function editResult(studentId, testId) {
   if (!canEdit()) return;
   const s = state.students.find((x) => x.id === studentId);
   const t = GTO.TEST_BY_ID[testId];
-  const thr = GTO.normsFor(s.stage, s.sex)[testId];
+  const thr = (GTO.normsFor(s.stage, s.sex) || {})[testId];
   const r = (state.results.get(studentId) || {})[testId];
   const placeholder = t.kind === 'time' ? 'например 12:20' : t.kind === 'sec' ? 'например 8,4' : 'например 25';
   const p = openModal(`
@@ -393,11 +428,11 @@ function editResult(studentId, testId) {
         <input name="date" type="date" max="${todayISO()}" value="${r ? r.test_date : todayISO()}" required>
       </label>
       <div class="full preview-level" id="preview"></div>
-      <table class="thr-table full"><tr>
+      ${thr ? `<table class="thr-table full"><tr>
         <td class="lvl-1">бронза ${esc(GTO.formatValue(testId, thr[0]))}</td>
         <td class="lvl-2">серебро ${esc(GTO.formatValue(testId, thr[1]))}</td>
         <td class="lvl-3">золото ${esc(GTO.formatValue(testId, thr[2]))}</td>
-      </tr></table>
+      </tr></table>` : `<p class="full hint">Это испытание не входит в ${ROMAN[s.stage]} ступень: результат сохранится и попадёт в выгрузку, но на знак не повлияет.</p>`}
       <p class="form-error full" id="result-error"></p>
       <div class="modal-actions full">
         ${r ? '<button type="button" class="btn btn-danger left" id="result-del">Удалить результат</button>' : ''}
@@ -412,6 +447,7 @@ function editResult(studentId, testId) {
     const box = $('#preview');
     if (!input.value.trim()) { box.innerHTML = ''; return; }
     if (v == null) { box.innerHTML = `<span class="chip lvl-0">Не понял значение — формат ${t.kind === 'time' ? 'мин:сек' : t.unit}</span>`; return; }
+    if (!thr) { box.innerHTML = `Будет записано: <strong>${GTO.formatValue(testId, v)} ${esc(t.unit)}</strong> — вне ступени, на знак не влияет`; return; }
     const lvl = GTO.levelFor(s.stage, s.sex, testId, v);
     box.innerHTML = `Будет засчитано как <span class="chip lvl-${lvl}">${GTO.formatValue(testId, v)} — ${lvl ? BADGE_TEXT[lvl] : 'норматив не выполнен'}</span>`;
   };
@@ -465,7 +501,7 @@ function editStudent(id) {
       <label>Институт<input name="institute" list="dl-inst" value="${esc(s.institute)}"></label>
       <label>Группа<input name="grp" list="dl-grp" value="${esc(s.grp)}"></label>
       <label>Ступень
-        <select name="stage">${[5, 6, 7, 8, 9].map((n) => `<option value="${n}"${n === s.stage ? ' selected' : ''}>${ROMAN[n]} ступень · ${GTO.STAGES[n]}</option>`).join('')}</select>
+        <select name="stage">${GTO.STAGE_LIST.map((n) => `<option value="${n}"${n === s.stage ? ' selected' : ''}>${ROMAN[n]} ступень · ${GTO.STAGES[n]}</option>`).join('')}</select>
       </label>
       <div><label>Пол</label>
         <div class="radio-row">
@@ -490,7 +526,7 @@ function editStudent(id) {
     const age = GTO.ageOn(bd.value, todayISO());
     const st = GTO.stageForAge(age);
     if (st) { stageSel.value = String(st); hint.textContent = `Возраст ${ageText(bd.value)} → ${ROMAN[st]} ступень`; }
-    else hint.textContent = `Возраст ${ageText(bd.value)} — вне ступеней V–IX (14–29 лет)`;
+    else hint.textContent = `Возраст ${ageText(bd.value)} — комплекс ГТО с 6 лет`;
   };
   bd.addEventListener('change', syncStage);
   if (bd.value) syncStage();
@@ -523,7 +559,8 @@ function openImport() {
   const p = openModal(`
     <h2>Загрузить список студентов</h2>
     <p class="sub">Физрук скачивает <a href="/api/template.xlsx" download="GTO-shablon-spiska.xlsx">шаблон списка</a>, заполняет и передаёт файл сюда.
-      Студенты, которые уже есть в базе (совпал УИН или ФИО + дата рождения), обновятся, остальные добавятся.</p>
+      Студенты, которые уже есть в базе (совпал УИН или ФИО + дата рождения), обновятся, остальные добавятся.
+      Прошлые результаты с листа «Результаты» загружает только администратор — после проверки и подтверждения.</p>
     <label class="drop-zone" id="imp-drop">
       <strong>Выберите файл .xlsx или .csv</strong>
       <span>или перетащите его сюда</span>
@@ -535,6 +572,7 @@ function openImport() {
     </details>
     <div class="preview-level" id="imp-summary"></div>
     <div id="imp-preview"></div>
+    <div id="imp-results"></div>
     <ul class="import-errors" id="imp-errors"></ul>
     <div class="modal-actions">
       <button class="btn btn-outline" data-close-modal>Отмена</button>
@@ -542,11 +580,52 @@ function openImport() {
     </div>`, { wide: true });
 
   let good = [];
+  let goodResults = [];
+  let canResults = false;
+  const resultsOn = () => canResults && goodResults.length && $('#imp-res-ok') && $('#imp-res-ok').checked;
+  function updateGo() {
+    const n = good.length;
+    const m = resultsOn() ? goodResults.length : 0;
+    $('#imp-go').disabled = !n && !m;
+    $('#imp-go').textContent = n || m ? `Загрузить (${[n ? n + ' уч.' : '', m ? m + ' рез.' : ''].filter(Boolean).join(', ')})` : 'Загрузить';
+  }
+  function renderResults(results) {
+    const box = $('#imp-results');
+    if (!results.length) { box.innerHTML = ''; return; }
+    goodResults = results.filter((r) => !r.error && r.action !== 'skip');
+    const bad = results.filter((r) => r.error).length;
+    const skip = results.filter((r) => r.action === 'skip').length;
+    const extra = goodResults.filter((r) => !r.in_stage).length;
+    box.innerHTML = `<h3 class="mt">Прошлые результаты</h3>
+      <div class="preview-level">Строк: <strong>${results.length}</strong> · будет записано: <strong>${goodResults.length}</strong>` +
+      (extra ? ` · из них вне ступени (на знак не влияют): ${extra}` : '') +
+      (skip ? ` · пропуск — в базе свежее: ${skip}` : '') +
+      (bad ? ` · <span class="chip lvl-0">с ошибками: ${bad} — будут пропущены</span>` : '') + `</div>
+      <div class="import-scroll"><table class="import-table"><thead><tr><th>#</th><th>Участник</th><th>Ступ.</th><th>Испытание</th><th>Результат</th><th>Дата</th><th></th></tr></thead><tbody>
+      ${results.map((r, i) => {
+        const t = r.test_id ? GTO.TEST_BY_ID[r.test_id] : null;
+        const status = r.error ? esc(r.error)
+          : r.action === 'skip' ? esc(r.note)
+          : !r.in_stage ? 'вне ступени — на знак не влияет'
+          : `<span class="chip lvl-${r.level}">${r.level ? BADGE_TEXT[r.level] : 'не выполнено'}</span>${r.note ? ' · ' + esc(r.note) : ''}`;
+        return `<tr class="${r.error ? 'bad' : ''}"><td>${i + 1}</td><td>${esc([r.last_name, r.first_name, r.middle_name].filter(Boolean).join(' '))}</td>
+          <td>${r.stage ? ROMAN[r.stage] : ''}</td><td>${t ? esc(t.name) : esc(r.test_raw)}</td>
+          <td>${t && r.value != null ? esc(GTO.formatValue(r.test_id, r.value)) : esc(r.value_raw)}</td>
+          <td>${r.test_date ? fmtDate(r.test_date) : esc(r.date_raw)}</td><td class="${r.error ? 'err' : ''}">${status}</td></tr>`;
+      }).join('')}</tbody></table></div>` +
+      (!goodResults.length ? '' : canResults
+        ? `<label class="check mt"><input type="checkbox" id="imp-res-ok"> Результаты проверены — загрузить их в базу (${goodResults.length}). Более поздние результаты в базе не заменяются.</label>`
+        : '<p class="hint mt">Результаты в файле есть, но загрузить их может только администратор — передайте файл ему.</p>');
+    const ok = $('#imp-res-ok');
+    if (ok) ok.addEventListener('change', updateGo);
+  }
   async function parse(body) {
     $('#imp-errors').innerHTML = '';
     $('#imp-summary').textContent = 'Проверяю…';
     try {
-      const { rows } = await api('POST', '/api/import/parse', body);
+      const { rows, results = [], can_import_results: cir } = await api('POST', '/api/import/parse', body);
+      canResults = !!cir;
+      goodResults = [];
       good = rows.filter((r) => !r.error);
       const bad = rows.length - good.length;
       const upd = good.filter((r) => r.action === 'update').length;
@@ -562,8 +641,8 @@ function openImport() {
             <td>${esc(r.uin)}</td><td>${esc(r.institute)}</td><td>${esc(r.grp)}</td><td>${r.error ? esc(r.stage) : ROMAN[r.stage]}</td>
             <td class="${r.error ? 'err' : ''}">${r.error ? esc(r.error) : r.action === 'update' ? 'обновить' : 'новый'}</td></tr>`).join('')}
           </tbody></table></div>` : '';
-      $('#imp-go').disabled = !good.length;
-      $('#imp-go').textContent = good.length ? `Загрузить (${good.length})` : 'Загрузить';
+      renderResults(results);
+      updateGo();
     } catch (err) {
       $('#imp-summary').textContent = '';
       $('#imp-errors').innerHTML = `<li>${esc(err.message)}</li>`;
@@ -595,10 +674,11 @@ function openImport() {
 
   p.querySelector('#imp-go').addEventListener('click', async () => {
     try {
-      const r = await api('POST', '/api/students/import', { rows: good });
+      const r = await api('POST', '/api/students/import', { rows: good, results: resultsOn() ? goodResults : [] });
       closeModal();
       await loadData();
-      toast(`Готово: добавлено ${r.created}, обновлено ${r.updated}`, true);
+      toast(`Готово: добавлено ${r.created}, обновлено ${r.updated}` +
+        (r.results != null ? `, результатов записано ${r.results}${r.results_skipped ? ` (пропущено ${r.results_skipped} — в базе свежее)` : ''}` : ''), true);
     } catch (err) {
       const errs = err.data && err.data.errors;
       $('#imp-errors').innerHTML = errs
@@ -891,6 +971,7 @@ function bind() {
     if (e.target.id === 'drawer' || e.target.closest('[data-close]')) { closeDrawer(); return; }
     const er = e.target.closest('[data-edit-result]');
     if (er) { editResult(drawerStudentId, er.dataset.editResult); return; }
+    if (e.target.closest('[data-extra-add]')) { editResult(drawerStudentId, $('#extra-test').value); return; }
     if (e.target.closest('[data-edit-student]')) { editStudent(drawerStudentId); return; }
     if (e.target.closest('[data-delete-student]')) deleteStudent(drawerStudentId);
   });

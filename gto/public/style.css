@@ -162,6 +162,13 @@ body:not(.can-edit) .edit-only { display: none !important; }
 .sel-box { width: 18px; height: 18px; margin: 0 8px 0 0; vertical-align: middle; accent-color: var(--gto-red); cursor: pointer; flex: none; }
 .name-cell { display: flex; align-items: center; }
 .grid tr.selected td { background: #FDECEE; }
+.badge-cell { white-space: nowrap; }
+.badge-date { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.grid td.res.na[data-t] { cursor: pointer; }
+.grid td.res.na.extra { color: var(--muted); font-style: italic; }
+.extra-add { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+.extra-add select { flex: 1; min-width: 0; }
+.req.muted-req { background: #EEE; color: var(--muted); }
 .selbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 20px; background: #FFF4F4; border-bottom: 1px solid #F3C9CD; font-size: 14px; }
 .selbar #sel-count { font-weight: 700; color: var(--red-dark); }
 .name-btn { all: unset; cursor: pointer; font-weight: 700; color: var(--navy); display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }

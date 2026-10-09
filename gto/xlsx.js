@@ -101,24 +101,7 @@ function colIndex(ref) {
 }
 const colName = (i) => (i >= 26 ? String.fromCharCode(64 + Math.floor(i / 26)) : '') + String.fromCharCode(65 + (i % 26));
 
-// Первый лист книги → массив строк (массивы строковых значений).
-function readFirstSheet(buf) {
-  const files = unzip(buf);
-  const wb = files['xl/workbook.xml'];
-  if (!wb) throw new Error('Файл не похож на .xlsx');
-  const firstRid = (wb.match(/<(?:\w+:)?sheet\b[^>]*\br:id="([^"]+)"/) || [])[1];
-  const rels = files['xl/_rels/workbook.xml.rels'] || '';
-  let target = 'worksheets/sheet1.xml';
-  for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = (m[0].match(/\bId="([^"]+)"/) || [])[1];
-    if (id === firstRid) target = (m[0].match(/\bTarget="([^"]+)"/) || [])[1] || target;
-  }
-  const path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
-  const sheet = files[path];
-  if (!sheet) throw new Error('Не найден первый лист');
-  const shared = files['xl/sharedStrings.xml']
-    ? [...files['xl/sharedStrings.xml'].matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => textOf(m[1]))
-    : [];
+function sheetRows(sheet, shared) {
   const rows = [];
   for (const rm of sheet.matchAll(/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/g)) {
     const row = [];
@@ -139,13 +122,47 @@ function readFirstSheet(buf) {
   return rows;
 }
 
+// Все листы книги по порядку → [{ name, rows }], строки — массивы строковых значений.
+function readSheets(buf) {
+  const files = unzip(buf);
+  const wb = files['xl/workbook.xml'];
+  if (!wb) throw new Error('Файл не похож на .xlsx');
+  const rels = files['xl/_rels/workbook.xml.rels'] || '';
+  const target = {};
+  for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = (m[0].match(/\bId="([^"]+)"/) || [])[1];
+    target[id] = (m[0].match(/\bTarget="([^"]+)"/) || [])[1];
+  }
+  const shared = files['xl/sharedStrings.xml']
+    ? [...files['xl/sharedStrings.xml'].matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => textOf(m[1]))
+    : [];
+  const out = [];
+  for (const m of wb.matchAll(/<(?:\w+:)?sheet\b[^>]*>/g)) {
+    const name = xmlUnesc((m[0].match(/\bname="([^"]*)"/) || [])[1] || '');
+    const rid = (m[0].match(/\br:id="([^"]+)"/) || [])[1];
+    const t = target[rid] || `worksheets/sheet${out.length + 1}.xml`;
+    const path = t.startsWith('/') ? t.slice(1) : 'xl/' + t.replace(/^\.\//, '');
+    if (files[path]) out.push({ name, rows: sheetRows(files[path], shared) });
+  }
+  if (!out.length) throw new Error('Не найден ни один лист');
+  return out;
+}
+
+function readFirstSheet(buf) {
+  return readSheets(buf)[0].rows;
+}
+
 // ---------- шаблон ----------
 const TEMPLATE_COLUMNS = [
   ['Фамилия*', 18], ['Имя*', 14], ['Отчество', 18], ['Дата рождения* (ДД.ММ.ГГГГ)', 16], ['Пол* (М/Ж)', 9],
-  ['УИН ГТО (ГГ-РР-ННННННН)', 18], ['Институт*', 32], ['Группа*', 12], ['Ступень (5–9, можно пусто)', 12],
+  ['УИН ГТО (ГГ-РР-ННННННН)', 18], ['Институт*', 32], ['Группа*', 12], ['Ступень (1–18, можно пусто)', 12],
+];
+const RESULT_COLUMNS = [
+  ['УИН ГТО', 16], ['Фамилия*', 18], ['Имя*', 14], ['Отчество', 18], ['Дата рождения* (ДД.ММ.ГГГГ)', 16],
+  ['Испытание* (из списка)', 48], ['Результат*', 12], ['Дата выполнения* (ДД.ММ.ГГГГ)', 16],
 ];
 
-function sheetXml(rows, { widths = [], headerStyle = 2, bodyStyle = 1, freeze = false } = {}) {
+function sheetXml(rows, { widths = [], headerStyle = 2, bodyStyle = 1, freeze = false, list = '' } = {}) {
   const cols = widths.length
     ? '<cols>' + widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" style="${bodyStyle}" customWidth="1"/>`).join('') + '</cols>'
     : '';
@@ -153,10 +170,11 @@ function sheetXml(rows, { widths = [], headerStyle = 2, bodyStyle = 1, freeze = 
   const body = rows.map((r, ri) => `<row r="${ri + 1}">` + r.map((v, ci) =>
     `<c r="${colName(ci)}${ri + 1}" t="inlineStr" s="${ri === 0 ? headerStyle : bodyStyle}"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`).join('') + '</row>').join('');
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${pane}${cols}<sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${pane}${cols}<sheetData>${body}</sheetData>${list}</worksheet>`;
 }
 
-function buildTemplate() {
+// tests: [{ name, unit, kind }] — справочник испытаний для листа «Результаты».
+function buildTemplate(tests = []) {
   const instructions = [
     ['Как заполнить список студентов для загрузки в систему ГТО'],
     ['1. Заполните лист «Студенты»: одна строка — один студент. Строку заголовков не удаляйте.'],
@@ -164,8 +182,11 @@ function buildTemplate() {
     ['3. Дата рождения — в формате ДД.ММ.ГГГГ, например 05.03.2006.'],
     ['4. Пол — буква М или Ж.'],
     ['5. УИН — номер участника ГТО с сайта gto.ru вида 23-65-0012345. Если его нет — оставьте пустым.'],
-    ['6. Ступень можно не указывать: она определится по возрасту (V 14–15, VI 16–17, VII 18–19, VIII 20–24, IX 25–29 лет).'],
-    ['7. Сохраните файл в формате .xlsx и передайте администратору для загрузки.'],
+    ['6. Ступень можно не указывать: она определится по возрасту (I 6–7 лет … IX 25–29, X 30–34 … XVIII 70 лет и старше).'],
+    ['7. Прошлые результаты (если есть) — на листе «Результаты»: одна строка — одно испытание. Участника узнаём по УИН или по ФИО и дате рождения.'],
+    ['   Испытание выбирается из списка (лист «Испытания»), время — мин:сек (12:20), секунды — с десятыми (8,4), остальное — числом. Дата выполнения обязательна.'],
+    ['   Испытание не своей ступени тоже можно внести: оно сохранится, но на знак не повлияет. Результаты загружает только администратор.'],
+    ['8. Сохраните файл в формате .xlsx и передайте администратору для загрузки.'],
   ];
   const files = {
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -175,6 +196,8 @@ function buildTemplate() {
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`,
     '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -183,13 +206,15 @@ function buildTemplate() {
 </Relationships>`,
     'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Студенты" sheetId="1" r:id="rId1"/><sheet name="Инструкция" sheetId="2" r:id="rId2"/></sheets>
+<sheets><sheet name="Студенты" sheetId="1" r:id="rId1"/><sheet name="Результаты" sheetId="3" r:id="rId4"/><sheet name="Испытания" sheetId="4" r:id="rId5"/><sheet name="Инструкция" sheetId="2" r:id="rId2"/></sheets>
 </workbook>`,
     'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
 <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>
 </Relationships>`,
     // Стиль 1 — текстовый формат (@), чтобы Excel не превращал даты и УИН в числа; 2 — заголовок.
     'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -203,8 +228,15 @@ function buildTemplate() {
 </styleSheet>`,
     'xl/worksheets/sheet1.xml': sheetXml([TEMPLATE_COLUMNS.map((c) => c[0])], { widths: TEMPLATE_COLUMNS.map((c) => c[1]), freeze: true }),
     'xl/worksheets/sheet2.xml': sheetXml(instructions, { widths: [110], bodyStyle: 0 }),
+    'xl/worksheets/sheet3.xml': sheetXml([RESULT_COLUMNS.map((c) => c[0])], {
+      widths: RESULT_COLUMNS.map((c) => c[1]), freeze: true,
+      list: tests.length ? `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Испытание" error="Выберите испытание из списка" sqref="F2:F5000"><formula1>'Испытания'!$A$2:$A$${tests.length + 1}</formula1></dataValidation></dataValidations>` : '',
+    }),
+    'xl/worksheets/sheet4.xml': sheetXml([['Испытание', 'Единица', 'Как записывать результат'],
+      ...tests.map((t) => [t.name, t.unit, t.kind === 'time' ? 'мин:сек, например 12:20' : t.kind === 'sec' ? 'секунды, например 8,4' : 'число'])],
+    { widths: [70, 10, 26] }),
   };
   return zip(files);
 }
 
-module.exports = { buildTemplate, readFirstSheet, zip, unzip, TEMPLATE_COLUMNS };
+module.exports = { buildTemplate, readFirstSheet, readSheets, sheetXml, zip, unzip, TEMPLATE_COLUMNS, RESULT_COLUMNS };
