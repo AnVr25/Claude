@@ -520,3 +520,28 @@ test('загрузка прошлых результатов из Excel: тол�
   assert.equal(r2.results, 0);
   assert.equal(r2.results_skipped, 1);
 });
+
+test('один CSV: участники и результаты списком, и загрузка нашего же экспорта', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const admin = await login(base, 'admin');
+  const csv = '﻿УИН;Фамилия;Имя;Отчество;Дата рождения;Пол;Институт;Группа;Ступень;Испытание;Результат;Дата выполнения\n' +
+    ';Орлова;Ольга;;12.04.2008;Ж;ИФК;1;;Бег на 60 м;9,5;10.05.2026\n' +
+    ';Орлова;Ольга;;12.04.2008;Ж;ИФК;1;;"Наклон вперёд стоя на гимнастической скамье";+16;11.05.2026\n' +
+    '23-65-0000777;Волков;Влад;;01.01.2006;М;ИФК;2;;;;\n';
+  const p = await (await admin('POST', '/api/import/parse', { text: csv })).json();
+  assert.equal(p.rows.length, 2, 'Орлова один раз, хотя строк две');
+  assert.equal(p.results.length, 2);
+  assert.ok(p.results.every((r) => !r.error), JSON.stringify(p.results));
+  const r = await (await admin('POST', '/api/students/import', { rows: p.rows, results: p.results })).json();
+  assert.deepEqual([r.created, r.results], [2, 2]);
+
+  // экспорт → правим → загружаем обратно: результаты подхватываются из колонок испытаний
+  let exp = await (await admin('GET', '/api/export.csv')).text();
+  exp = exp.replace(/Орлова;Ольга/, 'Орлова;Ольга');
+  const p2 = await (await admin('POST', '/api/import/parse', { text: exp })).json();
+  assert.equal(p2.rows.filter((x) => x.action === 'update').length, 2);
+  assert.equal(p2.results.length, 2);
+  assert.ok(p2.results.every((x) => !x.error && x.test_date), JSON.stringify(p2.results));
+  assert.equal((await admin('GET', '/api/template.csv')).status, 200);
+});

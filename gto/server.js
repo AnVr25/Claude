@@ -202,11 +202,87 @@ function createApp({
     });
   }
 
+  // CSV/TSV с кавычками (как сохраняет Excel и наш «Экспорт CSV»): разделитель — табуляция, «;» или «,».
   function parseCsvText(text) {
-    const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
-    if (!lines.length) return [];
-    const sep = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
-    return lines.map((l) => l.split(sep).map((c) => c.trim().replace(/^"(.*)"$/, '$1').replace(/""/g, '"')));
+    text = String(text).replace(/^\uFEFF/, '');
+    const first = text.split(/\r?\n/, 1)[0] || '';
+    const sep = first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch;
+      } else if (ch === '"' && !cell.trim()) q = true;
+      else if (ch === sep) { row.push(cell.trim()); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell.trim()); cell = '';
+        if (row.some((c) => c)) rows.push(row);
+        row = [];
+      } else cell += ch;
+    }
+    row.push(cell.trim());
+    if (row.some((c) => c)) rows.push(row);
+    return rows;
+  }
+
+  // Один общий список (CSV или один лист Excel): участники и их результаты в одной таблице.
+  // Длинный вид: колонки «Испытание», «Результат», «Дата выполнения» — строка на каждый результат.
+  // Широкий вид — как наш «Экспорт CSV»: колонка на испытание («60 м») и его дата («60 м (дата)»).
+  // Возвращает таблицу участников (без повторов) и таблицу результатов в формате листа «Результаты».
+  const normName = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
+  const SHORT_TO_TEST = new Map(GTO.TESTS.map((t) => [normName(t.short), t.id]));
+  function splitCombined(table) {
+    table = table.filter((r) => r.some((c) => String(c).trim()));
+    if (table.length < 2) return { students: table, results: null };
+    const head = table[0].map((h) => String(h).trim());
+    const low = head.map((h) => h.toLowerCase());
+    const idx = (re) => low.findIndex((h) => re.test(h));
+    const iTest = idx(/испыт|дисципл/);
+    const iVal = idx(/^результ/);
+    const iDate = idx(/выполн/);
+    const wide = [];
+    head.forEach((h, i) => {
+      const m = h.match(/^(.*?)\s*\(дата\)$/);
+      const id = SHORT_TO_TEST.get(normName(m ? m[1] : h));
+      if (!id) return;
+      let w = wide.find((x) => x.id === id);
+      if (!w) wide.push(w = { id, v: -1, d: -1 });
+      if (m) w.d = i; else w.v = i;
+    });
+    const isLong = iTest >= 0 && iVal >= 0;
+    if (!isLong && !wide.some((w) => w.v >= 0)) return { students: table, results: null };
+    const resultCols = new Set([iTest, iVal, iDate, ...wide.flatMap((w) => [w.v, w.d])].filter((i) => i >= 0));
+    // знак и его дата из нашей выгрузки — вычисляемые, не загружаем
+    low.forEach((h, i) => { if (/знак/.test(h)) resultCols.add(i); });
+    const keep = head.map((_, i) => i).filter((i) => !resultCols.has(i));
+    const pick = (r, re) => { const i = idx(re); return i >= 0 ? String(r[i] ?? '').trim() : ''; };
+    const studentRows = new Map();
+    const results = [['УИН', 'Фамилия', 'Имя', 'Отчество', 'Дата рождения', 'Испытание', 'Результат', 'Дата выполнения']];
+    const testName = (id) => GTO.TEST_BY_ID[id].name;
+    for (const r of table.slice(1)) {
+      const sr = keep.map((i) => String(r[i] ?? '').trim());
+      const k = sr.join('\u0001');
+      if (!studentRows.has(k)) studentRows.set(k, sr);
+      let last = pick(r, /фамил/);
+      let first = pick(r, /^имя/);
+      let middle = pick(r, /отчеств/);
+      const fio = pick(r, /^фио|ф\.и\.о/);
+      if (fio && !last) { const p = fio.split(/\s+/); [last, first] = p; middle = p.slice(2).join(' '); }
+      const who = [pick(r, /уин|uin/), last, first, middle, pick(r, /рожд/)];
+      if (isLong) {
+        const v = String(r[iVal] ?? '').trim();
+        if (v || String(r[iTest] ?? '').trim()) results.push([...who, String(r[iTest] ?? '').trim(), v, iDate >= 0 ? String(r[iDate] ?? '').trim() : '']);
+      }
+      for (const w of wide) {
+        const v = w.v >= 0 ? String(r[w.v] ?? '').trim() : '';
+        if (v) results.push([...who, testName(w.id), v, w.d >= 0 ? String(r[w.d] ?? '').trim() : '']);
+      }
+    }
+    return { students: [keep.map((i) => head[i]), ...studentRows.values()], results: results.length > 1 ? results : null };
   }
 
   // Найти существующего студента: по УИН, иначе по ФИО + дате рождения.
@@ -230,7 +306,6 @@ function createApp({
     [/уин|uin/, 'uin'], [/^фио|ф\.и\.о/, 'fio'], [/фамил/, 'last_name'], [/^имя/, 'first_name'], [/отчеств/, 'middle_name'],
     [/рожд/, 'birth_date'], [/испыт|дисципл|норматив/, 'test'], [/^результ/, 'value'], [/выполн|^дата/, 'date'],
   ];
-  const normName = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"]/g, '').replace(/\s+/g, ' ').trim();
   const TEST_LOOKUP = new Map();
   for (const t of GTO.TESTS) for (const k of [t.id, t.name, t.short, `${t.name}, ${t.unit}`]) TEST_LOOKUP.set(normName(k), t.id);
   const studentKey = (x) => x.uin ? 'u:' + x.uin : 'n:' + [x.last_name, x.first_name, x.middle_name].map(normName).join(' ') + '|' + x.birth_date;
@@ -377,6 +452,16 @@ function createApp({
       return sendCsv(res, user);
     }
 
+    if (method === 'GET' && p === '/api/template.csv') {
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="gto-spisok.csv"; filename*=UTF-8''${encodeURIComponent('ГТО — общий список.csv')}`,
+        'Cache-Control': 'no-store',
+      });
+      return res.end('\uFEFF' + ['УИН', 'Фамилия', 'Имя', 'Отчество', 'Дата рождения', 'Пол', 'Институт', 'Группа', 'Ступень',
+        'Испытание', 'Результат', 'Дата выполнения'].join(';') + '\r\n');
+    }
+
     if (method === 'GET' && p === '/api/template.xlsx') {
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -411,6 +496,7 @@ function createApp({
           table = studs.rows;
           resultTable = (sheets.find((x) => /результ/i.test(x.name)) || {}).rows || null;
         } else table = parseCsvText(b.text || '');
+        if (!resultTable) ({ students: table, results: resultTable } = splitCombined(table));
       } catch (e) { throw new HttpError(400, e.message || 'Не удалось прочитать файл'); }
       const rows = tableToRows(table);
       if (rows.length > 5000) throw new HttpError(400, 'Не больше 5000 строк за раз');
