@@ -317,20 +317,21 @@ td.res{font:600 18px var(--head)}
 .wz-dots{display:flex;gap:6px;flex:1}
 .wz-dots i{height:4px;flex:1;max-width:60px;border-radius:2px;background:var(--line)}
 .wz-dots i.on{background:var(--track)}
-.wz-x{border:0;background:none;font-size:18px;color:var(--muted);padding:4px 8px;cursor:pointer}
+.wz-x{border:0;background:none;font-size:18px;color:var(--muted);width:44px;height:44px;margin:-8px -8px -8px auto;padding:0;cursor:pointer}
 .wiz h2{font:600 24px var(--head);margin:0 0 4px}
 .wiz .wz-sub{color:var(--muted);margin:0 0 14px}
 .wz-cards{display:grid;grid-template-columns:1fr;gap:10px}
-.wz-card{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--panel);cursor:pointer;color:var(--ink);font-weight:400;min-height:64px}
+.wz-card{display:flex;flex-direction:column;gap:2px;text-align:left;width:100%;min-width:0;white-space:normal;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--panel);cursor:pointer;color:var(--ink);font-weight:400;min-height:64px}
 .wz-card b{font:600 18px var(--head)}
 .wz-card small{color:var(--muted);font-size:14px}
 .wz-card:hover{border-color:var(--track)}
 .wz-card.on{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track);background:#E71E2508}
 .wz-form{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px}
 .wz-form .full{grid-column:1/-1}
-.wz-form input{font-size:16px;min-height:44px}
+.wz-form input,.wiz textarea{font-size:16px;min-height:44px}
+.wiz :focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
 .wz-chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
-.wz-chip{border:1px solid var(--line);border-radius:999px;padding:8px 14px;min-height:40px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink)}
+.wz-chip{border:1px solid var(--line);border-radius:999px;padding:8px 16px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink)}
 .wz-chip.on{background:var(--track);border-color:var(--track);color:#fff}
 .wz-err{color:var(--bad,#c8161c);font-weight:700;margin-top:8px;min-height:1.2em}
 .wz-nav{margin-top:16px}
@@ -475,7 +476,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="row"><button class="hide" id="calImport" title="Перенести календарь федерации 2026 года с сайта fla65.ru">Загрузить календарь ФЛАСО 2026</button><button class="primary" id="btnNew">Новое соревнование</button></div>
   </div>
   <div id="evFormHome"></div>
-  <div class="panel wiz hide" id="wizard" role="dialog" aria-labelledby="wzTitle">
+  <div class="panel wiz hide" id="wizard" role="region" aria-labelledby="wzTitle">
     <div class="wz-top"><span class="wz-step" id="wzStep">Шаг 1 из 3</span><div class="wz-dots"><i></i><i></i><i></i></div><button class="wz-x" id="wzClose" aria-label="Закрыть" title="Закрыть">✕</button></div>
     <div id="wzBody"></div>
     <div class="row wz-nav"><button id="wzBack">← Назад</button><span class="spacer"></span><button class="primary" id="wzNext">Далее →</button></div>
@@ -1299,7 +1300,7 @@ const WZ_TYPES = [
 const wz = {step:1, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true};
 function wzOpen(){
   Object.assign(wz, {step:1, type:null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true});
-  $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wzDraw();
+  $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wz.focus = true; wzDraw();
   $("wizard").scrollIntoView({block:"nearest"});
 }
 function wzClose(){ $("wizard").classList.add("hide"); }
@@ -1310,7 +1311,7 @@ function wzDraw(){
   document.querySelectorAll(".wz-dots i").forEach((d, i) => d.classList.toggle("on", i < n));
   $("wzBack").classList.toggle("hide", n === 1); $("wzNext").textContent = n === 3 ? "Создать соревнование" : "Далее →";
   if (n === 1) b.innerHTML = `<h2 id="wzTitle">Что за соревнование?</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
-    <div class="wz-cards">${WZ_TYPES.map(t => `<button type="button" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
+    <div class="wz-cards" role="radiogroup" aria-label="Тип соревнования">${WZ_TYPES.map(t => `<button type="button" role="radio" aria-checked="${wz.type === t.id}" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
   if (n === 2) b.innerHTML = `<h2 id="wzTitle">Как называется и когда проходит?</h2><p class="wz-sub">Так увидят участники на сайте и в протоколе.</p>
     <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="Кубок Сахалинской области" value="${esc(wz.name)}"></div>
     <div><label for="wzDate">Дата *</label><input id="wzDate" type="date" value="${esc(wz.date)}"></div>
@@ -1322,14 +1323,16 @@ function wzDraw(){
     <label for="wzExtra">Свои дистанции <span class="muted">— по одной в строке</span></label><textarea id="wzExtra" style="min-height:64px" placeholder="400 м с/б">${esc(wz.extra)}</textarea>
     <label class="check" style="margin-top:12px"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Сразу открыть приём заявок и показать на сайте fla65.ru</label>
     <p class="small muted" style="margin:2px 0 0">Лимит мест, номера и категории настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
+  if (wz.focus) { const f = n === 1 ? (b.querySelector(".wz-card.on") || b.querySelector(".wz-card")) : n === 2 ? $("wzName") : (b.querySelector(".wz-chip.on") || b.querySelector(".wz-chip")); f && f.focus({preventScroll:true}); }
+  wz.focus = true;
 }
 function wzRead(){
   if (wz.step === 2) { wz.name = $("wzName").value.trim(); wz.date = $("wzDate").value; wz.city = $("wzCity").value.trim(); wz.place = $("wzPlace").value.trim(); }
   if (wz.step === 3) { wz.extra = $("wzExtra").value; wz.open = $("wzOpen").checked; }
 }
 $("wzBody").addEventListener("click", (e) => {
-  const c = e.target.closest("[data-t]"); if (c) { wz.type = c.dataset.t; wz.dists = []; wzDraw(); return; }
-  const d = e.target.closest("[data-d]"); if (d) { const v = d.dataset.d; wz.dists = wz.dists.includes(v) ? wz.dists.filter(x => x !== v) : [...wz.dists, v]; wz.extra = $("wzExtra").value; wzDraw(); }
+  const c = e.target.closest("[data-t]"); if (c) { wz.type = c.dataset.t; wz.dists = []; wz.focus = false; wzDraw(); $("wzBody").querySelector(`[data-t="${wz.type}"]`).focus(); return; }
+  const d = e.target.closest("[data-d]"); if (d) { const v = d.dataset.d; wz.dists = wz.dists.includes(v) ? wz.dists.filter(x => x !== v) : [...wz.dists, v]; wz.extra = $("wzExtra").value; wz.focus = false; wzDraw(); [...$("wzBody").querySelectorAll("[data-d]")].find(x => x.dataset.d === v).focus(); }
 });
 $("wzBack").onclick = () => { wzRead(); wz.step = Math.max(1, wz.step - 1); wzDraw(); };
 $("wzClose").onclick = wzClose;
