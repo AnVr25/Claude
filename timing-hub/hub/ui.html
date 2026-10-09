@@ -484,6 +484,9 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <label for="fNotes">Заметки для своих</label><input id="fNotes" placeholder="дистанции, круги, особенности">
     <label class="check chips-only"><input id="fPush" type="checkbox" checked> Отправлять старт в Wiclax</label>
     <label class="check judge-only"><input id="fSeq" type="checkbox"> Забеги идут по очереди: старт следующего забега сам завершает предыдущий</label>
+    <label for="fTeam" style="margin-top:12px">Командный зачёт</label>
+    <select id="fTeam" style="max-width:420px"><option value="">нет</option><option value="1">1 лучший участник команды в каждой категории</option><option value="2">2 лучших в каждой категории</option><option value="3">3 лучших в каждой категории</option><option value="4">4 лучших в каждой категории</option><option value="5">5 лучших в каждой категории</option><option value="6">6 лучших в каждой категории</option><option value="20">все участники команды</option></select>
+    <p class="small muted" style="margin:4px 0 0">Очки — из колонки «Очки» в списке участников, а если её нет — по месту: 20, 17, 15, 14, 13 … 1. Мальчики и девочки одного возраста — одна таблица.</p>
     <p class="small muted" id="fTimingHint" style="margin:8px 0 0"></p>
     <div class="row" style="margin-top:14px">
       <button class="primary" id="btnSave">Сохранить</button>
@@ -562,7 +565,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       </div>
       <div class="drop" id="drop">Перетащите сюда CSV или Excel со стартовым списком — или нажмите, чтобы выбрать файл. Можно и вставить строки ниже.</div>
       <details class="small muted" style="margin-bottom:8px"><summary>Какие колонки нужны</summary>
-        <p>Порядок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке: можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны для протокола; храните их с согласия участников.</p></details>
+        <p>Порядок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке: можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны для протокола; храните их с согласия участников.</p><p><b>Старт уже прошёл</b> (протокол из другой системы или с бумаги)? Добавьте колонки <span class="mono">Дистанция</span>, <span class="mono">Результат</span> (1:50,5 · 12,84 · DNF · DNS) и <span class="mono">Очки</span> — места посчитаются сами, а с настройкой «Командный зачёт» — и места команд. Список без колонки «Результат» уже введённые итоги не стирает.</p></details>
       <textarea id="dEntries" placeholder="Номер;Чип;Забег;ФИО;Год;Команда;Категория&#10;101;E2801160600002084A5C1234;Забег 1;Иванов Иван;2008;СШОР им. Комнацкого;Юноши&#10;15;;Забег 2;Петрова Анна;2009;Холмск"></textarea>
       <div class="row" style="margin-top:10px">
         <button class="primary" id="btnEntries">Сохранить список</button>
@@ -1174,6 +1177,7 @@ async function openForm(ev, where){
   $("fStartClock").value = ev?.start_clock||""; $("fOrg").value = ev?.organizer||(events.find(x=>x.organizer)||{}).organizer||"";
   $("fJudge").value = ev?.chief_judge||""; $("fSecr").value = ev?.chief_secretary||"";
   $("fSeq").checked = ev ? !!ev.heats_sequential : false;
+  $("fTeam").value = ev && ev.team_best ? String(ev.team_best) : "";
   $("fDateEnd").value = ev?.date_end||""; $("fCity").value = ev?.city||"";
   const kind = ev?.kind || "mass";
   document.querySelectorAll('input[name=fKind]').forEach(r => r.checked = r.value === kind);
@@ -1216,7 +1220,7 @@ $("btnSave").onclick = async () => {
     finish_device:$("fFinish").value||null, min_time_sec:Number($("fMin").value||0), alert_silence_min:Number($("fSilence").value||0),
     push_wiclax:$("fPush").checked, notes:$("fNotes").value.trim(),
     start_clock:$("fStartClock").value.trim(), organizer:$("fOrg").value.trim(),
-    chief_judge:$("fJudge").value.trim(), chief_secretary:$("fSecr").value.trim(), heats_sequential:$("fSeq").checked,
+    chief_judge:$("fJudge").value.trim(), chief_secretary:$("fSecr").value.trim(), heats_sequential:$("fSeq").checked, team_best:$("fTeam").value || null,
     kind:(document.querySelector('input[name=fKind]:checked')||{}).value||"mass", timing:$("fTiming").value,
     date_end:$("fDateEnd").value||null, city:$("fCity").value.trim()};
   if (body.timing !== "chips") { body.finish_device = "JUDGE"; body.push_wiclax = false; }

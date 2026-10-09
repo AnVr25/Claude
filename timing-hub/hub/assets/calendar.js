@@ -295,7 +295,7 @@ a:focus-visible,button:focus-visible{outline:3px solid #E71E2566;outline-offset:
       acts.push(link(e.reg.url || e.page, 'Регистрация' + (dl ? `<small>${esc(dl)}</small>` : ''), 'btn pri'));
     }
     const res = link(e.results, 'Результаты' + (e.results_live ? `<span class="on">${DOT}онлайн</span>` : ''), 'btn res');
-    if (st === 'past') acts.push(res);
+    if (st === 'past') acts.push(res, link(e.teams, 'Командный зачёт', 'btn'));
     acts.push(link(e.start_list, 'Стартовый протокол', 'btn'));
     if (st !== 'past') acts.push(res);
     acts.push(link(e.live, 'Трансляция' + (st === 'run' ? `<span class="on">${DOT}эфир</span>` : ''), 'btn'));

@@ -317,6 +317,7 @@ function eventBlock(head){
   const tiles=[
     tile(c.start_list,"start","Стартовый протокол","Забеги и стартовые номера"),
     tile(c.results,"res","Результаты",live?'<span class="live">онлайн</span>':c.status==="finished"?"Итоговый протокол":"Протокол результатов",live?"hot":""),
+    tile(c.teams,"res","Командный зачёт","Места школ и команд"),
     tile(c.live,"live","Трансляция",esc(host(c.live)||"видео")),
     tile(c.photo,"photo","Фото",esc(host(c.photo)||"фотоальбом")),
     ...(Array.isArray(c.links)?c.links:[]).filter(l=>l&&l.url).map(l=>tile(l.url,"link",l.title||host(l.url)||"Ссылка",esc(host(l.url))))].join("");

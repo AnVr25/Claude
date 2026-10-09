@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.6"
+VERSION = "2.7"
 log = logging.getLogger("timing-hub")
 
 
@@ -695,7 +695,7 @@ class Store:
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
                     "reg_info", "reg_consent",
                     "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
-                    "live_url", "photo_url", "links", "pub_start", "pub_results")
+                    "live_url", "photo_url", "links", "pub_start", "pub_results", "team_best")
     KINDS = ("mass", "stadium")
     TIMINGS = ("chips", "judge", "manual", "lynx")
     LEVELS = ("russia", "dfo", "interregion", "region", "mass")
@@ -718,6 +718,8 @@ class Store:
                        ("organizer", "TEXT"), ("chief_judge", "TEXT"), ("chief_secretary", "TEXT"),
                        ("start_clock", "TEXT"), ("heats_sequential", "INTEGER")))
         add("readers", (("wiclax_port", "INTEGER"),))
+        add("entries", (("points", "REAL"),))
+        add("events", (("team_best", "INTEGER"),))
         add("users", (("note", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1")))
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
@@ -1012,6 +1014,11 @@ class Store:
                     v = str(v).strip()[:4000 if k == "links" else 500] or None
                 if k == "reg_lanes":
                     v = max(1, min(int(v or 8), 50))
+                if k == "team_best":
+                    try:
+                        v = max(1, min(int(v), 20)) if v not in (None, "", 0, "0") else None
+                    except (TypeError, ValueError):
+                        v = None
                 if k in ("reg_distances", "reg_rules", "reg_info", "reg_consent", "reg_deadline") and v is not None:
                     v = str(v)[:4000] or None
                 sets.append(f"{k} = ?")
@@ -1038,9 +1045,10 @@ class Store:
             self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
             self.con.executemany(
                 "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lane, coach, seed, reg_id, sex, result, status, points) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
-                  r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"))
+                  r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
+                  r.get("result"), r.get("status"), r.get("points"))
                  for r in rows])
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
                 self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
@@ -1056,7 +1064,8 @@ class Store:
 
     def entries_rows(self, eid: int) -> list:
         return self._rows(self.con.execute(
-            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status FROM entries"
+            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points"
+            " FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
 
     def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str]) -> int:
@@ -1786,6 +1795,7 @@ class Hub:
                 "reg": {"open": True, "deadline": ev.get("reg_deadline"), "url": page} if page and open_ else None,
                 "start_list": f"{page}/protocol?kind=start" if page and v["pub_start"] else None,
                 "results": f"{page}/protocol" if page and v["pub_results"] else None,
+                "teams": f"{page}/protocol?kind=teams" if page and v["pub_results"] and ev.get("team_best") else None,
                 "results_live": bool(page and v["pub_results"] and status == "running"),
                 "live": self.clean_url(ev.get("live_url")), "photo": self.clean_url(ev.get("photo_url")),
                 "links": self.parse_links(ev.get("links")), "files": files}
@@ -1815,7 +1825,7 @@ class Hub:
         r = self.compute(ev)
         return {"event": self._public_event(ev), "started": r["started"], "devices": r["devices"],
                 "finished": self._no_chips(r["finished"]), "on_course": self._no_chips(r["on_course"]),
-                "not_seen": self._no_chips(r["not_seen"]), "groups": r["groups"],
+                "not_seen": self._no_chips(r["not_seen"]), "groups": r["groups"], "teams": r.get("teams") or [],
                 "final": (ev.get("status") == "finished")}
 
     def public_startlist(self, ev: dict) -> dict:
@@ -1905,6 +1915,52 @@ class Hub:
         f = f".{frac}" if frac else ""
         txt = f"{h}:{mi:02d}:{sec:02d}{f}" if h else (f"{mi}:{sec:02d}{f}" if mi else f"{sec}{f}")
         return total, txt
+
+    TEAM_POINTS = (20, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+    GENDER_WORDS = ("мальчики", "юноши", "юниоры", "мужчины", "девочки", "девушки", "юниорки", "женщины")
+
+    def team_standings(self, finished: list, best: int) -> list:
+        """Командный зачёт: в каждой категории команде идут очки её `best` лучших участников;
+        категории одной возрастной группы (мальчики и девочки 2017–2018 г.р.) — колонки одной таблицы.
+        Очки — из протокола (колонка «Очки»), а если их нет — по месту: 20, 17, 15, 14, 13 … 1, дальше по 1."""
+        by_cat: dict = {}
+        for r in finished:
+            by_cat.setdefault((r["category"], r["distance"]), []).append(r)
+        groups: dict = {}
+        for (cat, dist), lst in by_cat.items():
+            lst.sort(key=lambda r: r.get("place_overall") or 0)
+            imported = any(r.get("points") is not None for r in lst)
+            if not imported:
+                for i, r in enumerate(lst):
+                    r["points"] = self.TEAM_POINTS[i] if i < len(self.TEAM_POINTS) else 1
+            low = (cat or "").strip().lower()
+            word = next((w for w in self.GENDER_WORDS if low.startswith(w)), None)
+            if word:
+                grp, col = (cat or "").strip()[len(word):].strip(" ,·-") or dist or "Общий зачёт", word.capitalize()
+            else:
+                grp, col = cat or dist or "Общий зачёт", "Очки"
+            g = groups.setdefault(grp, {"cols": [], "teams": {}})
+            if col not in g["cols"]:
+                g["cols"].append(col)
+            per_team: dict = {}
+            for r in lst:
+                if r.get("team") and r.get("points") is not None:
+                    per_team.setdefault(r["team"], []).append(float(r["points"]))
+            for team, pts in per_team.items():
+                t = g["teams"].setdefault(team, {})
+                t[col] = t.get(col, 0) + sum(sorted(pts, reverse=True)[:best])
+        out = []
+        for grp in sorted(groups, reverse=True):
+            g = groups[grp]
+            cols = sorted(g["cols"], key=lambda c: (self.GENDER_WORDS.index(c.lower()) if c.lower() in self.GENDER_WORDS else 99))
+            rows = [{"team": t, "by": {c: (int(v) if float(v).is_integer() else v) for c, v in by.items()},
+                     "total": sum(by.values())} for t, by in g["teams"].items()]
+            rows.sort(key=lambda r: (-r["total"], r["team"]))
+            for i, r in enumerate(rows):
+                r["place"] = rows[i - 1]["place"] if i and rows[i - 1]["total"] == r["total"] else i + 1
+                r["total"] = int(r["total"]) if float(r["total"]).is_integer() else r["total"]
+            out.append({"group": grp, "columns": cols, "best": best, "rows": rows})
+        return out
 
     def compute(self, ev: dict) -> dict:
         eid = ev["id"]
@@ -2012,6 +2068,7 @@ class Hub:
                     "distance": meta.get("distance") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
+                    "points": inf.get("points"),
                     "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
                     "manual": sorted(d for d in per if (chip, d) in manual_set)}
 
@@ -2058,6 +2115,8 @@ class Hub:
                     tie = [r]
             res["groups"].append({"category": cat, "distance": dist, "count": len(lst)})
         res["groups"].sort(key=lambda g: (g["distance"], g["category"]))
+        if ev.get("team_best"):
+            res["teams"] = self.team_standings(res["finished"], int(ev["team_best"]))
         for chip, per in first.items():
             if fin_dev not in per and chip not in entered and chip not in status_of:
                 last_dev = max(per, key=lambda d: per[d])
@@ -2186,7 +2245,8 @@ class Hub:
                      f" / {wave}" if wave else "", fmt_db(st), len(self.wiclax_clients))
         return self._event_view(self.store.get_event(ev["id"]))
 
-    ENTRY_COLS = ("bib", "chip", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed")
+    ENTRY_COLS = ("bib", "chip", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed",
+                  "result", "points")
     _HEAD = (("bib", ("номер", "нагрудн", "№", "bib", "ст.н", "старт.ном")),
              ("chip", ("чип", "chip", "транспонд", "метка")),
              ("wave", ("забег", "волна", "heat", "старт")),
@@ -2196,7 +2256,10 @@ class Hub:
              ("category", ("категор", "группа", "пол", "category")),
              ("lane", ("дорожк", "lane")),
              ("coach", ("тренер", "coach")),
-             ("seed", ("заявл", "лучш", "seed")))
+             ("seed", ("заявл", "лучш", "seed")),
+             ("result", ("результат", "итог", "result")),
+             ("points", ("очк", "балл", "points")),
+             ("distance", ("дистанц", "distance")))
 
     @classmethod
     def parse_entries(cls, text: str) -> tuple:
@@ -2222,7 +2285,7 @@ class Hub:
                 if "bib" in mapped:
                     cols = mapped
                     continue
-            rec = {k: (parts[i] if i < len(parts) else "") for i, k in enumerate(cols) if k}
+            rec = {k: parts[i] for i, k in enumerate(cols) if k and i < len(parts)}
             bib = re.sub(r"[^0-9A-Za-z-]", "", rec.get("bib", ""))[:12]
             chip = re.sub(r"\s", "", rec.get("chip", "")).upper()
             if not bib or (chip and not re.fullmatch(r"[0-9A-Z]+", chip)):
@@ -2241,6 +2304,24 @@ class Hub:
                          "team": rec.get("team", "")[:80] or None, "category": rec.get("category", "")[:40] or None,
                          "lane": int(rec["lane"]) if rec.get("lane", "").isdigit() else None,
                          "coach": rec.get("coach", "")[:80] or None, "seed": rec.get("seed", "")[:12] or None})
+            if rec.get("distance"):
+                rows[-1]["distance"] = rec["distance"][:20]
+            if "result" in rec:         # колонка есть: итог уже проведённого старта (протокол из другой системы)
+                val = rec["result"].strip()
+                st = val.upper().rstrip(".")
+                if st in cls.STATUSES:
+                    rows[-1].update(result=None, status=st)
+                elif val and cls.parse_result(val) is None:
+                    rows.pop()
+                    bad.append(n)
+                    continue
+                else:
+                    rows[-1].update(result=val or None, status=None)
+            if "points" in rec:
+                try:
+                    rows[-1]["points"] = float(rec["points"].replace(",", ".")) if rec["points"].strip() else None
+                except ValueError:
+                    rows[-1]["points"] = None
         return rows, bad
 
     # ---- проверка чипов перед стартом
@@ -2391,7 +2472,7 @@ class Hub:
                     return err("укажите название")
                 eid = self.store.add_event({**data, "name": name})
                 extra = {k: data[k] for k in ("kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end",
-                                              "city", "note") if k in data}
+                                              "city", "note", "team_best") if k in data}
                 if extra:
                     self.store.update_event(eid, extra)
                 if data.get("pub_site"):
@@ -2421,9 +2502,12 @@ class Hub:
                 rows = self.store.entries_rows(eid)
                 lines = []
                 for r in rows:
+                    pts = r.get("points")
                     vals = [r["bib"], "" if r["chip"].startswith("#") else r["chip"], r["wave"] or "",
                             r["name"] or "", r["birth_year"] or "", r["team"] or "", r["category"] or "",
-                            str(r["lane"] or ""), r["coach"] or "", r["seed"] or ""]
+                            str(r["lane"] or ""), r["coach"] or "", r["seed"] or "",
+                            r.get("status") or r.get("result") or "",
+                            "" if pts is None else (str(int(pts)) if float(pts).is_integer() else str(pts))]
                     while len(vals) > 2 and not vals[-1]:
                         vals.pop()
                     lines.append(";".join(vals))
@@ -2580,9 +2664,26 @@ class Hub:
             rows, bad = self.parse_entries(str(data.get("text", "")))
             old = {e["bib"]: e for e in self.store.entries_rows(eid)}
             for r in rows:
-                r["reg_id"] = (old.get(r["bib"]) or {}).get("reg_id")    # связь с заявкой и пол сохраняются по номеру
-                r["sex"] = (old.get(r["bib"]) or {}).get("sex")
+                o = old.get(r["bib"]) or {}
+                r["reg_id"] = o.get("reg_id")    # связь с заявкой и пол сохраняются по номеру
+                r["sex"] = o.get("sex")
+                if "result" not in r:            # в списке нет колонки результата — введённые итоги не теряются
+                    r["result"], r["status"] = o.get("result"), o.get("status")
+                if "points" not in r:
+                    r["points"] = o.get("points")
             self.store.set_entries(eid, rows)
+            waves = {w["name"]: w for w in self.store.waves(eid)}
+            for r in rows:                       # дистанция и категория забега — из колонок файла, если у забега их нет
+                w = waves.get(r.get("wave") or "")
+                if not w:
+                    continue
+                kw = {}
+                if r.get("distance") and not w.get("distance"):
+                    kw["distance"] = w["distance"] = r["distance"]
+                if r.get("category") and not w.get("category"):
+                    kw["category"] = w["category"] = r["category"]
+                if kw:
+                    self.store.update_wave(eid, w["name"], **kw)
             self.store.audit(who, eid, "Загружен список участников", f"{len(rows)} строк")
             return ok({"count": len(rows), "bad_lines": bad})
         if action == "waves":

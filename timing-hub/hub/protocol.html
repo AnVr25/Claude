@@ -72,6 +72,7 @@ tbody td:first-child b{font:600 13px/1 var(--head)}
 /* 1–3 места: мягкие золото / серебро / бронза */
 tr[class^="pl"]>td:first-child b{display:inline-block;min-width:22px;padding:3px 4px 2px;border-radius:999px;text-align:center}
 tr.pl1>td:first-child b{background:#C9A22733;box-shadow:inset 0 0 0 1px var(--gold);color:#5C4708}
+tr.mine>td{background:#F3481D17;font-weight:700}
 tr.pl2>td:first-child b{background:#8E99A830;box-shadow:inset 0 0 0 1px var(--silver);color:#39414C}
 tr.pl3>td:first-child b{background:#B873332E;box-shadow:inset 0 0 0 1px var(--bronze);color:#5B3613}
 tr{break-inside:avoid;page-break-inside:avoid}
@@ -119,9 +120,11 @@ thead{display:table-header-group}
   <select id="mode">
     <option value="overall">Итоговый: общий рейтинг по категориям</option>
     <option value="heats">По забегам</option>
+    <option value="teams">Командный зачёт</option>
     <option value="start">Стартовый протокол</option>
   </select>
   <select id="grp"><option value="">все дистанции и категории</option></select>
+  <select id="team" title="Показать только участников одной команды — например, своей школы"><option value="">все команды</option></select>
   <label id="chipBox"><input type="checkbox" id="showChip"> чипы</label>
   <label><input type="checkbox" id="showSplits"> отсечки</label>
   <label><input type="checkbox" id="showDnf" checked> не финишировали</label>
@@ -140,9 +143,10 @@ const eid=new URLSearchParams(location.search).get("event");
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let R=null, SL=null;
 const kind=new URLSearchParams(location.search).get("kind");
-["mode","grp","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
+const QTEAM=new URLSearchParams(location.search).get("team")||"";
+["mode","grp","team","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
   const el=$(id), saved=LS.get("protocol."+id,null);
-  if(saved!==null){ if(el.type==="checkbox") el.checked=saved; else if(id!=="grp") el.value=saved; }
+  if(saved!==null){ if(el.type==="checkbox") el.checked=saved; else if(id!=="grp"&&id!=="team") el.value=saved; }
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
 });
 const dateRu=d=>{ if(!d) return ""; const [y,m,dd]=d.split("-"); return `${dd}.${m}.${y}`; };
@@ -155,6 +159,18 @@ if(PUB){
   const b=document.createElement("a"); b.className="back"; b.href="/r/"+SLUG; b.textContent="← к странице события"; $("barLogo").after(b);
 }
 const gkey=x=>(x.distance||"")+"|"+(x.category||"");
+// команды для выбора «показать только свою»; режим «Командный зачёт» — только если он считается
+function fillTeams(){
+  const all=R?R.finished.concat(R.on_course,R.not_seen):[];
+  const teams=[...new Set(all.map(x=>x.team).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ru",{numeric:true}));
+  const prev=QTEAM||LS.get("protocol.team","");
+  $("team").innerHTML='<option value="">все команды</option>'+teams.map(t=>`<option>${esc(t)}</option>`).join("");
+  $("team").hidden=teams.length<2;
+  if(teams.includes(prev)) $("team").value=prev;
+  const to=[...$("mode").options].find(o=>o.value==="teams");
+  to.hidden=to.disabled=!(R&&R.teams&&R.teams.length);
+  if(to.disabled&&$("mode").value==="teams") $("mode").value="overall";
+}
 const gtitle=(dist,cat)=>[dist,cat].filter(Boolean).join(" · ")||"Все участники";
 
 async function load(){
@@ -172,6 +188,7 @@ async function load(){
   if(keys.includes(prev)) $("grp").value=prev;
   if(kind==="start") $("mode").value="start";
   else if(kind==="results"&&$("mode").value==="start") $("mode").value="overall";
+  fillTeams(); if(kind==="teams"&&R.teams&&R.teams.length) $("mode").value="teams";
   render();
 }
 async function getPub(name){
@@ -194,11 +211,13 @@ async function loadPublic(){
   document.title=(R?"Протокол — ":"Стартовый протокол — ")+ev.name;
   $("barName").textContent=ev.name;
   [...$("mode").options].forEach(o=>{ o.hidden=o.disabled=o.value==="start"?!SL:!R; });
+  fillTeams();
   const keys=[...new Set(R?R.finished.concat(R.on_course,R.not_seen).map(gkey):SL.heats.map(gkey))].sort();
   const prev=LS.get("protocol.grp","");
   $("grp").innerHTML='<option value="">все дистанции и категории</option>'+keys.map(k=>{const [d,c]=k.split("|");return `<option value="${esc(k)}">${esc(gtitle(d,c))}</option>`;}).join("");
   if(keys.includes(prev)) $("grp").value=prev;
   if(kind==="start"&&SL||!R) $("mode").value="start";
+  else if(kind==="teams"&&R.teams&&R.teams.length) $("mode").value="teams";
   else if($("mode").value==="start"||$("mode").selectedIndex<0) $("mode").value="overall";
   render();
   setInterval(refresh,15000);
@@ -207,7 +226,7 @@ async function loadPublic(){
 const liveOn=()=>!!(PUB&&R&&R.final===false&&R.event&&R.event.status==="running");
 async function refresh(){
   if(!liveOn()||document.hidden) return;
-  try{ const d=await getPub("results.json"); if(!d) return; R=d; }catch(e){ return; }
+  try{ const d=await getPub("results.json"); if(!d) return; R=d; fillTeams(); }catch(e){ return; }
   if($("mode").value==="start") return;
   const y=window.scrollY; render(); window.scrollTo(0,y);
 }
@@ -259,13 +278,16 @@ function renderStart(){
 
 function render(){
   if(!R){ if(PUB&&SL) renderStart(); return; }
-  const ev=R.event, mode=$("mode").value, gf=$("grp").value;
+  const ev=R.event, mode=$("mode").value, gf=$("grp").value, tf=$("team").hidden?"":$("team").value;
   if(mode==="start") return renderStart();
+  const byTeam=x=>!tf||x.team===tf;
+  const anyPts=R.finished.some(x=>x.points!=null);
+  const fmtPts=v=>v==null?"":String(v).replace(".",",");
   const coachOn=$("showCoach").checked&&R.finished.concat(R.not_seen).some(x=>x.coach);
   const chip=!PUB&&$("showChip").checked, spl=$("showSplits").checked, dnf=$("showDnf").checked;
   const fin=ev.finish_device, splitDevs=(R.devices||[]).filter(d=>d!==fin);
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
-  const anyTeam=R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team), hasHeats=ev.waves.length>0;
+  const anyTeam=!tf&&(R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team)), hasHeats=ev.waves.length>0;
   const man=x=>(x.manual||[]).includes(fin);
   const allManual=R.finished.length&&R.finished.every(man), someManual=R.finished.some(man);
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
@@ -274,32 +296,42 @@ function render(){
   const head=(placeLbl,withHeat)=>`<thead><tr><th style="width:42px">${placeLbl}</th><th style="width:52px">Нагр. №</th>
     ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
     ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
-    <th style="width:78px">Результат</th>${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+    <th style="width:78px">Результат</th>${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
   const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
     ${anyName?`<td>${esc(x.name)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
     ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
-    <td class="r"><b>${esc(res)}</b></td>${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
+    <td class="r"><b>${esc(res)}</b></td>${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
   const handNote=x=>man(x)&&!allManual?"р":"";
   // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
   const outCode=x=>x.status||(x.last_point?"DNF":"DNS");
   const dnfRows=(list,withHeat)=>list.map(x=>tr(x,"—",withHeat,outCode(x),"")).join("");
 
+  const teamsHtml=()=>(R.teams||[]).map(g=>{
+    const cols=g.columns;
+    return `<h2>Командный зачёт · ${esc(g.group)} <small>— сумма очков ${g.best} лучших участников команды в каждой категории</small></h2>
+      <table><thead><tr><th style="width:52px">Место</th><th>Команда</th>${cols.map(c=>`<th style="width:90px">${esc(c)}</th>`).join("")}<th style="width:80px">Итого</th></tr></thead><tbody>
+      ${g.rows.map(r=>`<tr class="${r.place<=3?"pl"+r.place:""}${tf&&r.team===tf?" mine":""}"><td class="c"><b>${r.place}</b></td><td>${esc(r.team)}</td>${cols.map(c=>`<td class="c">${esc(fmtPts(r.by[c]??""))}</td>`).join("")}<td class="c"><b>${esc(fmtPts(r.total))}</b></td></tr>`).join("")}
+      </tbody></table>`;
+  }).join("");
   let body="";
-  if(mode==="overall"){
+  if(mode==="teams"){
+    body=teamsHtml();
+  } else if(mode==="overall"){
     const groups={};
-    R.finished.forEach(x=>(groups[gkey(x)]=groups[gkey(x)]||{f:[],d:[]}).f.push(x));
-    if(dnf) R.on_course.concat(R.not_seen).forEach(x=>(groups[gkey(x)]=groups[gkey(x)]||{f:[],d:[]}).d.push(x));
+    R.finished.filter(byTeam).forEach(x=>(groups[gkey(x)]=groups[gkey(x)]||{f:[],d:[]}).f.push(x));
+    if(dnf) R.on_course.concat(R.not_seen).filter(byTeam).forEach(x=>(groups[gkey(x)]=groups[gkey(x)]||{f:[],d:[]}).d.push(x));
     Object.keys(groups).sort().filter(k=>!gf||k===gf).forEach(k=>{
       const [d,c]=k.split("|"), g=groups[k]; g.f.sort((a,b)=>a.place_overall-b.place_overall);
       body+=`<h2>${esc(gtitle(d,c))} <small>— финишировали ${g.f.length}${g.d.length?`, без результата ${g.d.length}`:""}</small></h2>
         <table>${head("Место",hasHeats)}<tbody>${g.f.map(x=>tr(x,x.place_overall,hasHeats,x.result,handNote(x))).join("")}${dnfRows(g.d,hasHeats)}</tbody></table>`;
     });
+    if(!gf&&!tf) body+=teamsHtml();
   } else {
     const heats=hasHeats?ev.waves:[{name:"",category:"",distance:""}];
     heats.forEach(w=>{
-      const f=R.finished.filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)).sort((a,b)=>a.place-b.place);
-      const d=dnf?R.on_course.concat(R.not_seen).filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)):[];
+      const f=R.finished.filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)&&byTeam(x)).sort((a,b)=>a.place-b.place);
+      const d=dnf?R.on_course.concat(R.not_seen).filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)&&byTeam(x)):[];
       if(!f.length&&!d.length) return;
       const st=w.start_time?` · старт ${w.start_time.slice(11,19)}`:"";
       body+=`<h2>${esc(w.name||"Общий старт")} <small>— ${esc(gtitle(w.distance,w.category))}${st}</small></h2>
@@ -310,8 +342,9 @@ function render(){
   const notes=[];
   if(allManual) notes.push("Хронометраж ручной, результаты округлены до 0,1 с в большую сторону.");
   else if(someManual) notes.push("«р» — результат по ручному хронометражу (округлён до 0,1 с в большую сторону).");
+  if(tf&&mode!=="teams") notes.push(`Показаны только участники команды «${tf}». Места — общие по категории.`);
   if(mode==="overall"&&hasHeats) notes.push("Места определены по результатам всех забегов в категории; в скобках — место в забеге. Равный результат в разных забегах — одно место.");
-  if(dnf&&(R.on_course.length||R.not_seen.length)){
+  if(mode!=="teams"&&dnf&&(R.on_course.length||R.not_seen.length)){
     const codes=new Set(R.on_course.concat(R.not_seen).map(outCode));
     const more=[["DQ","дисквалифицирован"],["NM","нет результата"]].filter(([k])=>codes.has(k)).map(([k,v])=>`, ${k} — ${v}`).join("");
     notes.push(`DNS — не стартовал, DNF — не финишировал${more}.`);
@@ -319,7 +352,7 @@ function render(){
 
   $("sheet").innerHTML=`
     ${BRAND}${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
-    <h1>ПРОТОКОЛ РЕЗУЛЬТАТОВ</h1>
+    <h1>${mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ"}</h1>${tf&&mode!=="teams"?`<div class="ev" style="margin-top:-4px">Команда: ${esc(tf)}</div>`:""}
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>
     ${stampHtml()}${body}

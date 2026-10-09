@@ -33,6 +33,7 @@
       "reg": {"open": true, "deadline": "2026-06-10T20:00", "url": "https://reg.fla65.ru/r/kubok26"}, // или null
       "start_list": "https://reg.fla65.ru/r/kubok26/protocol?kind=start",   // или null — не опубликован
       "results": "https://reg.fla65.ru/r/kubok26/protocol",                 // или null
+      "teams": "https://reg.fla65.ru/r/kubok26/protocol?kind=teams",        // командный зачёт или null
       "results_live": false,                   // true — идёт старт, результаты обновляются
       "live": "https://vk.com/video…",         // трансляция или null
       "photo": "https://disk.yandex.ru/…",     // фото или null
@@ -48,8 +49,8 @@
 - `GET /r/<slug>` — страница события (reg.html): шапка, регистрация (если открыта), протоколы, документы, фото, трансляция.
 - `GET /r/<slug>/info` — данные формы регистрации (как раньше) + `"card": {…элемент календаря…}`.
 - `GET /r/<slug>/startlist.json` — стартовый протокол (только если опубликован), формат как `/api/events/<id>/startlist` без чипов.
-- `GET /r/<slug>/results.json` — результаты (только если опубликованы), формат как `/api/events/<id>/results` без чипов; `final: true`, когда соревнование завершено.
-- `GET /r/<slug>/protocol[?kind=start]` — печатный протокол (protocol.html в публичном режиме).
+- `GET /r/<slug>/results.json` — результаты (только если опубликованы), формат как `/api/events/<id>/results` без чипов; `final: true`, когда соревнование завершено; `teams` — командный зачёт (группы → команды, очки по категориям, итог, место).
+- `GET /r/<slug>/protocol[?kind=start|teams][&team=…]` — печатный протокол (protocol.html в публичном режиме); `team` — только участники одной команды (ссылка для тренера).
 - `GET /r/<slug>/files/<id>` — файл, отмеченный «на сайте».
 
 ## Встраивание на fla65.ru

@@ -573,6 +573,41 @@ def main() -> int:
         check("стадион: места по введённым результатам, DNF отдельно",
               [(x["bib"], x["place"], x["result"]) for x in rs["finished"]] == [("12", 1, "7.94"), ("11", 2, "8.15")]
               and any(x["bib"] == "13" and x.get("status") == "DNF" for x in rs["not_seen"]), txt[:300])
+        # проведённый старт из чужого протокола: список с результатами и очками, командный зачёт
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Кросс школьников", "kind": "stadium", "timing": "manual",
+                         "team_best": 2}).encode(), J)
+        ek = json.loads(txt)
+        csv_txt = ("Номер;Забег;ФИО;Дата рождения;Команда;Категория;Дистанция;Результат;Очки\n"
+                   "1;Д1;Аа Ая;20.05.2017;Школа 1;Девочки 2017-2018 г.р.;500 м;1:50,5;20\n"
+                   "2;Д1;Бб Бя;21.11.2017;Школа 2;Девочки 2017-2018 г.р.;500 м;1:51,5;17\n"
+                   "3;Д1;Вв Вя;2017;Школа 1;Девочки 2017-2018 г.р.;500 м;1:52,2;15\n"
+                   "4;Д1;Гг Гя;2018;Школа 1;Девочки 2017-2018 г.р.;500 м;1:53,0;14\n"
+                   "5;Д1;Дд Дя;2017;Школа 2;Девочки 2017-2018 г.р.;500 м;DNF;\n"
+                   "6;М1;Ее Ея;2017;Школа 2;Мальчики 2017-2018 г.р.;500 м;1:41,03;20\n"
+                   "7;М1;Жж Жя;2017;Школа 1;Мальчики 2017-2018 г.р.;500 м;1:41,06;17\n"
+                   "8;М1;Зз Зя;2017;Школа 1;Мальчики 2017-2018 г.р.;500 м;мимо;1")
+        code, txt = http("POST", f"/api/events/{ek['id']}/entries", json.dumps({"text": csv_txt}).encode(), J)
+        check("протокол из файла: 7 строк принято, строка с ошибкой в результате названа",
+              code == 200 and json.loads(txt) == {"count": 7, "bad_lines": [9]}, txt)
+        _, txt = http("GET", f"/api/events/{ek['id']}/results")
+        rk = json.loads(txt)
+        fin = {x["bib"]: x for x in rk["finished"]}
+        check("протокол из файла: места, результаты, очки, дистанция забега, DNF",
+              fin["1"]["place_overall"] == 1 and fin["4"]["place_overall"] == 4 and fin["6"]["result"] == "1:41.03"
+              and fin["2"]["points"] == 17 and fin["1"]["distance"] == "500 м"
+              and any(x["bib"] == "5" and x.get("status") == "DNF" for x in rk["not_seen"]), txt[:400])
+        tk = rk.get("teams") or [{}]
+        rows_k = {r["team"]: r for r in tk[0].get("rows", [])}
+        check("командный зачёт: 2 лучших в категории, мальчики и девочки одной таблицей, места",
+              tk[0].get("group") == "2017-2018 г.р." and tk[0].get("columns") == ["Мальчики", "Девочки"]
+              and rows_k["Школа 1"]["by"] == {"Девочки": 35, "Мальчики": 17} and rows_k["Школа 1"]["total"] == 52
+              and rows_k["Школа 1"]["place"] == 1 and rows_k["Школа 2"]["total"] == 37, str(tk)[:400])
+        http("POST", f"/api/events/{ek['id']}/entries",
+             json.dumps({"text": "Номер;Забег;ФИО\n1;Д1;Аа Ая\n2;Д1;Бб Бя\n9;Д1;Новая Нна"}).encode(), J)
+        _, txt = http("GET", f"/api/events/{ek['id']}/results")
+        fin = {x["bib"]: x for x in json.loads(txt)["finished"]}
+        check("список без колонки результата не стирает введённые итоги", fin.get("1", {}).get("result") == "1:50.5"
+              and fin.get("2", {}).get("points") == 17 and "9" not in fin, txt[:300])
         code, txt, hd = pub("GET", "/r/api/calendar")
         cal = json.loads(txt)
         card = next((c for c in cal["events"] if c["name"] == "Стадион 60 м"), None)
