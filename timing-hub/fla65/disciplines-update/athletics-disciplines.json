@@ -1,0 +1,924 @@
+{
+  "version": "2.8",
+  "updated": "2026-10-11",
+  "source": "World Athletics Rules 2024-2025",
+  "categories": {
+    "track": {
+      "name": "Беговые дисциплины",
+      "name_en": "Track Events",
+      "subcategories": {
+        "sprints": {
+          "name": "Спринт",
+          "name_en": "Sprints",
+          "disciplines": [
+            {
+              "code": "60M",
+              "name": "60 метров",
+              "name_en": "60 metres",
+              "distance": 60,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["indoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0
+            },
+            {
+              "code": "100M",
+              "name": "100 метров",
+              "name_en": "100 metres",
+              "distance": 100,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0
+            },
+            {
+              "code": "200M",
+              "name": "200 метров",
+              "name_en": "200 metres",
+              "distance": 200,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0
+            },
+            {
+              "code": "400M",
+              "name": "400 метров",
+              "name_en": "400 metres",
+              "distance": 400,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": false
+            }
+          ]
+        },
+        "middle_distance": {
+          "name": "Средние дистанции",
+          "name_en": "Middle Distance",
+          "disciplines": [
+            {
+              "code": "800M",
+              "name": "800 метров",
+              "name_en": "800 metres",
+              "distance": 800,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": false
+            },
+            {
+              "code": "1000M",
+              "name": "1000 метров",
+              "name_en": "1000 metres",
+              "distance": 1000,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": false,
+              "has_wind": false
+            },
+            {
+              "code": "1500M",
+              "name": "1500 метров",
+              "name_en": "1500 metres",
+              "distance": 1500,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": false
+            },
+            {
+              "code": "MILE",
+              "name": "Миля",
+              "name_en": "Mile",
+              "distance": 1609.34,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": false,
+              "has_wind": false
+            }
+          ]
+        },
+        "long_distance": {
+          "name": "Длинные дистанции",
+          "name_en": "Long Distance",
+          "disciplines": [
+            {
+              "code": "3000M",
+              "name": "3000 метров",
+              "name_en": "3000 metres",
+              "distance": 3000,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": false
+            },
+            {
+              "code": "5000M",
+              "name": "5000 метров",
+              "name_en": "5000 metres",
+              "distance": 5000,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": false
+            },
+            {
+              "code": "10000M",
+              "name": "10000 метров",
+              "name_en": "10000 metres",
+              "distance": 10000,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20"],
+              "venue": ["outdoor"],
+              "has_heats": false,
+              "has_wind": false
+            }
+          ]
+        },
+        "hurdles": {
+          "name": "Барьерный бег",
+          "name_en": "Hurdles",
+          "disciplines": [
+            {
+              "code": "60MH",
+              "name": "60 метров с барьерами",
+              "name_en": "60 metres hurdles",
+              "distance": 60,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["indoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0,
+              "hurdles_count": 5,
+              "hurdle_height": {
+                "M": 1.067,
+                "W": 0.838
+              }
+            },
+            {
+              "code": "100MH",
+              "name": "100 метров с барьерами",
+              "name_en": "100 metres hurdles",
+              "distance": 100,
+              "unit": "m",
+              "gender": ["W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0,
+              "hurdles_count": 10,
+              "hurdle_height": {
+                "W": 0.838
+              }
+            },
+            {
+              "code": "110MH",
+              "name": "110 метров с барьерами",
+              "name_en": "110 metres hurdles",
+              "distance": 110,
+              "unit": "m",
+              "gender": ["M"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": true,
+              "max_wind": 2.0,
+              "hurdles_count": 10,
+              "hurdle_height": {
+                "M": 1.067
+              }
+            },
+            {
+              "code": "400MH",
+              "name": "400 метров с барьерами",
+              "name_en": "400 metres hurdles",
+              "distance": 400,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "hurdles_count": 10,
+              "hurdle_height": {
+                "M": 0.914,
+                "W": 0.762
+              }
+            }
+          ]
+        },
+        "steeplechase": {
+          "name": "Бег с препятствиями",
+          "name_en": "Steeplechase",
+          "disciplines": [
+            {
+              "code": "2000MSC",
+              "name": "2000 метров с препятствиями",
+              "name_en": "2000 metres steeplechase",
+              "distance": 2000,
+              "unit": "m",
+              "gender": ["W"],
+              "age_groups": ["u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "water_jump": true
+            },
+            {
+              "code": "3000MSC",
+              "name": "3000 метров с препятствиями",
+              "name_en": "3000 metres steeplechase",
+              "distance": 3000,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "water_jump": true
+            }
+          ]
+        },
+        "relays": {
+          "name": "Эстафеты",
+          "name_en": "Relays",
+          "disciplines": [
+            {
+              "code": "4X100M",
+              "name": "4х100 метров",
+              "name_en": "4x100 metres relay",
+              "distance": 400,
+              "unit": "m",
+              "gender": ["M", "W", "Mixed"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "team_size": 4,
+              "exchange_zones": 3
+            },
+            {
+              "code": "4X200M",
+              "name": "4х200 метров",
+              "name_en": "4x200 metres relay",
+              "distance": 800,
+              "unit": "m",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20"],
+              "venue": ["indoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "team_size": 4,
+              "exchange_zones": 3
+            },
+            {
+              "code": "4X400M",
+              "name": "4х400 метров",
+              "name_en": "4x400 metres relay",
+              "distance": 1600,
+              "unit": "m",
+              "gender": ["M", "W", "Mixed"],
+              "age_groups": ["adults", "u23", "u20", "u18"],
+              "venue": ["outdoor", "indoor"],
+              "has_heats": true,
+              "has_wind": false,
+              "team_size": 4,
+              "exchange_zones": 3
+            }
+          ]
+        }
+      }
+    },
+    "field": {
+      "name": "Технические дисциплины",
+      "name_en": "Field Events",
+      "subcategories": {
+        "jumps": {
+          "name": "Прыжки",
+          "name_en": "Jumps",
+          "disciplines": [
+            {
+              "code": "HJ",
+              "name": "Прыжок в высоту",
+              "name_en": "High Jump",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "measurement_unit": "m",
+              "result_type": "height",
+              "attempts": 3,
+              "progression": true,
+              "has_wind": false
+            },
+            {
+              "code": "PV",
+              "name": "Прыжок с шестом",
+              "name_en": "Pole Vault",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "measurement_unit": "m",
+              "result_type": "height",
+              "attempts": 3,
+              "progression": true,
+              "has_wind": false
+            },
+            {
+              "code": "LJ",
+              "name": "Прыжок в длину",
+              "name_en": "Long Jump",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": true,
+              "max_wind": 2.0
+            },
+            {
+              "code": "TJ",
+              "name": "Тройной прыжок",
+              "name_en": "Triple Jump",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": true,
+              "max_wind": 2.0
+            }
+          ]
+        },
+        "throws": {
+          "name": "Метания",
+          "name_en": "Throws",
+          "disciplines": [
+            {
+              "code": "SP",
+              "name": "Толкание ядра",
+              "name_en": "Shot Put",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor", "indoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": false,
+              "implement_weight": {
+                "M_adults": 7.26,
+                "M_u20": 6.0,
+                "M_u18": 5.0,
+                "W_adults": 4.0,
+                "W_u20": 4.0,
+                "W_u18": 3.0
+              }
+            },
+            {
+              "code": "DT",
+              "name": "Метание диска",
+              "name_en": "Discus Throw",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": false,
+              "implement_weight": {
+                "M_adults": 2.0,
+                "M_u20": 1.75,
+                "M_u18": 1.5,
+                "W_adults": 1.0,
+                "W_u20": 1.0,
+                "W_u18": 1.0
+              }
+            },
+            {
+              "code": "HT",
+              "name": "Метание молота",
+              "name_en": "Hammer Throw",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": false,
+              "implement_weight": {
+                "M_adults": 7.26,
+                "M_u20": 6.0,
+                "M_u18": 5.0,
+                "W_adults": 4.0,
+                "W_u20": 4.0,
+                "W_u18": 3.0
+              }
+            },
+            {
+              "code": "JT",
+              "name": "Метание копья",
+              "name_en": "Javelin Throw",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20", "u18", "u16"],
+              "venue": ["outdoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": false,
+              "implement_weight": {
+                "M_adults": 0.8,
+                "M_u20": 0.8,
+                "M_u18": 0.7,
+                "W_adults": 0.6,
+                "W_u20": 0.6,
+                "W_u18": 0.5
+              }
+            },
+            {
+              "code": "WT",
+              "name": "Метание веса",
+              "name_en": "Weight Throw",
+              "gender": ["M", "W"],
+              "age_groups": ["adults", "u23", "u20"],
+              "venue": ["indoor"],
+              "measurement_unit": "m",
+              "result_type": "distance",
+              "attempts": 6,
+              "has_wind": false,
+              "implement_weight": {
+                "M_adults": 15.88,
+                "W_adults": 9.08
+              }
+            }
+          ]
+        }
+      }
+    },
+    "combined": {
+      "name": "Многоборья",
+      "name_en": "Combined Events",
+      "disciplines": [
+        {
+          "code": "PENT",
+          "name": "Пятиборье (женщины, закрытые помещения)",
+          "name_en": "Pentathlon",
+          "gender": ["W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["indoor"],
+          "events": [
+            {
+              "order": 1,
+              "day": 1,
+              "discipline_code": "60MH",
+              "name": "60 метров с барьерами"
+            },
+            {
+              "order": 2,
+              "day": 1,
+              "discipline_code": "HJ",
+              "name": "Прыжок в высоту"
+            },
+            {
+              "order": 3,
+              "day": 1,
+              "discipline_code": "SP",
+              "name": "Толкание ядра"
+            },
+            {
+              "order": 4,
+              "day": 1,
+              "discipline_code": "LJ",
+              "name": "Прыжок в длину"
+            },
+            {
+              "order": 5,
+              "day": 1,
+              "discipline_code": "800M",
+              "name": "800 метров"
+            }
+          ],
+          "scoring_table": "IAAF Combined Events Scoring Tables"
+        },
+        {
+          "code": "HEPT",
+          "name": "Семиборье (женщины)",
+          "name_en": "Heptathlon",
+          "gender": ["W"],
+          "age_groups": ["adults", "u23", "u20", "u18"],
+          "venue": ["outdoor"],
+          "days": 2,
+          "events": [
+            {
+              "order": 1,
+              "day": 1,
+              "discipline_code": "100MH",
+              "name": "100 метров с барьерами"
+            },
+            {
+              "order": 2,
+              "day": 1,
+              "discipline_code": "HJ",
+              "name": "Прыжок в высоту"
+            },
+            {
+              "order": 3,
+              "day": 1,
+              "discipline_code": "SP",
+              "name": "Толкание ядра"
+            },
+            {
+              "order": 4,
+              "day": 1,
+              "discipline_code": "200M",
+              "name": "200 метров"
+            },
+            {
+              "order": 5,
+              "day": 2,
+              "discipline_code": "LJ",
+              "name": "Прыжок в длину"
+            },
+            {
+              "order": 6,
+              "day": 2,
+              "discipline_code": "JT",
+              "name": "Метание копья"
+            },
+            {
+              "order": 7,
+              "day": 2,
+              "discipline_code": "800M",
+              "name": "800 метров"
+            }
+          ],
+          "scoring_table": "IAAF Combined Events Scoring Tables"
+        },
+        {
+          "code": "HEPT_M",
+          "name": "Семиборье (мужчины, закрытые помещения)",
+          "name_en": "Heptathlon",
+          "gender": ["M"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["indoor"],
+          "days": 2,
+          "events": [
+            {
+              "order": 1,
+              "day": 1,
+              "discipline_code": "60M",
+              "name": "60 метров"
+            },
+            {
+              "order": 2,
+              "day": 1,
+              "discipline_code": "LJ",
+              "name": "Прыжок в длину"
+            },
+            {
+              "order": 3,
+              "day": 1,
+              "discipline_code": "SP",
+              "name": "Толкание ядра"
+            },
+            {
+              "order": 4,
+              "day": 1,
+              "discipline_code": "HJ",
+              "name": "Прыжок в высоту"
+            },
+            {
+              "order": 5,
+              "day": 2,
+              "discipline_code": "60MH",
+              "name": "60 метров с барьерами"
+            },
+            {
+              "order": 6,
+              "day": 2,
+              "discipline_code": "PV",
+              "name": "Прыжок с шестом"
+            },
+            {
+              "order": 7,
+              "day": 2,
+              "discipline_code": "1000M",
+              "name": "1000 метров"
+            }
+          ],
+          "scoring_table": "IAAF Combined Events Scoring Tables"
+        },
+        {
+          "code": "DEC",
+          "name": "Десятиборье (мужчины)",
+          "name_en": "Decathlon",
+          "gender": ["M"],
+          "age_groups": ["adults", "u23", "u20", "u18"],
+          "venue": ["outdoor"],
+          "days": 2,
+          "events": [
+            {
+              "order": 1,
+              "day": 1,
+              "discipline_code": "100M",
+              "name": "100 метров"
+            },
+            {
+              "order": 2,
+              "day": 1,
+              "discipline_code": "LJ",
+              "name": "Прыжок в длину"
+            },
+            {
+              "order": 3,
+              "day": 1,
+              "discipline_code": "SP",
+              "name": "Толкание ядра"
+            },
+            {
+              "order": 4,
+              "day": 1,
+              "discipline_code": "HJ",
+              "name": "Прыжок в высоту"
+            },
+            {
+              "order": 5,
+              "day": 1,
+              "discipline_code": "400M",
+              "name": "400 метров"
+            },
+            {
+              "order": 6,
+              "day": 2,
+              "discipline_code": "110MH",
+              "name": "110 метров с барьерами"
+            },
+            {
+              "order": 7,
+              "day": 2,
+              "discipline_code": "DT",
+              "name": "Метание диска"
+            },
+            {
+              "order": 8,
+              "day": 2,
+              "discipline_code": "PV",
+              "name": "Прыжок с шестом"
+            },
+            {
+              "order": 9,
+              "day": 2,
+              "discipline_code": "JT",
+              "name": "Метание копья"
+            },
+            {
+              "order": 10,
+              "day": 2,
+              "discipline_code": "1500M",
+              "name": "1500 метров"
+            }
+          ],
+          "scoring_table": "IAAF Combined Events Scoring Tables"
+        }
+      ]
+    },
+    "road": {
+      "name": "Шоссейные дисциплины",
+      "name_en": "Road Events",
+      "note": "Для полноты справочника, но обычно проводятся вне стадиона",
+      "disciplines": [
+        {
+          "code": "10KM",
+          "name": "10 км",
+          "name_en": "10 kilometres",
+          "distance": 10000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "15KM",
+          "name": "15 км",
+          "name_en": "15 kilometres",
+          "distance": 15000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "10MILES",
+          "name": "10 миль",
+          "name_en": "10 miles",
+          "distance": 16093.4,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "20KM",
+          "name": "20 км",
+          "name_en": "20 kilometres",
+          "distance": 20000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "HALFMAR",
+          "name": "Полумарафон",
+          "name_en": "Half Marathon",
+          "distance": 21097.5,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "25KM",
+          "name": "25 км",
+          "name_en": "25 kilometres",
+          "distance": 25000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults"],
+          "venue": ["road"]
+        },
+        {
+          "code": "30KM",
+          "name": "30 км",
+          "name_en": "30 kilometres",
+          "distance": 30000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults"],
+          "venue": ["road"]
+        },
+        {
+          "code": "MAR",
+          "name": "Марафон",
+          "name_en": "Marathon",
+          "distance": 42195,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road"]
+        },
+        {
+          "code": "20KMW",
+          "name": "Спортивная ходьба 20 км",
+          "name_en": "20 kilometres race walk",
+          "distance": 20000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["road", "track"]
+        },
+        {
+          "code": "35KMW",
+          "name": "Спортивная ходьба 35 км",
+          "name_en": "35 kilometres race walk",
+          "distance": 35000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23"],
+          "venue": ["road"]
+        }
+      ]
+    },
+    "race_walk": {
+      "name": "Спортивная ходьба (стадион)",
+      "name_en": "Race Walking (Stadium)",
+      "disciplines": [
+        {
+          "code": "3000MW",
+          "name": "Спортивная ходьба 3000 метров",
+          "name_en": "3000 metres race walk",
+          "distance": 3000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["u20", "u18"],
+          "venue": ["track"],
+          "has_heats": false
+        },
+        {
+          "code": "5000MW",
+          "name": "Спортивная ходьба 5000 метров",
+          "name_en": "5000 metres race walk",
+          "distance": 5000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20", "u18"],
+          "venue": ["track"],
+          "has_heats": false
+        },
+        {
+          "code": "10000MW",
+          "name": "Спортивная ходьба 10000 метров",
+          "name_en": "10000 metres race walk",
+          "distance": 10000,
+          "unit": "m",
+          "gender": ["M", "W"],
+          "age_groups": ["adults", "u23", "u20"],
+          "venue": ["track"],
+          "has_heats": false
+        }
+      ]
+    }
+  },
+  "age_groups_reference": {
+    "adults": {
+      "name": "Взрослые",
+      "name_en": "Senior",
+      "age": "20+",
+      "category": "senior"
+    },
+    "u23": {
+      "name": "До 23 лет",
+      "name_en": "Under 23",
+      "age": "18-22",
+      "category": "youth"
+    },
+    "u20": {
+      "name": "Юниоры",
+      "name_en": "Junior (Under 20)",
+      "age": "16-19",
+      "category": "youth"
+    },
+    "u18": {
+      "name": "Юноши",
+      "name_en": "Youth (Under 18)",
+      "age": "14-17",
+      "category": "youth"
+    },
+    "u16": {
+      "name": "Младшие юноши",
+      "name_en": "Under 16",
+      "age": "12-15",
+      "category": "youth"
+    }
+  },
+  "gender_reference": {
+    "M": {
+      "name": "Мужчины",
+      "name_en": "Men"
+    },
+    "W": {
+      "name": "Женщины",
+      "name_en": "Women"
+    },
+    "Mixed": {
+      "name": "Смешанная",
+      "name_en": "Mixed"
+    }
+  },
+  "venue_reference": {
+    "outdoor": {
+      "name": "Открытый стадион",
+      "name_en": "Outdoor Stadium"
+    },
+    "indoor": {
+      "name": "Закрытое помещение",
+      "name_en": "Indoor Arena"
+    },
+    "track": {
+      "name": "Легкоатлетический стадион",
+      "name_en": "Athletics Track"
+    },
+    "road": {
+      "name": "Шоссе",
+      "name_en": "Road"
+    }
+  }
+}
