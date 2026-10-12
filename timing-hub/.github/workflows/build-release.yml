@@ -39,6 +39,70 @@ jobs:
             echo "::warning::timing-hub directory not found, skipping build"
           fi
 
+      - name: Bump version and update build date
+        if: steps.check.outputs.exists == 'true'
+        id: version
+        run: |
+          cd timing-hub
+
+          # Инкрементируем версию
+          OLD_VERSION=$(grep -oP 'VERSION = "\K[^"]+' hub/hub.py)
+
+          # Разбираем версию на части
+          IFS='.' read -ra PARTS <<< "$OLD_VERSION"
+          MAJOR=${PARTS[0]}
+          MINOR=${PARTS[1]}
+          PATCH=${PARTS[2]:-0}
+
+          # Инкрементируем патч-версию
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          # Обновляем VERSION в hub.py
+          sed -i "s/VERSION = \"$OLD_VERSION\"/VERSION = \"$NEW_VERSION\"/" hub/hub.py
+
+          # Обновляем BUILD_DATE (используем текущую дату UTC)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          if grep -q "BUILD_DATE" hub/hub.py; then
+            sed -i "s/BUILD_DATE = \"[^\"]*\"/BUILD_DATE = \"$BUILD_DATE\"/" hub/hub.py
+          else
+            sed -i "/VERSION = \"$NEW_VERSION\"/a BUILD_DATE = \"$BUILD_DATE\"" hub/hub.py
+          fi
+
+          echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+          cd ..
+
+      - name: Commit version bump
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          if git diff --quiet timing-hub/hub/hub.py; then
+            echo "Version not changed, skipping commit"
+          else
+            git add timing-hub/hub/hub.py
+            git commit -m "🔖 Bump version to ${{ steps.version.outputs.new_version }}" \
+                       -m "Build date: ${{ steps.version.outputs.build_date }}" \
+                       -m "Auto-incremented from ${{ steps.version.outputs.old_version }}"
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
+          fi
+
+      - name: Create update changelog
+        if: steps.check.outputs.exists == 'true'
+        id: changelog
+        run: |
+          # Собираем последние изменения
+          CHANGES=$(git log --format='%s' -n 10 --no-merges -- timing-hub/ | grep -v "^🤖 Автосборка" | grep -v "^🔖 Bump version" | head -5)
+
+          # Формируем JSON для changelog
+          echo "$CHANGES" | jq -R -s -c 'split("\n") | map(select(length > 0))' > /tmp/changes.json
+
+          # Сохраняем для следующих шагов
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create timing-hub.zip archive
         if: steps.check.outputs.exists == 'true'
         run: |
@@ -50,6 +114,21 @@ jobs:
           # Проверяем размер архива
           SIZE=$(du -h timing-hub.zip | cut -f1)
           echo "Archive size: $SIZE"
+
+          # Создаём файл с метаданными обновления для админки
+          cat > update-info.json <<EOF
+          {
+            "version": "${{ steps.version.outputs.new_version }}",
+            "build_date": "${{ steps.version.outputs.build_date }}",
+            "commit_sha": "${GITHUB_SHA}",
+            "commit_short": "$(git rev-parse --short HEAD)",
+            "previous_version": "${{ steps.version.outputs.old_version }}",
+            "archive_size": "$(stat -c%s timing-hub.zip 2>/dev/null || stat -f%z timing-hub.zip 2>/dev/null || echo 0)",
+            "changelog": $(cat /tmp/changes.json)
+          }
+          EOF
+
+          cat update-info.json
 
           # Выводим содержимое архива для проверки
           echo "Archive contents:"
@@ -72,29 +151,27 @@ jobs:
             echo "New archive, will commit"
           fi
 
-      - name: Commit and push timing-hub.zip
+      - name: Commit and push release artifacts
         if: steps.check.outputs.exists == 'true' && steps.changed.outputs.changed == 'true'
         run: |
-          git add timing-hub.zip
+          git add timing-hub.zip update-info.json
 
-          # Получаем короткий хеш последнего коммита
-          SHORT_SHA=$(git rev-parse --short HEAD)
-
-          # Получаем версию из hub.py если она есть
-          if [ -f "timing-hub/hub/hub.py" ]; then
-            VERSION=$(grep -oP 'VERSION = "\K[^"]+' timing-hub/hub/hub.py || echo "unknown")
-          else
-            VERSION="unknown"
-          fi
-
-          # Создаём коммит
-          git commit -m "🤖 Автосборка timing-hub.zip v${VERSION} [${SHORT_SHA}]" \
-                     -m "Обновлён архив для установки на сервер" \
-                     -m "Коммит источника: ${GITHUB_SHA}" \
+          # Создаём коммит с подробной информацией
+          git commit -m "🤖 Автосборка timing-hub.zip v${{ steps.version.outputs.new_version }}" \
+                     -m "📦 Готов к установке с ручным подтверждением" \
                      -m "" \
-                     -m "Для обновления сервера:" \
-                     -m "1. Скачайте timing-hub.zip из корня репозитория" \
-                     -m "2. Загрузите через веб-интерфейс: Оборудование → Обновление сервера → ⬆ Установить обновление"
+                     -m "**Версия:** ${{ steps.version.outputs.new_version }}" \
+                     -m "**Дата сборки:** ${{ steps.version.outputs.build_date }}" \
+                     -m "**Размер:** $(du -h timing-hub.zip | cut -f1)" \
+                     -m "" \
+                     -m "**Последние изменения:**" \
+                     -m "${{ steps.changelog.outputs.changes }}" \
+                     -m "" \
+                     -m "**Для установки:**" \
+                     -m "1. Откройте админку: Оборудование → Обновление сервера" \
+                     -m "2. Нажмите кнопку \"Установить обновление v${{ steps.version.outputs.new_version }}\"" \
+                     -m "3. Подтвердите установку" \
+                     -m "4. Сервер перезапустится (~1 минута), прежняя версия сохранится"
 
           # Пушим в ту же ветку
           git push origin HEAD:${GITHUB_REF#refs/heads/}
@@ -104,13 +181,17 @@ jobs:
         run: |
           echo "### ✅ Сборка завершена" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Версия:** v${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Дата сборки:** ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
           echo "**Архив:** timing-hub.zip" >> $GITHUB_STEP_SUMMARY
           echo "**Размер:** $(du -h timing-hub.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
           echo "**Файлов:** $(unzip -l timing-hub.zip | tail -1 | awk '{print $2}')" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ steps.changed.outputs.changed }}" == "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Архив закоммичен в репозиторий" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Архив и метаданные закоммичены в репозиторий" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Установка требует ручного подтверждения в админке**" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "ℹ️ Архив не изменился, коммит не создан" >> $GITHUB_STEP_SUMMARY

@@ -42,7 +42,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.8"
+VERSION = "2.8.2"
+BUILD_DATE = "2026-10-12"
 log = logging.getLogger("timing-hub")
 
 
@@ -4090,8 +4091,28 @@ class Hub:
             log_tail = open(os.path.join(d, "last.log"), encoding="utf-8", errors="replace").read()[-4000:]
         except OSError:
             pass
-        return {"version": VERSION, "pending": os.path.exists(os.path.join(d, "incoming.zip")),
-                "helper": os.path.isdir(d), "status": st, "log": log_tail}
+
+        # Проверяем наличие готового обновления (не pending, а ready для установки)
+        ready_zip = os.path.join(d, "ready.zip")
+        ready_info = {}
+        if os.path.exists(ready_zip):
+            try:
+                info_file = os.path.join(d, "ready-info.json")
+                if os.path.exists(info_file):
+                    ready_info = json.load(open(info_file, encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+
+        return {
+            "version": VERSION,
+            "build_date": BUILD_DATE,
+            "pending": os.path.exists(os.path.join(d, "incoming.zip")),
+            "ready": os.path.exists(ready_zip),
+            "ready_info": ready_info,
+            "helper": os.path.isdir(d),
+            "status": st,
+            "log": log_tail
+        }
 
     def receive_update(self, body: bytes, actor: str) -> tuple:
         import hashlib
@@ -4115,13 +4136,35 @@ class Hub:
         src = z.read("timing-hub/hub/hub.py").decode("utf-8", "replace")
         m = re.search(r'VERSION = "([^"]+)"', src)
         newv = m.group(1) if m else "?"
+
+        # Извлекаем BUILD_DATE если есть
+        build_date_match = re.search(r'BUILD_DATE = "([^"]+)"', src)
+        build_date = build_date_match.group(1) if build_date_match else "unknown"
+
         sha = hashlib.sha256(body).hexdigest()
-        part = os.path.join(self.update_dir, "incoming.part")
+
+        # Сохраняем как ready.zip (НЕ incoming.zip) - установка только по команде пользователя
+        ready_path = os.path.join(self.update_dir, "ready.zip")
+        part = os.path.join(self.update_dir, "ready.part")
         with open(part, "wb") as fh:
             fh.write(body)
-        os.replace(part, os.path.join(self.update_dir, "incoming.zip"))   # появление файла запускает установку
-        self.store.audit(actor, None, "Обновление сервера загружено", f"{VERSION} → {newv}, sha256 {sha[:16]}…")
-        return 200, {"ok": True, "from": VERSION, "to": newv, "sha256": sha}
+        os.replace(part, ready_path)
+
+        # Сохраняем метаданные обновления
+        info = {
+            "version": newv,
+            "build_date": build_date,
+            "uploaded_at": fmt_db(now_local()),
+            "sha256": sha,
+            "size": len(body)
+        }
+        with open(os.path.join(self.update_dir, "ready-info.json"), "w", encoding="utf-8") as f:
+            json.dump(info, f, ensure_ascii=False, indent=2)
+
+        self.store.audit(actor, None, "Обновление загружено и готово к установке",
+                        f"{VERSION} → {newv} (дата сборки: {build_date}), sha256 {sha[:16]}…")
+        return 200, {"ok": True, "from": VERSION, "to": newv, "build_date": build_date, "sha256": sha,
+                    "message": "Обновление загружено. Для установки нажмите кнопку в интерфейсе."}
 
     # ---- обновление с GitHub: сервер сам скачивает официальную версию и отдаёт её
     # в ту же цепочку, что и загрузку архива (receive_update → timing-update с автооткатом).
