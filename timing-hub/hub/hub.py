@@ -1110,11 +1110,30 @@ class Store:
         return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND bib = ?",
                                 (*args, eid, bib)).rowcount
 
+    def get_next_bib(self, eid: int) -> str:
+        """Получить следующий свободный номер участника (максимальный + 1)."""
+        result = self.con.execute(
+            "SELECT MAX(CAST(bib AS INTEGER)) FROM entries WHERE event_id = ? AND bib GLOB '[0-9]*'",
+            (eid,)
+        ).fetchone()
+        max_bib = result[0] if result and result[0] is not None else 0
+        return str(max_bib + 1)
+
     def add_entry(self, eid: int, r: dict) -> None:
+        # Если номер не указан, присваиваем следующий свободный
+        bib = r.get("bib")
+        if not bib or str(bib).strip() == "":
+            bib = self.get_next_bib(eid)
+
+        # Если чип не указан, используем номер с префиксом #
+        chip = r.get("chip")
+        if not chip or str(chip).strip() == "":
+            chip = "#" + str(bib)
+
         self.con.execute(
             "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
             " reg_id, sex, members) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+            (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
              r.get("members")))
 
