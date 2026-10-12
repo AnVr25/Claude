@@ -2629,6 +2629,9 @@ class Hub:
             return ok(self.system_view())
         if path == "/api/system/update":
             return ok(self.update_state())
+        if path == "/api/system/update/install" and method == "POST":
+            code, out = self.confirm_update_install(actor)
+            return code, J, json.dumps(out, ensure_ascii=False), None
         if path == "/api/log":
             return ok({"log": self.store.audit_list(None)})
         if path == "/api/live":
@@ -4165,6 +4168,45 @@ class Hub:
                         f"{VERSION} → {newv} (дата сборки: {build_date}), sha256 {sha[:16]}…")
         return 200, {"ok": True, "from": VERSION, "to": newv, "build_date": build_date, "sha256": sha,
                     "message": "Обновление загружено. Для установки нажмите кнопку в интерфейсе."}
+
+    def confirm_update_install(self, actor: str) -> tuple:
+        """Подтверждение установки: переносит ready.zip -> incoming.zip, запуская установку."""
+        d = self.update_dir
+        ready_zip = os.path.join(d, "ready.zip")
+        ready_info_file = os.path.join(d, "ready-info.json")
+
+        if not os.path.exists(ready_zip):
+            return 404, {"error": "Нет загруженного обновления. Сначала загрузите архив."}
+
+        if os.path.exists(os.path.join(d, "incoming.zip")):
+            return 409, {"error": "Обновление уже устанавливается — подождите минуту"}
+
+        # Читаем информацию об обновлении
+        info = {}
+        try:
+            if os.path.exists(ready_info_file):
+                info = json.load(open(ready_info_file, encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+
+        # Переносим ready.zip -> incoming.zip (это запускает timing-update.path)
+        try:
+            import shutil
+            shutil.copy2(ready_zip, os.path.join(d, "incoming.zip"))
+        except OSError as e:
+            return 500, {"error": f"Не удалось запустить установку: {e}"}
+
+        new_version = info.get("version", "?")
+        self.store.audit(actor, None, "Запущена установка обновления",
+                        f"{VERSION} → {new_version} (пользователь подтвердил установку)")
+
+        return 200, {
+            "ok": True,
+            "message": "Установка запущена. Сервер перезапустится через ~1 минуту.",
+            "from": VERSION,
+            "to": new_version,
+            "info": info
+        }
 
     # ---- обновление с GitHub: сервер сам скачивает официальную версию и отдаёт её
     # в ту же цепочку, что и загрузку архива (receive_update → timing-update с автооткатом).

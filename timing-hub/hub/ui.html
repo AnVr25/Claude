@@ -2035,16 +2035,43 @@ function rdPointOpts(cur){
 let upTimer = null;
 async function loadUpdate(){
   let u; try{ u = await api("/api/system/update"); }catch(e){ return; }
-  $("upVer").textContent = "v" + u.version;
+  $("upVer").textContent = "v" + u.version + (u.build_date ? ` (${u.build_date})` : "");
   const st = u.status || {};
   const names = {ok:"✅ Готово", running:"⏳ Устанавливаю…", failed:"❌ Ошибка", rolledback:"↩ Откат"};
   let html = "";
   if (!u.helper) html = '<span class="muted">Обновление из браузера включится после одной установки этой версии через WinSCP.</span>';
   else if (u.pending) html = "⏳ Архив принят, установка начнётся через несколько секунд…";
+  else if (u.ready && u.ready_info) {
+    const info = u.ready_info;
+    html = `<div style="padding:12px;background:var(--ice);border-left:3px solid var(--track);border-radius:var(--r);margin:8px 0">
+      <div style="font-weight:600;margin-bottom:8px">🎉 Доступно обновление v${esc(info.version)}</div>
+      <div class="small muted">Дата сборки: ${esc(info.build_date || "неизвестна")} • Загружено: ${esc(info.uploaded_at ? info.uploaded_at.slice(0,16) : "")}</div>
+      <button class="primary" id="confirmInstall" style="margin-top:10px">🚀 Установить обновление v${esc(info.version)}</button>
+      <div class="small muted" style="margin-top:6px">Сервер перезапустится (~1 минута). Прежняя версия сохранится.</div>
+    </div>`;
+  }
   else if (st.state) html = `${names[st.state]||st.state}: ${esc(st.message||"")} <span class="muted">(${esc(st.at||"")})</span>`;
   $("upState").innerHTML = html; $("upLog").textContent = u.log || "";
-  $("upBtn").disabled = !u.helper || u.pending || st.state === "running";
+  $("upBtn").disabled = !u.helper || u.pending || st.state === "running" || u.ready;
   $("ghCheck").disabled = !u.helper || u.pending || st.state === "running";
+
+  // Обработчик кнопки подтверждения установки
+  if (u.ready && $("confirmInstall")) {
+    $("confirmInstall").onclick = async () => {
+      const info = u.ready_info;
+      if (!confirm(`Установить обновление v${info.version}?\n\nДата сборки: ${info.build_date || "неизвестна"}\n\nСервер перезапустится (около минуты).\nПрежняя версия сохранится, при сбое вернётся сама.`)) return;
+      $("confirmInstall").disabled = true;
+      $("confirmInstall").textContent = "⏳ Запускаю установку…";
+      try{
+        const res = await fetch("/api/system/update/install", {method:"POST", headers:{"X-Requested-With":"timing-hub"}});
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || res.status);
+        toast(`Установка запущена: v${u.version} → v${j.to}`);
+      }catch(err){ toast("Ошибка: " + err.message); $("confirmInstall").disabled = false; $("confirmInstall").textContent = `🚀 Установить обновление v${info.version}`; }
+      setTimeout(loadUpdate, 1000);
+    };
+  }
+
   clearTimeout(upTimer);
   if (u.pending || st.state === "running") upTimer = setTimeout(loadUpdate, 3000);
 }
@@ -2081,12 +2108,12 @@ $("ghCheck").onclick = async () => {
 $("upBtn").onclick = () => $("upFile").click();
 $("upFile").onchange = async () => {
   const f = $("upFile").files[0]; $("upFile").value = ""; if (!f) return;
-  if (!confirm(`Установить обновление из «${f.name}»?\n\nСервер перезапустится (около минуты). Прежняя версия сохранится, при сбое вернётся сама.`)) return;
+  if (!confirm(`Загрузить обновление из «${f.name}»?\n\nАрхив будет проверен и сохранён.\nУстановка произойдёт после вашего подтверждения.`)) return;
   try{
     const r = await fetch("/api/system/update", {method:"POST", body:f, headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}});
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
-    toast(`Принято: v${j.from} → v${j.to}. Устанавливаю…`);
+    toast(`Загружено: v${j.from} → v${j.to}. Нажмите кнопку установки для применения.`);
   }catch(err){ toast("Ошибка: " + err.message); }
   setTimeout(loadUpdate, 1000);
 };
