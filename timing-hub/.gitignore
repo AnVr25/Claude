@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+*.log
+.DS_Store
+
+# Архив собирается автоматически через GitHub Actions
+# timing-hub.zip

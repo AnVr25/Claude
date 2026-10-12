@@ -1,0 +1,117 @@
+name: Build timing-hub.zip
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    paths:
+      - 'timing-hub/**'
+      - '.github/workflows/build-release.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Check if timing-hub directory exists
+        id: check
+        run: |
+          if [ -d "timing-hub" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::timing-hub directory not found, skipping build"
+          fi
+
+      - name: Create timing-hub.zip archive
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          cd timing-hub
+          # Создаём архив со всем содержимым папки timing-hub
+          zip -r ../timing-hub.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "*.log"
+          cd ..
+
+          # Проверяем размер архива
+          SIZE=$(du -h timing-hub.zip | cut -f1)
+          echo "Archive size: $SIZE"
+
+          # Выводим содержимое архива для проверки
+          echo "Archive contents:"
+          unzip -l timing-hub.zip | head -20
+
+      - name: Check if archive changed
+        if: steps.check.outputs.exists == 'true'
+        id: changed
+        run: |
+          if [ -f "timing-hub.zip" ]; then
+            if git diff --quiet timing-hub.zip 2>/dev/null; then
+              echo "changed=false" >> $GITHUB_OUTPUT
+              echo "Archive hasn't changed, skipping commit"
+            else
+              echo "changed=true" >> $GITHUB_OUTPUT
+              echo "Archive has changes, will commit"
+            fi
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "New archive, will commit"
+          fi
+
+      - name: Commit and push timing-hub.zip
+        if: steps.check.outputs.exists == 'true' && steps.changed.outputs.changed == 'true'
+        run: |
+          git add timing-hub.zip
+
+          # Получаем короткий хеш последнего коммита
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          # Получаем версию из hub.py если она есть
+          if [ -f "timing-hub/hub/hub.py" ]; then
+            VERSION=$(grep -oP 'VERSION = "\K[^"]+' timing-hub/hub/hub.py || echo "unknown")
+          else
+            VERSION="unknown"
+          fi
+
+          # Создаём коммит
+          git commit -m "🤖 Автосборка timing-hub.zip v${VERSION} [${SHORT_SHA}]" \
+                     -m "Обновлён архив для установки на сервер" \
+                     -m "Коммит источника: ${GITHUB_SHA}" \
+                     -m "" \
+                     -m "Для обновления сервера:" \
+                     -m "1. Скачайте timing-hub.zip из корня репозитория" \
+                     -m "2. Загрузите через веб-интерфейс: Оборудование → Обновление сервера → ⬆ Установить обновление"
+
+          # Пушим в ту же ветку
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+
+      - name: Summary
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "### ✅ Сборка завершена" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Архив:** timing-hub.zip" >> $GITHUB_STEP_SUMMARY
+          echo "**Размер:** $(du -h timing-hub.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "**Файлов:** $(unzip -l timing-hub.zip | tail -1 | awk '{print $2}')" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.changed.outputs.changed }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Архив закоммичен в репозиторий" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️ Архив не изменился, коммит не создан" >> $GITHUB_STEP_SUMMARY
+          fi
