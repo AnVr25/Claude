@@ -196,6 +196,7 @@ tr.rej td{opacity:.55}
 .pmode input{width:auto;min-height:0;margin:0 6px 0 0;accent-color:var(--track)}
 button.bigred{background:#C8161C;border-color:#C8161C;color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
 button.bigred:hover{background:#A31217}
+.bibin{width:64px;min-height:0;padding:4px 6px;font-weight:700;text-align:center}
 .heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
 .heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:2px solid var(--line)}
@@ -1899,15 +1900,15 @@ function renderHeats(sl){
   const opt = (cur) => `<option value="">— без забега</option>` + names.map(n => `<option ${n===cur?"selected":""}>${esc(n)}</option>`).join("");
   $("gHeatsBox").innerHTML = sl.heats.map(h => `<div class="heat"><div class="hh"><b>${esc(h.name)}</b><span class="small muted">${esc([h.category,h.distance].filter(Boolean).join(" · "))} · ${h.entries.length} чел.${h.state!=="planned"?" · "+({running:"идёт",finished:"завершён"})[h.state]:""}</span></div>
     <table><thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Заявл.</th><th>Перенести</th></tr></thead><tbody>
-    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td>${h.name==="Общий список"?'<span class="muted">—</span>':`<input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}>`}</td><td><b>${esc(e.bib)}</b></td>
+    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td>${h.name==="Общий список"?'<span class="muted">—</span>':`<input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}>`}</td><td><input class="bibin mono" value="${esc(e.bib)}" title="Нагрудный номер — можно изменить" aria-label="Нагрудный номер"></td>
       <td>${esc(e.name||"")}<div class="small muted">${esc([e.birth_year,e.team].filter(Boolean).join(" · "))}</div></td><td class="mono">${esc(e.seed||"")}</td>
       <td><select class="mv" ${h.state!=="planned"?"disabled":""}>${opt(h.name)}</select></td></tr>`).join("") || '<tr><td colspan="5" class="empty">пусто</td></tr>'}
     </tbody></table></div>`).join("") || '<div class="card empty">Забегов пока нет — подтвердите заявки и нажмите «Сформировать забеги».</div>';
   const loose = regData ? regData.regs.filter(x => x.status==="approved" && !x.entry_bib) : [];
   const noHeat = sl.no_heat || [];
   $("gLoose").innerHTML = (loose.length || noHeat.length) ? `<h2>Не распределены</h2><div class="tbl"><table><tbody>
-    ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><b>${esc(e.bib)}</b></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
-    ${loose.map(x => `<tr data-reg="${x.id}"><td class="muted">—</td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
+    ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><input class="bibin mono" value="${esc(e.bib)}" aria-label="Нагрудный номер"></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
+    ${loose.map(x => `<tr data-reg="${x.id}"><td><input class="bibin mono" placeholder="авто" title="Можно вписать номер самому; пусто — выдастся следующий" aria-label="Нагрудный номер"></td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
     </tbody></table></div>` : "";
 }
 async function moveEntry(tr, body){
@@ -1915,11 +1916,12 @@ async function moveEntry(tr, body){
     if (tr.dataset.reg) await api(`/api/events/${curId}/entry`, Object.assign({reg_id:+tr.dataset.reg}, body));
     else await api(`/api/events/${curId}/entry`, Object.assign({bib:tr.dataset.bib}, body));
     toast("Готово"); document.activeElement && document.activeElement.blur(); regLoaded = null; await loadRegs(); loadEvents();
-  }catch(err){ toast("Ошибка: "+err.message); }
+  }catch(err){ toast("Ошибка: "+err.message); regLoaded = null; loadRegs(); }
 }
 ["gHeatsBox","gLoose"].forEach(id => $(id).addEventListener("change", (e) => {
   const tr = e.target.closest("tr"); if (!tr) return;
-  if (e.target.classList.contains("mv")) return moveEntry(tr, {wave:e.target.value});
+  if (e.target.classList.contains("bibin")) { if (tr.dataset.reg) return; return moveEntry(tr, {new_bib:e.target.value}); }
+  if (e.target.classList.contains("mv")) { const bi = tr.querySelector(".bibin"); return moveEntry(tr, {wave:e.target.value, set_bib: tr.dataset.reg && bi ? bi.value : undefined}); }
   if (e.target.classList.contains("lane")) return moveEntry(tr, {lane:e.target.value});
 }));
 

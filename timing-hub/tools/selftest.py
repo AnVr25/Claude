@@ -726,6 +726,17 @@ def main() -> int:
               code == 200 and len(sll["heats"]) == 1 and sll["heats"][0]["name"] == "Общий список"
               and len(sll["heats"][0]["entries"]) == 7 and all(e["lane"] is None for e in sll["heats"][0]["entries"])
               and not sll["no_heat"] and {e["sex"] for e in sll["heats"][0]["entries"]} == {"М", "Ж"}, txt[:300])
+        b1 = sll["heats"][0]["entries"][0]["bib"]; b2 = sll["heats"][0]["entries"][1]["bib"]
+        code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b1, "new_bib": "501"}).encode(), J)
+        code2, txt2 = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b2, "new_bib": "501"}).encode(), J)
+        code3, _ = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b2, "new_bib": "с пробелом"}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e4}/startlist")
+        bb = {e["bib"]: e for e in json.loads(txt)["heats"][0]["entries"]}
+        _, rt = http("GET", f"/api/events/{e4}/regs")
+        check("секретарь вручную меняет нагрудный номер; занятый и неверный номера отклоняются",
+              "501" in bb and b1 not in bb and bb["501"]["chip"] == "#501" and code2 == 400 and "занят" in txt2 and code3 == 400
+              and '"bib": "501"' in rt.replace('"bib":"501"', '"bib": "501"'), txt2[:200])
+        http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": "501", "new_bib": b1}).encode(), J)
         http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
         sl = json.loads(txt)
@@ -1135,7 +1146,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.3.0 и дата сборки 13.10.2026", st3["version"] == "3.3.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.3.1 и дата сборки 13.10.2026", st3["version"] == "3.3.1" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",

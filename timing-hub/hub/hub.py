@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.3.0"
+VERSION = "3.3.1"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1155,6 +1155,13 @@ class Store:
             (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
              r.get("members"), r.get("rank")))
+
+    def rename_bib(self, eid: int, old: str, new: str) -> None:
+        """Сменить нагрудный номер участника везде: в списке, заявках и ручных отметках судей."""
+        self.con.execute("UPDATE entries SET bib = ?, chip = CASE WHEN chip = ? THEN ? ELSE chip END"
+                         " WHERE event_id = ? AND bib = ?", (new, "#" + old, "#" + new, eid, old))
+        self.con.execute("UPDATE registrations SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
+        self.con.execute("UPDATE manual SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
 
     def delete_entry(self, eid: int, bib: str) -> None:
         self.con.execute("DELETE FROM entries WHERE event_id = ? AND bib = ?", (eid, bib))
@@ -3267,6 +3274,13 @@ class Hub:
                 log.exception("стартовый список в папку «Для судей»")
             return ok(out)
         if action == "entry":
+            def clean_bib(v, used):
+                v = str(v or "").strip()
+                if not v or len(v) > 10 or not re.fullmatch(r"[0-9A-Za-zА-Яа-я\-]+", v):
+                    return None, "номер — до 10 символов: цифры или буквы, без пробелов"
+                if v in used or "#" + v in {e["chip"] for e in self.store.entries_rows(eid)}:
+                    return None, f"номер {v} уже занят другим участником"
+                return v, None
             # перенос участника в другой забег / дорожку, или добавление подтверждённой заявки в забег
             wave = str(data.get("wave") or "").strip()[:40] or None
             if wave and not self.store.get_wave(eid, wave):
@@ -3288,7 +3302,12 @@ class Hub:
                 ids = r.get("_ids") or [r["id"]]
                 if any(x.get("reg_id") in ids for x in rows) or (r.get("bib") and any(e["bib"] == r["bib"] for e in rows)):
                     return err("участник уже в стартовом списке")
-                bib = self.next_bib(ev, {e["bib"] for e in rows}, r["distance"])
+                if str(data.get("set_bib") or "").strip():          # номер, который секретарь вписал сам
+                    bib, e_ = clean_bib(data["set_bib"], {e["bib"] for e in rows})
+                    if e_:
+                        return err(e_)
+                else:
+                    bib = self.next_bib(ev, {e["bib"] for e in rows}, r["distance"])
                 if lane is None and wave:
                     taken = {e["lane"] for e in rows if e["wave"] == wave}
                     lane = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
@@ -3309,6 +3328,15 @@ class Hub:
             if row["wave"] and (self.store.get_wave(eid, row["wave"]) or {}).get("start_time") and "wave" in data \
                     and wave != row["wave"]:
                 return err("забег участника уже стартовал")
+            if "new_bib" in data:
+                if str(data["new_bib"]).strip() == bib:
+                    return ok({"bib": bib})
+                nb, e_ = clean_bib(data["new_bib"], {e["bib"] for e in self.store.entries_rows(eid)})
+                if e_:
+                    return err(e_)
+                self.store.rename_bib(eid, bib, nb)
+                self.store.audit(who, eid, "Изменён нагрудный номер", f"{row.get('name') or ''}: №{bib} → №{nb}")
+                return ok({"bib": nb})
             upd = {}
             if "wave" in data:
                 upd["wave"] = wave
