@@ -1,0 +1,1454 @@
+{
+ "version": 1,
+ "updated": "2026-10-13",
+ "sources": [
+  "World Athletics Technical Rules (TR 22, 23, 24, 32)",
+  "ЕВСК и положения ВФЛА (младшие возрасты)"
+ ],
+ "groups": [
+  {
+   "id": "sprint",
+   "name": "Спринт",
+   "hint": "30–400 м"
+  },
+  {
+   "id": "middle",
+   "name": "Средние дистанции",
+   "hint": "500 м – 2000 м"
+  },
+  {
+   "id": "long",
+   "name": "Длинные дистанции",
+   "hint": "3000 м и дальше"
+  },
+  {
+   "id": "hurdles",
+   "name": "Барьерный бег",
+   "hint": "с/б"
+  },
+  {
+   "id": "steeple",
+   "name": "Стипль-чез",
+   "hint": "с/п"
+  },
+  {
+   "id": "relay",
+   "name": "Эстафеты",
+   "hint": "команда из нескольких этапов"
+  },
+  {
+   "id": "walk",
+   "name": "Спортивная ходьба",
+   "hint": "по стадиону"
+  },
+  {
+   "id": "jumps",
+   "name": "Прыжки",
+   "hint": "высота, шест, длина, тройной"
+  },
+  {
+   "id": "throws",
+   "name": "Метания",
+   "hint": "ядро, диск, молот, копьё, мяч"
+  },
+  {
+   "id": "combined",
+   "name": "Многоборья",
+   "hint": "результат — очки по таблице"
+  }
+ ],
+ "result_types": {
+  "time": {
+   "name": "Время",
+   "unit": "с",
+   "hint": "12.84 · 1:05.32 · 2:05:31",
+   "better": "lower"
+  },
+  "distance": {
+   "name": "Расстояние",
+   "unit": "м",
+   "hint": "7.85 (метры)",
+   "better": "higher"
+  },
+  "height": {
+   "name": "Высота",
+   "unit": "м",
+   "hint": "1.95 (метры)",
+   "better": "higher"
+  },
+  "points": {
+   "name": "Очки",
+   "unit": "очк.",
+   "hint": "7250 (целое число)",
+   "better": "higher"
+  }
+ },
+ "ages": [
+  {
+   "id": "u12",
+   "name": "до 12 лет"
+  },
+  {
+   "id": "u14",
+   "name": "до 14 лет"
+  },
+  {
+   "id": "u16",
+   "name": "до 16 лет"
+  },
+  {
+   "id": "u18",
+   "name": "до 18 лет"
+  },
+  {
+   "id": "u20",
+   "name": "юниоры до 20 лет"
+  },
+  {
+   "id": "u23",
+   "name": "молодёжь до 23 лет"
+  },
+  {
+   "id": "sen",
+   "name": "взрослые"
+  }
+ ],
+ "disciplines": [
+  {
+   "id": "30m",
+   "name": "30 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "note": "для детей, нормативы и тесты"
+  },
+  {
+   "id": "50m",
+   "name": "50 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "note": "для детей, нормативы и тесты"
+  },
+  {
+   "id": "60m",
+   "name": "60 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "60",
+    "60м"
+   ]
+  },
+  {
+   "id": "100m",
+   "name": "100 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "aliases": [
+    "100",
+    "100м"
+   ]
+  },
+  {
+   "id": "200m",
+   "name": "200 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "200",
+    "200м"
+   ]
+  },
+  {
+   "id": "300m",
+   "name": "300 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "300",
+    "300м"
+   ]
+  },
+  {
+   "id": "400m",
+   "name": "400 м",
+   "group": "sprint",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "400",
+    "400м"
+   ]
+  },
+  {
+   "id": "500m",
+   "name": "500 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "500",
+    "500м"
+   ]
+  },
+  {
+   "id": "600m",
+   "name": "600 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "600",
+    "600м"
+   ]
+  },
+  {
+   "id": "800m",
+   "name": "800 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "800",
+    "800м"
+   ]
+  },
+  {
+   "id": "1000m",
+   "name": "1000 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "1000",
+    "1000м"
+   ]
+  },
+  {
+   "id": "1500m",
+   "name": "1500 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "1500",
+    "1500м"
+   ]
+  },
+  {
+   "id": "mile",
+   "name": "1 миля",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "Миля"
+   ]
+  },
+  {
+   "id": "2000m",
+   "name": "2000 м",
+   "group": "middle",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "2000",
+    "2000м"
+   ]
+  },
+  {
+   "id": "3000m",
+   "name": "3000 м",
+   "group": "long",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "3000",
+    "3000м"
+   ]
+  },
+  {
+   "id": "5000m",
+   "name": "5000 м",
+   "group": "long",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "aliases": [
+    "5000",
+    "5000м"
+   ]
+  },
+  {
+   "id": "10000m",
+   "name": "10000 м",
+   "group": "long",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "aliases": [
+    "10000",
+    "10000м",
+    "10 000 м"
+   ]
+  },
+  {
+   "id": "60mh",
+   "name": "60 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor"
+   ],
+   "specs": [
+    {
+     "who": "Мужчины",
+     "text": "106,7 см · 13,72 / 9,14 / 9,72 м"
+    },
+    {
+     "who": "Юниоры до 20",
+     "text": "99,1 см"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "91,4 см"
+    },
+    {
+     "who": "Женщины и юниорки",
+     "text": "83,8 см · 13,00 / 8,50 / 13,00 м"
+    },
+    {
+     "who": "Девушки до 18",
+     "text": "76,2 см"
+    },
+    {
+     "who": "Мальчики до 14 (ЕВСК)",
+     "text": "84 см"
+    },
+    {
+     "who": "Девочки до 14 (ЕВСК)",
+     "text": "65 см"
+    }
+   ],
+   "aliases": [
+    "60 с/б",
+    "60 м/б",
+    "60м с/б"
+   ]
+  },
+  {
+   "id": "80mh",
+   "name": "80 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "F",
+   "venue": [
+    "outdoor"
+   ],
+   "aliases": [
+    "80 с/б"
+   ],
+   "note": "девочки младших возрастов, параметры — по положению соревнований"
+  },
+  {
+   "id": "100mh",
+   "name": "100 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "F",
+   "venue": [
+    "outdoor"
+   ],
+   "specs": [
+    {
+     "who": "Женщины и юниорки до 20",
+     "text": "высота 83,8 см · 13,00 / 8,50 / 10,50 м"
+    },
+    {
+     "who": "Девушки до 18",
+     "text": "высота 76,2 см · 13,00 / 8,50 / 10,50 м"
+    },
+    {
+     "who": "Девочки до 14 (ЕВСК)",
+     "text": "высота 65 см"
+    }
+   ],
+   "aliases": [
+    "100 с/б",
+    "100 м/б"
+   ]
+  },
+  {
+   "id": "110mh",
+   "name": "110 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "M",
+   "venue": [
+    "outdoor"
+   ],
+   "specs": [
+    {
+     "who": "Мужчины",
+     "text": "высота 106,7 см · 13,72 / 9,14 / 14,02 м"
+    },
+    {
+     "who": "Юниоры до 20",
+     "text": "высота 99,1 см · 13,72 / 9,14 / 14,02 м"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "высота 91,4 см · 13,72 / 9,14 / 14,02 м"
+    }
+   ],
+   "aliases": [
+    "110 с/б",
+    "110 м/б"
+   ]
+  },
+  {
+   "id": "300mh",
+   "name": "300 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "300 с/б"
+   ],
+   "note": "молодёжные и юношеские возрасты, параметры — по положению соревнований"
+  },
+  {
+   "id": "400mh",
+   "name": "400 м с/б",
+   "group": "hurdles",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "specs": [
+    {
+     "who": "Мужчины и юниоры до 20",
+     "text": "высота 91,4 см · 45 / 35 / 40 м"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "высота 83,8 см"
+    },
+    {
+     "who": "Женщины, юниорки, девушки",
+     "text": "высота 76,2 см"
+    }
+   ],
+   "aliases": [
+    "400 с/б",
+    "400 м/б"
+   ]
+  },
+  {
+   "id": "2000msc",
+   "name": "2000 м с/п",
+   "group": "steeple",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "specs": [
+    {
+     "who": "Мужчины и юниоры до 20",
+     "text": "барьер 91,4 см"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "барьер 83,8 см"
+    },
+    {
+     "who": "Женщины, юниорки, девушки",
+     "text": "барьер 76,2 см"
+    }
+   ],
+   "aliases": [
+    "2000 с/п",
+    "2000 стипль"
+   ]
+  },
+  {
+   "id": "3000msc",
+   "name": "3000 м с/п",
+   "group": "steeple",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "specs": [
+    {
+     "who": "Мужчины и юниоры до 20",
+     "text": "барьер 91,4 см"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "барьер 83,8 см"
+    },
+    {
+     "who": "Женщины, юниорки, девушки",
+     "text": "барьер 76,2 см"
+    }
+   ],
+   "aliases": [
+    "3000 с/п",
+    "3000 стипль"
+   ]
+  },
+  {
+   "id": "4x60",
+   "name": "4×60 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x60"
+   ]
+  },
+  {
+   "id": "4x100",
+   "name": "4×100 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x100",
+    "4х100",
+    "4*100"
+   ]
+  },
+  {
+   "id": "4x200",
+   "name": "4×200 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x200",
+    "4х200"
+   ]
+  },
+  {
+   "id": "4x400",
+   "name": "4×400 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x400",
+    "4х400"
+   ]
+  },
+  {
+   "id": "4x400mix",
+   "name": "4×400 м смешанная",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x400 микст"
+   ],
+   "note": "два юноши и две девушки"
+  },
+  {
+   "id": "4x800",
+   "name": "4×800 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x800"
+   ]
+  },
+  {
+   "id": "4x1500",
+   "name": "4×1500 м",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "4x1500"
+   ]
+  },
+  {
+   "id": "swedish",
+   "name": "Шведская эстафета",
+   "group": "relay",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "legs": 4,
+   "aliases": [
+    "Шведская"
+   ],
+   "note": "этапы 100, 200, 300 и 400 м"
+  },
+  {
+   "id": "walk1500",
+   "name": "Ходьба 1500 м",
+   "group": "walk",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "Ходьба 1500"
+   ],
+   "note": "судейство по правилам спортивной ходьбы: предупреждения и дисквалификация"
+  },
+  {
+   "id": "walk2000",
+   "name": "Ходьба 2000 м",
+   "group": "walk",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "Ходьба 2000"
+   ],
+   "note": "судейство по правилам спортивной ходьбы: предупреждения и дисквалификация"
+  },
+  {
+   "id": "walk3000",
+   "name": "Ходьба 3000 м",
+   "group": "walk",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "Ходьба 3000"
+   ],
+   "note": "судейство по правилам спортивной ходьбы: предупреждения и дисквалификация"
+  },
+  {
+   "id": "walk5000",
+   "name": "Ходьба 5000 м",
+   "group": "walk",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "aliases": [
+    "Ходьба 5000"
+   ],
+   "note": "судейство по правилам спортивной ходьбы: предупреждения и дисквалификация"
+  },
+  {
+   "id": "walk10000",
+   "name": "Ходьба 10000 м",
+   "group": "walk",
+   "result": "time",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "aliases": [
+    "Ходьба 10000"
+   ],
+   "note": "судейство по правилам спортивной ходьбы: предупреждения и дисквалификация"
+  },
+  {
+   "id": "hj",
+   "name": "Прыжок в высоту",
+   "group": "jumps",
+   "result": "height",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 2.7,
+   "aliases": [
+    "Высота",
+    "Прыжок в высоту"
+   ],
+   "note": "лучшая взятая высота; попытки по высотам — в протоколе судей"
+  },
+  {
+   "id": "pv",
+   "name": "Прыжок с шестом",
+   "group": "jumps",
+   "result": "height",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 7.0,
+   "aliases": [
+    "Шест",
+    "Прыжок с шестом"
+   ],
+   "note": "лучшая взятая высота"
+  },
+  {
+   "id": "lj",
+   "name": "Прыжок в длину",
+   "group": "jumps",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 10.0,
+   "aliases": [
+    "Длина",
+    "Прыжок в длину"
+   ],
+   "note": "лучший результат из попыток; ветер — в протоколе судей"
+  },
+  {
+   "id": "tj",
+   "name": "Тройной прыжок",
+   "group": "jumps",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 19.5,
+   "aliases": [
+    "Тройной",
+    "Тройной прыжок"
+   ],
+   "note": "лучший результат из попыток"
+  },
+  {
+   "id": "sp",
+   "name": "Толкание ядра",
+   "group": "throws",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 25.0,
+   "specs": [
+    {
+     "who": "Мужчины",
+     "text": "7,26 кг"
+    },
+    {
+     "who": "Юниоры до 20",
+     "text": "6 кг"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "5 кг"
+    },
+    {
+     "who": "Юноши до 14 (ЕВСК)",
+     "text": "4 кг"
+    },
+    {
+     "who": "Женщины и юниорки",
+     "text": "4 кг"
+    },
+    {
+     "who": "Девушки до 18",
+     "text": "3 кг"
+    }
+   ],
+   "aliases": [
+    "Ядро",
+    "Толкание ядра"
+   ],
+   "note": "лучший результат из попыток"
+  },
+  {
+   "id": "dt",
+   "name": "Метание диска",
+   "group": "throws",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 82.0,
+   "specs": [
+    {
+     "who": "Мужчины",
+     "text": "2 кг"
+    },
+    {
+     "who": "Юниоры до 20",
+     "text": "1,75 кг"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "1,5 кг"
+    },
+    {
+     "who": "Юноши до 14 (ЕВСК)",
+     "text": "1 кг"
+    },
+    {
+     "who": "Женщины, юниорки, девушки",
+     "text": "1 кг"
+    },
+    {
+     "who": "Девочки до 14 (ЕВСК)",
+     "text": "0,75 кг"
+    }
+   ],
+   "aliases": [
+    "Диск",
+    "Метание диска"
+   ],
+   "note": "лучший результат из попыток"
+  },
+  {
+   "id": "ht",
+   "name": "Метание молота",
+   "group": "throws",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 92.0,
+   "specs": [
+    {
+     "who": "Мужчины",
+     "text": "7,26 кг"
+    },
+    {
+     "who": "Юниоры до 20",
+     "text": "6 кг"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "5 кг"
+    },
+    {
+     "who": "Женщины и юниорки",
+     "text": "4 кг"
+    },
+    {
+     "who": "Девушки до 18",
+     "text": "3 кг"
+    }
+   ],
+   "aliases": [
+    "Молот",
+    "Метание молота"
+   ],
+   "note": "лучший результат из попыток"
+  },
+  {
+   "id": "jt",
+   "name": "Метание копья",
+   "group": "throws",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 105.0,
+   "specs": [
+    {
+     "who": "Мужчины и юниоры до 20",
+     "text": "800 г"
+    },
+    {
+     "who": "Юноши до 18",
+     "text": "700 г"
+    },
+    {
+     "who": "Женщины и юниорки",
+     "text": "600 г"
+    },
+    {
+     "who": "Девушки до 18",
+     "text": "500 г"
+    }
+   ],
+   "aliases": [
+    "Копьё",
+    "Копье",
+    "Метание копья",
+    "Метание копья"
+   ],
+   "note": "лучший результат из попыток"
+  },
+  {
+   "id": "ball",
+   "name": "Метание мяча",
+   "group": "throws",
+   "result": "distance",
+   "sex": "MF",
+   "venue": [
+    "outdoor"
+   ],
+   "attempts": true,
+   "max": 90.0,
+   "specs": [
+    {
+     "who": "Дети",
+     "text": "мяч 140 г"
+    }
+   ],
+   "aliases": [
+    "Мяч",
+    "Метание мяча 140 г"
+   ],
+   "note": "дети до 14 лет"
+  },
+  {
+   "id": "dec",
+   "name": "Десятиборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "M",
+   "venue": [
+    "outdoor"
+   ],
+   "max": 9500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Юниоры до 20, юноши до 18 (с 16 лет), мужчины"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "100 м",
+      "Длина",
+      "Ядро",
+      "Высота",
+      "400 м"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "110 м с/б",
+      "Диск",
+      "Шест",
+      "Копьё",
+      "1500 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "oct",
+   "name": "Восьмиборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "M",
+   "venue": [
+    "outdoor"
+   ],
+   "max": 7500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Юноши до 16 лет"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "100 м",
+      "Длина",
+      "Ядро",
+      "400 м"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "110 м с/б",
+      "Высота",
+      "Копьё",
+      "1000 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hep",
+   "name": "Семиборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "F",
+   "venue": [
+    "outdoor"
+   ],
+   "max": 7500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Девушки, юниорки, женщины (с 14 лет)"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "100 м с/б",
+      "Высота",
+      "Ядро",
+      "200 м"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "Длина",
+      "Копьё",
+      "800 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hepi",
+   "name": "Семиборье (зал)",
+   "group": "combined",
+   "result": "points",
+   "sex": "M",
+   "venue": [
+    "indoor"
+   ],
+   "max": 7000,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Юниоры, юноши, мужчины в помещении"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "60 м",
+      "Длина",
+      "Ядро",
+      "Высота"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "60 м с/б",
+      "Шест",
+      "1000 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "peni",
+   "name": "Пятиборье (зал)",
+   "group": "combined",
+   "result": "points",
+   "sex": "F",
+   "venue": [
+    "indoor"
+   ],
+   "max": 5500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Девушки, юниорки, женщины в помещении"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "60 м с/б",
+      "Высота",
+      "Ядро",
+      "Длина",
+      "800 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hex",
+   "name": "Шестиборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "M",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "max": 6000,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Юноши до 14–15 лет"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "60 м с/б",
+      "Длина",
+      "Ядро"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "Высота",
+      "Копьё",
+      "1000 м"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tet",
+   "name": "Четырёхборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "max": 4500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Дети до 14 лет"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "60 м",
+      "Прыжок (длина или высота)"
+     ]
+    },
+    {
+     "day": 2,
+     "events": [
+      "Мяч",
+      "600 м (девочки), 800 м (мальчики)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tri",
+   "name": "Троеборье",
+   "group": "combined",
+   "result": "points",
+   "sex": "MF",
+   "venue": [
+    "indoor",
+    "outdoor"
+   ],
+   "max": 3500,
+   "specs": [
+    {
+     "who": "Участники",
+     "text": "Дети до 13 лет, юноши и девушки до 18 лет: бег, прыжок и метание по выбору"
+    }
+   ],
+   "note": "очки по таблице многоборий World Athletics",
+   "parts": [
+    {
+     "day": 1,
+     "events": [
+      "Бег",
+      "Прыжок",
+      "Ядро или метание"
+     ]
+    }
+   ]
+  }
+ ],
+ "presets": [
+  {
+   "id": "indoor",
+   "name": "Манеж: основная программа",
+   "hint": "бег до 3000 м, 60 м с/б, прыжки, ядро",
+   "venue": "indoor",
+   "disciplines": [
+    "60m",
+    "200m",
+    "400m",
+    "800m",
+    "1500m",
+    "3000m",
+    "60mh",
+    "hj",
+    "pv",
+    "lj",
+    "tj",
+    "sp"
+   ]
+  },
+  {
+   "id": "outdoor",
+   "name": "Стадион: основная программа",
+   "hint": "бег, барьеры, стипль, прыжки, метания, эстафеты",
+   "venue": "outdoor",
+   "disciplines": [
+    "100m",
+    "200m",
+    "400m",
+    "800m",
+    "1500m",
+    "5000m",
+    "100mh",
+    "110mh",
+    "400mh",
+    "3000msc",
+    "hj",
+    "pv",
+    "lj",
+    "tj",
+    "sp",
+    "dt",
+    "ht",
+    "jt",
+    "4x100",
+    "4x400"
+   ]
+  },
+  {
+   "id": "cup",
+   "name": "Кубок: бег и прыжки",
+   "hint": "компактная программа на один день",
+   "disciplines": [
+    "60m",
+    "100m",
+    "200m",
+    "400m",
+    "800m",
+    "1500m",
+    "lj",
+    "hj"
+   ]
+  },
+  {
+   "id": "kids",
+   "name": "Дети до 14 лет",
+   "hint": "60 м, 300 м, 600 м, 1000 м, барьеры, длина, высота, мяч, ядро",
+   "disciplines": [
+    "60m",
+    "300m",
+    "600m",
+    "1000m",
+    "60mh",
+    "lj",
+    "hj",
+    "ball",
+    "sp"
+   ]
+  },
+  {
+   "id": "boys-combined",
+   "name": "Многоборье юношей",
+   "hint": "десятиборье и восьмиборье",
+   "disciplines": [
+    "dec",
+    "oct"
+   ]
+  },
+  {
+   "id": "girls-combined",
+   "name": "Многоборье девушек",
+   "hint": "семиборье и пятиборье в зале",
+   "disciplines": [
+    "hep",
+    "peni"
+   ]
+  },
+  {
+   "id": "jumps",
+   "name": "Прыжки",
+   "hint": "высота, шест, длина, тройной",
+   "disciplines": [
+    "hj",
+    "pv",
+    "lj",
+    "tj"
+   ]
+  },
+  {
+   "id": "throws",
+   "name": "Метания",
+   "hint": "ядро, диск, молот, копьё, мяч",
+   "disciplines": [
+    "sp",
+    "dt",
+    "ht",
+    "jt",
+    "ball"
+   ]
+  },
+  {
+   "id": "relays",
+   "name": "Эстафеты",
+   "hint": "4×100 м и 4×400 м",
+   "disciplines": [
+    "4x100",
+    "4x400"
+   ]
+  },
+  {
+   "id": "walk",
+   "name": "Спортивная ходьба",
+   "hint": "3000 м и 5000 м",
+   "disciplines": [
+    "walk3000",
+    "walk5000"
+   ]
+  }
+ ]
+}

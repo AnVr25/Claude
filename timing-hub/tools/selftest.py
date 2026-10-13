@@ -1101,7 +1101,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.0.0 и дата сборки 13.10.2026", st3["version"] == "3.0.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.1.0 и дата сборки 13.10.2026", st3["version"] == "3.1.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1111,6 +1111,53 @@ def main() -> int:
         check("3.0: стартовый экран — Мастер подбора соревнования с двумя направлениями",
               code == 200 and "Мастер подбора соревнования" in txt and "Настройка оборудования IPICO" in txt
               and "Массовый забег с хронометражем" in txt and "Соревнования на стадионе" in txt, str(code))
+        # 3.1: справочник дисциплин и типы результата (прыжки, метания, многоборья)
+        code, txt = http("GET", "/api/disciplines")
+        dj = json.loads(txt)
+        dn = [d["name"] for d in dj["disciplines"]]
+        grp = {g["id"] for g in dj["groups"]}
+        check("3.1: справочник — 10 групп, не меньше 50 дисциплин, названия уникальны и до 20 символов",
+              code == 200 and len(dj["groups"]) == 10 and len(dn) >= 50 and len(set(dn)) == len(dn) and all(len(n) <= 20 for n in dn)
+              and {d["group"] for d in dj["disciplines"]} <= grp, txt[:200])
+        byname = {d["name"]: d for d in dj["disciplines"]}
+        check("3.1: есть бег, барьеры, стипль, ходьба, прыжки, метания, многоборья и эстафеты",
+              {"100 м", "110 м с/б", "3000 м с/п", "Ходьба 5000 м", "Прыжок в длину", "Толкание ядра", "Десятиборье", "4×100 м"} <= set(dn), str(dn)[:300])
+        check("3.1: типы результата — время, расстояние, высота, очки; у метаний попытки; у эстафет этапы",
+              byname["100 м"]["result"] == "time" and byname["Прыжок в длину"]["result"] == "distance"
+              and byname["Прыжок с шестом"]["result"] == "height" and byname["Десятиборье"]["result"] == "points"
+              and byname["Метание копья"].get("attempts") and byname["4×100 м"]["legs"] == 4, "")
+        check("3.1: спецификации — массы снарядов и высоты барьеров по возрастам",
+              any("7,26" in x["text"] for x in byname["Толкание ядра"]["specs"]) and any("106,7" in x["text"] for x in byname["110 м с/б"]["specs"]), "")
+        ids_ = {d["id"] for d in dj["disciplines"]}
+        check("3.1: пресеты ссылаются на существующие дисциплины", len(dj["presets"]) >= 8
+              and all(set(p["disciplines"]) <= ids_ for p in dj["presets"]), "")
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Технические виды", "kind": "stadium", "timing": "manual"}).encode(), J)
+        et = json.loads(txt)["id"]
+        http("POST", f"/api/events/{et}/entries", json.dumps({"text": "Номер;Забег;ФИО\n1;Длина;Альфа\n2;Длина;Бета\n3;Длина;Гамма\n4;Высота;Дельта\n5;Высота;Эпсилон\n6;Многоборье;Зета\n7;Многоборье;Эта\n8;100;Тета\n9;100;Йота"}).encode(), J)
+        for wn, dist in (("Длина", "Прыжок в длину"), ("Высота", "Прыжок в высоту"), ("Многоборье", "Десятиборье"), ("100", "100 м")):
+            http("POST", f"/api/events/{et}/waves", json.dumps({"name": wn, "category": "Юноши", "distance": dist}).encode(), J)
+        code, txt = http("POST", f"/api/events/{et}/results", json.dumps({"rows": [
+            {"bib": "1", "result": "7,85"}, {"bib": "2", "result": "7.2"}, {"bib": "3", "result": "99"},
+            {"bib": "4", "result": "1,95"}, {"bib": "5", "result": "2.05"},
+            {"bib": "6", "result": "7250"}, {"bib": "7", "result": "8100"},
+            {"bib": "8", "result": "11,2"}, {"bib": "9", "result": "10.9"}]}).encode(), J)
+        rr = json.loads(txt)
+        check("3.1: результаты по типам сохранены, нереальный прыжок 99 м отклонён с подсказкой формата",
+              rr["saved"] == 8 and len(rr["errors"]) == 1 and rr["errors"][0].startswith("3:") and "7.85" in rr["errors"][0], txt[:300])
+        _, txt = http("GET", f"/api/events/{et}/results")
+        fin = {x["bib"]: x for x in json.loads(txt)["finished"]}
+        check("3.1: расстояние и высота — больше лучше, текст с сотыми; многоборье — очки; время — меньше лучше",
+              fin["1"]["place"] == 1 and fin["1"]["result"] == "7.85" and fin["2"]["place"] == 2
+              and fin["5"]["place"] == 1 and fin["5"]["result"] == "2.05" and fin["4"]["place"] == 2
+              and fin["7"]["place"] == 1 and fin["7"]["result"] == "8100" and fin["6"]["place"] == 2
+              and fin["9"]["place"] == 1 and fin["8"]["place"] == 2 and fin["1"]["rtype"] == "distance"
+              and fin["1"]["time"] == "7.85" and fin["9"].get("rtype") is None, str({k: (v["place"], v["result"]) for k, v in fin.items()}))
+        _, txt = http("GET", f"/api/events/{et}/results")
+        grp_ = {(g["category"], g["distance"]): g["count"] for g in json.loads(txt)["groups"]}
+        check("3.1: общий зачёт по дисциплине считается по убыванию результата",
+              grp_.get(("Юноши", "Прыжок в длину")) == 2, str(grp_))
+        code, txt = http("POST", f"/api/events/{et}/results", json.dumps({"rows": [{"bib": "6", "result": "13:20"}]}).encode(), J)
+        check("3.1: время в дисциплине с очками не принимается", json.loads(txt)["saved"] == 0 and len(json.loads(txt)["errors"]) == 1, txt[:200])
         # календарь: перенесённый старт обновляет прежнюю запись
         code, txt = http("POST", "/api/events", json.dumps({"name": "«Ночной забег»", "date": "2026-10-16"}).encode(), J)
         en = json.loads(txt)["id"]

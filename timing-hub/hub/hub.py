@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2115,6 +2115,66 @@ class Hub:
         txt = f"{h}:{mi:02d}:{sec:02d}{f}" if h else (f"{mi}:{sec:02d}{f}" if mi else f"{sec}{f}")
         return total, txt
 
+    # ---- справочник дисциплин лёгкой атлетики (seed/disciplines.json) и типы результата
+    _DISC: Optional[dict] = None
+
+    @staticmethod
+    def _dkey(name) -> str:
+        t = re.sub(r"(?<=\d)[xх*](?=\d)", "×", str(name or "").lower())
+        return re.sub(r"[\s.\-]+", "", t).replace("ё", "е")
+
+    @classmethod
+    def disciplines(cls) -> dict:
+        """Справочник: группы, дисциплины (бег, ходьба, прыжки, метания, многоборья, эстафеты), пресеты."""
+        if cls._DISC is None:
+            p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed", "disciplines.json")
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, ValueError):
+                data = {"groups": [], "disciplines": [], "presets": [], "result_types": {}, "ages": []}
+            idx: dict = {}
+            for d in data["disciplines"]:
+                for n in [d["name"], *(d.get("aliases") or [])]:
+                    idx.setdefault(cls._dkey(n), d)
+            cls._DISC = {"data": data, "index": idx}
+        return cls._DISC
+
+    @classmethod
+    def discipline(cls, name) -> Optional[dict]:
+        return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
+
+    @classmethod
+    def result_type(cls, name) -> str:
+        """time · distance · height · points. Неизвестная дисциплина — время, как раньше."""
+        d = cls.discipline(name)
+        return d["result"] if d else "time"
+
+    @classmethod
+    def parse_typed(cls, rtype: str, text, name=None) -> Optional[tuple]:
+        """Результат по типу дисциплины → (ключ места: меньше — лучше, текст для протокола) или None.
+        Время — как раньше; расстояние и высота — метры (7.85 · 7,85); очки — целое число."""
+        if rtype == "time":
+            return cls.parse_result(text)
+        t = re.sub(r"\s+", "", str(text or ""))
+        mx = (cls.discipline(name) or {}).get("max")
+        if rtype == "points":
+            if not re.fullmatch(r"\d{1,5}", t):
+                return None
+            v = int(t)
+            return (-float(v), str(v)) if 0 < v <= (mx or 12000) else None
+        m = re.fullmatch(r"(\d{1,3})(?:[.,](\d{1,2}))?", t)
+        if not m:
+            return None
+        v = float(f"{m.group(1)}.{m.group(2) or 0}")
+        if v <= 0 or v > (mx or (8.0 if rtype == "height" else 120.0)):
+            return None
+        return -v, f"{v:.2f}"
+
+    @classmethod
+    def result_hint(cls, rtype: str) -> str:
+        return (cls.disciplines()["data"].get("result_types", {}).get(rtype) or {}).get("hint") or "12.84 или 4:05.32"
+
     TEAM_POINTS = (20, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
     GENDER_WORDS = ("мальчики", "юноши", "юниоры", "мужчины", "девочки", "девушки", "юниорки", "женщины")
 
@@ -2164,14 +2224,18 @@ class Hub:
     def compute(self, ev: dict) -> dict:
         eid = ev["id"]
         erows = self.store.entries_rows(eid)
-        entered, status_of = {}, {}
+        entered, status_of, rtype_of = {}, {}, {}
+        wdist = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
         for r in erows:
             if r.get("status") in self.STATUSES:
                 status_of[r["chip"]] = r["status"]
             elif r.get("result"):
-                pr = self.parse_result(r["result"])
+                dn = wdist.get(r["wave"] or "")
+                rt = self.result_type(dn)
+                pr = self.parse_typed(rt, r["result"], dn)
                 if pr:
                     entered[r["chip"]] = pr
+                    rtype_of[r["chip"]] = rt
         entries = {r["chip"]: r["bib"] for r in erows}
         info = {r["chip"]: r for r in erows}
         chip_wave = {r["chip"]: r["wave"] for r in erows if r["wave"]}
@@ -2289,6 +2353,8 @@ class Hub:
                 place = pv[1] if pv and pv[0] == txt else place_by_wave[w]   # одинаковый результат — одно место
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt, seconds=round(sec, 3),
                          finish_at=None, finish_epoch_ms=None, entered=True)
+                if rtype_of.get(chip, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
+                    r.update(time=txt, seconds=None, rtype=rtype_of[chip], value=round(-sec, 2))
             else:
                 txt = self.fmt_result(sec)
                 pv = prev_by_wave.get(w)
@@ -2303,7 +2369,7 @@ class Hub:
         for r in res["finished"]:
             groups.setdefault((r["category"], r["distance"]), []).append(r)
         for (cat, dist), lst in groups.items():
-            lst.sort(key=lambda r: r["seconds"])
+            lst.sort(key=lambda r: -r["value"] if r.get("rtype") else r["seconds"])
             tie: list = []      # одинаковый результат в разных забегах — делят место
             for i, r in enumerate(lst, 1):
                 if tie and r["result"] == tie[0]["result"] and all(t["wave"] != r["wave"] for t in tie):
@@ -2511,7 +2577,7 @@ class Hub:
                 st = val.upper().rstrip(".")
                 if st in cls.STATUSES:
                     rows[-1].update(result=None, status=st)
-                elif val and cls.parse_result(val) is None:
+                elif val and cls.parse_typed(cls.result_type(rec.get("distance")), val, rec.get("distance")) is None:
                     rows.pop()
                     bad.append(n)
                     continue
@@ -2662,6 +2728,9 @@ class Hub:
                 out.append(item)
             last = out[-1]["id"] if out else (since if since > 0 else self.store.last_id())
             return ok({"last_id": last, "reads": out})
+        if path == "/api/disciplines" and method == "GET":
+            data = self.disciplines()["data"]
+            return ok({k: data.get(k) for k in ("version", "updated", "sources", "groups", "result_types", "ages", "disciplines", "presets")})
         if path == "/api/default-rules" and method == "GET":
             # возрастные группы по образцу положений ВФЛА для года соревнований (для мастера создания)
             y = str(qs.get("year", ""))
@@ -2836,6 +2905,8 @@ class Hub:
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "results" and isinstance(data.get("rows"), list):
             bad, n = [], 0
+            wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
+            dn_of = {e["bib"]: wd.get(e["wave"] or "") for e in self.store.entries_rows(eid)}
             for rw in data["rows"][:2000]:
                 if not isinstance(rw, dict):
                     continue
@@ -2847,9 +2918,10 @@ class Hub:
                     continue
                 pr = None
                 if txt and not st:
-                    pr = self.parse_result(txt)
+                    rt = self.result_type(dn_of.get(bib))
+                    pr = self.parse_typed(rt, txt, dn_of.get(bib))
                     if not pr:
-                        bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: 12.84 или 4:05.32")
+                        bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
                 if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None):
                     n += 1
@@ -3757,7 +3829,8 @@ class Hub:
 
         heats, rows, n = [], [], 0
         for key in sorted(groups, key=lambda k: (dist_order.get(k[0], 99), k[0], cat_order.get(k[1], 99), k[1])):
-            lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, r["best_sec"] or 0, r["id"]))
+            sign = 1 if self.result_type(key[0]) == "time" else -1        # в прыжках и метаниях лучший — наибольший результат
+            lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, sign * (r["best_sec"] or 0), r["id"]))
             k = math.ceil(len(lst) / lanes)
             base, extra = divmod(len(lst), k)
             sizes = [base + (1 if i >= k - extra else 0) for i in range(k)]   # полные забеги — последние

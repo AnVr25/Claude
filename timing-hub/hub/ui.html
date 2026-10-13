@@ -311,6 +311,26 @@ td.res{font:600 18px var(--head)}
 .datalinks a{color:var(--ink);text-underline-offset:3px}
 
 /* формат соревнования, сайт, ввод результатов, пользователи */
+/* 3.1: выбор дисциплин из справочника */
+.dp{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--panel)}
+.dp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.dp-top input{flex:1 1 200px;min-height:44px;font-size:16px}
+.dp-seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.dp-seg button{border:0;border-radius:0;background:var(--panel);min-height:44px;padding:0 14px;font-size:15px;color:var(--muted)}
+.dp-seg button.on{background:var(--track);color:#fff}
+.dp-pre{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.dp-pre button{min-height:36px;padding:4px 12px;font-size:14px;border-radius:999px}
+.dp-g{margin-top:10px}
+.dp-g h4{display:flex;align-items:baseline;gap:8px;margin:0 0 6px;font:600 16px var(--head)}
+.dp-g h4 small{font:400 13px var(--body);color:var(--muted)}
+.dp-g h4 .dp-n{margin-left:auto;font:600 13px var(--head);color:var(--track)}
+.dp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dp-chip{border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink);white-space:nowrap}
+.dp-chip:hover{border-color:var(--track)}
+.dp-chip.on{background:var(--track);border-color:var(--track);color:#fff}
+.dp-chip i{font-style:normal;font-size:12px;opacity:.75;margin-left:6px}
+.dp-sum{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:14px;color:var(--muted)}
+.dp-empty{padding:10px 0;color:var(--muted);font-size:14px}
 /* 3.0: Мастер подбора соревнования, панели направлений */
 .welcome{max-width:880px;margin:4vh auto 0;text-align:center}
 .wl-k{font:600 14px var(--head);letter-spacing:.8px;text-transform:uppercase;color:var(--track);margin:0 0 8px}
@@ -753,6 +773,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <a class="btn sm" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR для афиши</a>
       </div>
       <details class="panel" id="gSettings"><summary><b>Настройки формы</b> <span class="small muted">дистанции, категории, текст</span></summary>
+        <details id="gPick" style="margin:6px 0"><summary class="small"><b>Выбрать из справочника дисциплин</b> — бег, прыжки, метания, многоборья</summary><div id="gPickBox" style="margin-top:8px"></div></details>
         <label for="gDist">Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:110px" placeholder="60 м&#10;100 м | лимит 40&#10;1000 м | номера с 300&#10;4×200 м | эстафета 4"></textarea>
         <div class="small muted">Через «|»: <span class="mono">лимит 40</span> — мест; <span class="mono">номера с 300</span> — диапазон номеров; <span class="mono">эстафета 4</span> — команда на 4 этапа.</div>
         <label for="gRules">Категории: название;пол;год с;год по · <a href="#" id="gRulesDefault" style="color:var(--track)">образец</a></label><textarea id="gRules" style="min-height:110px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea>
@@ -815,6 +836,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="row"><button class="primary" id="eSave">Сохранить результаты</button></div>
   </div>
   <div class="tabs" id="eHeats"></div>
+  <p class="small muted" id="eHint" style="margin:6px 0"></p>
   <div class="tbl entry"><table>
     <thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Команда</th><th>Результат</th><th>Отметка</th><th>Место</th></tr></thead>
     <tbody id="eBody"></tbody>
@@ -1400,6 +1422,60 @@ $("fFinish").onchange = () => {
   else $("fFinish").value="";
 };
 $("btnNew").onclick = () => wzOpen();
+/* ---------- справочник дисциплин лёгкой атлетики и выбор дисциплин ---------- */
+let DISC = null, discLoading = null;
+const discKey = (n) => String(n || "").toLowerCase().replace(/(\d)[xх*](\d)/g, "$1×$2").replace(/[\s.\-]+/g, "").replace(/ё/g, "е");
+function loadDisc(){
+  if (DISC) return Promise.resolve(DISC);
+  return discLoading || (discLoading = api("/api/disciplines").then(d => {
+    d.index = new Map(); d.disciplines.forEach(x => [x.name, ...(x.aliases || [])].forEach(n => d.index.has(discKey(n)) || d.index.set(discKey(n), x)));
+    return (DISC = d);
+  }).catch(() => (discLoading = null, { groups: [], disciplines: [], presets: [], result_types: {}, index: new Map() })));
+}
+const discBy = (name) => DISC && DISC.index.get(discKey(String(name || "").split("|")[0]));
+const discLine = (d) => d.name + (d.legs ? ` | эстафета ${d.legs}` : "");
+const RT_BADGE = {distance: "м", height: "м", points: "очки"};
+// api = {get: () => ["строка дистанции", …], set: (строки) => …}; корень — любой div
+async function discPicker(root, api2){
+  const D = await loadDisc();
+  const st = {q: "", venue: ""};
+  root.innerHTML = `<div class="dp"><div class="dp-top"><input type="search" class="dp-q" placeholder="Найти дисциплину: 100, шест, ядро…" aria-label="Поиск дисциплины">
+    <div class="dp-seg" role="group" aria-label="Где проходит"><button type="button" data-v="" class="on">Все</button><button type="button" data-v="indoor">Манеж</button><button type="button" data-v="outdoor">Стадион</button></div></div>
+    <div class="small muted" style="margin-bottom:4px">Готовые программы — добавят свои дисциплины в выбор:</div>
+    <div class="dp-pre">${D.presets.map(p => `<button type="button" data-p="${esc(p.id)}" title="${esc(p.hint)}">${esc(p.name)}</button>`).join("")}</div>
+    <div class="dp-list"></div><div class="dp-sum"><span class="dp-cnt"></span><button type="button" class="sm dp-clear">Очистить выбор</button></div></div>`;
+  const list = root.querySelector(".dp-list");
+  const sel = () => new Set(api2.get().map(l => { const d = discBy(l); return d ? d.id : null; }).filter(Boolean));
+  function draw(){
+    const on = sel(), q = discKey(st.q), cnt = api2.get().length;
+    root.querySelector(".dp-cnt").textContent = cnt ? `Выбрано: ${cnt}` : "Пока ничего не выбрано";
+    root.querySelector(".dp-clear").classList.toggle("hide", !cnt);
+    const html = D.groups.map(g => {
+      const items = D.disciplines.filter(d => d.group === g.id && (!st.venue || (d.venue || []).includes(st.venue))
+        && (!q || discKey(d.name).includes(q) || (d.aliases || []).some(a => discKey(a).includes(q))));
+      if (!items.length) return "";
+      const n = items.filter(d => on.has(d.id)).length;
+      return `<div class="dp-g"><h4>${esc(g.name)} <small>${esc(g.hint || "")}</small>${n ? `<span class="dp-n">выбрано ${n}</span>` : ""}</h4><div class="dp-chips">${items.map(d => {
+        const tip = [d.note, ...(d.specs || []).map(x => x.who + ": " + x.text)].filter(Boolean).join("\n");
+        return `<button type="button" class="dp-chip${on.has(d.id) ? " on" : ""}" data-did="${esc(d.id)}" aria-pressed="${on.has(d.id)}"${tip ? ` title="${esc(tip)}"` : ""}>${esc(d.name)}${RT_BADGE[d.result] ? `<i>${RT_BADGE[d.result]}</i>` : ""}</button>`; }).join("")}</div></div>`; }).join("");
+    list.innerHTML = html || '<div class="dp-empty">Ничего не найдено. Свою дисциплину можно дописать в поле ниже.</div>';
+  }
+  const toggle = (id, force) => {
+    const d = D.disciplines.find(x => x.id === id), lines = api2.get(), i = lines.findIndex(l => { const x = discBy(l); return x && x.id === id; });
+    if (i >= 0 && force !== true) lines.splice(i, 1); else if (i < 0) lines.push(discLine(d));
+    api2.set(lines); draw();
+  };
+  list.addEventListener("click", (e) => { const b = e.target.closest("[data-did]"); if (!b) return; toggle(b.dataset.did); const nb = list.querySelector(`[data-did="${b.dataset.did}"]`); nb && nb.focus({preventScroll:true}); });
+  root.querySelector(".dp-pre").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return;
+    const p = D.presets.find(x => x.id === b.dataset.p); p.disciplines.forEach(id => toggle(id, true)); toast(`«${p.name}»: добавлено ${p.disciplines.length}`); });
+  root.querySelector(".dp-q").addEventListener("input", (e) => { st.q = e.target.value; draw(); });
+  root.querySelector(".dp-seg").addEventListener("click", (e) => { const b = e.target.closest("[data-v]"); if (!b) return; st.venue = b.dataset.v;
+    root.querySelectorAll(".dp-seg button").forEach(x => x.classList.toggle("on", x === b)); draw(); });
+  root.querySelector(".dp-clear").onclick = () => { api2.set([]); draw(); };
+  root._dpDraw = draw; draw();
+  return draw;
+}
+
 /* ---------- мастер «Новое соревнование»: шаги зависят от направления ---------- */
 const WZ_TYPES = [
   {id:"mass", b:"Забег на улице", small:"Кроссы, полумарафоны, массовые старты. Время считают чипы и ридеры на финише.", kind:"mass", timing:"chips", dists:["1 км","3 км","5 км","10 км","21,1 км","42,2 км"]},
@@ -1446,11 +1522,12 @@ async function wzDraw(){
     <div><label for="wzCity">Город</label><input id="wzCity" value="${esc(wz.city)}"></div>
     <div class="full"><label for="wzPlace">Где проходит <span class="muted">(необязательно)</span></label><input id="wzPlace" list="venueList" placeholder="Легкоатлетический манеж" value="${esc(wz.place)}"></div></div><div class="wz-err" id="wzErr"></div>`;
   if (id === "dists") { const t = wzType(), last = flow[flow.length - 1] === "dists";
-    b.innerHTML = `<h2 id="wzTitle">${t.kind === "mass" ? "Какие дистанции?" : "Какие дисциплины в программе?"}</h2><p class="wz-sub">Нажмите на нужные — они попадут в форму регистрации. Своих можно дописать ниже.</p>
-    <div class="wz-chips">${t.dists.map(d => `<button type="button" class="wz-chip${wz.dists.includes(d) ? " on" : ""}" data-d="${esc(d)}" aria-pressed="${wz.dists.includes(d)}">${esc(d)}</button>`).join("")}</div>
+    b.innerHTML = `<h2 id="wzTitle">${t.kind === "mass" ? "Какие дистанции?" : "Какие дисциплины в программе?"}</h2><p class="wz-sub">${t.kind === "mass" ? "Нажмите на нужные — они попадут в форму регистрации." : "Бег, ходьба, прыжки, метания, многоборья, эстафеты. Выберите готовую программу или отметьте нужные дисциплины."} Своих можно дописать ниже.</p>
+    ${t.kind === "mass" ? `<div class="wz-chips">${t.dists.map(d => `<button type="button" class="wz-chip${wz.dists.includes(d) ? " on" : ""}" data-d="${esc(d)}" aria-pressed="${wz.dists.includes(d)}">${esc(d)}</button>`).join("")}</div>` : '<div id="wzPicker"></div>'}
     <label for="wzExtra">Свои <span class="muted">— по одной в строке</span></label><textarea id="wzExtra" style="min-height:64px" placeholder="400 м с/б">${esc(wz.extra)}</textarea>
     ${last ? `<label class="check" style="margin-top:12px"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Сразу открыть приём заявок и показать на сайте fla65.ru</label>` : ""}
-    <p class="small muted" style="margin:2px 0 0">Лимит мест, номера и эстафеты настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
+    <p class="small muted" style="margin:2px 0 0">Лимит мест и номера настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`;
+    if (t.kind !== "mass") discPicker($("wzPicker"), {get: () => wz.dists.slice(), set: (l) => { wz.dists = l; }}); }
   if (id === "groups") { b.innerHTML = '<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Загружаю…</p>'; await wzLoadRules(); const pairs = wzPairs();
     b.innerHTML = `<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Группы по годам рождения для ${esc(wz.rulesYear)} года, как в положениях ВФЛА. Уберите лишние.</p>
     <div class="wz-chips">${pairs.map((p, k) => `<button type="button" class="wz-chip${p.idx.every(i => wz.sel.includes(i)) ? " on" : ""}" data-g="${k}" aria-pressed="${p.idx.every(i => wz.sel.includes(i))}">${esc(p.label)}</button>`).join("")}</div>
@@ -1661,6 +1738,9 @@ async function drawQr(url){
     setTimeout(() => { const c = box.querySelector("canvas"); if (c) { $("gQrDl").href = c.toDataURL("image/png"); $("gQrDl").classList.remove("hide"); } }, 100);
   }catch(e){ box.innerHTML = '<span class="small muted" style="padding:50px 0">QR не загрузился</span>'; }
 }
+$("gPick").addEventListener("toggle", () => { if (!$("gPick").open || $("gPickBox").dataset.on) return; $("gPickBox").dataset.on = "1";
+  discPicker($("gPickBox"), {get: () => $("gDist").value.split("\n").map(x => x.trim()).filter(Boolean), set: (l) => { $("gDist").value = l.join("\n"); }}); });
+$("gDist").addEventListener("input", () => { const r = $("gPickBox"); if (r._dpDraw) r._dpDraw(); });
 $("gRulesDefault").onclick = (e) => { e.preventDefault(); if ($("gRules").value.trim() && !confirm("Заменить правила образцом?")) return; $("gRules").value = regDefaults; toast("Образец подставлен — поправьте годы рождения по положению"); };
 $("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select(); try{ document.execCommand("copy"); toast("Ссылка скопирована"); }catch(e){ toast("Скопируйте вручную: Ctrl+C"); } };
 $("gSave").onclick = async () => {
@@ -2527,10 +2607,13 @@ function renderEntry(){
   if (!eData) return;
   $("eHeats").innerHTML = eData.groups.map(g => `<button data-h="${esc(g.name)}" class="${g.name===eHeat?"on":""}">${esc(g.name)}${g.sub?` <span class="small muted" style="font-family:var(--body)">${esc(g.sub)}</span>`:""}<i>${g.entries.length}</i></button>`).join("");
   const g = eData.groups.find(x => x.name === eHeat);
+  const dd = g && g.sub ? discBy(g.sub.split(" · ").pop()) : null, rt = dd ? dd.result : "time";
+  const RT_HINT = {time: "", distance: "Результат — расстояние в метрах, лучшее из попыток: 7.85 или 7,85.", height: "Результат — лучшая взятая высота в метрах: 1.95 или 1,95.", points: "Результат — сумма очков многоборья по таблице: целое число, например 7250."};
+  $("eHint").textContent = RT_HINT[rt] || "";
   $("eBody").innerHTML = g ? g.entries.map(r => `<tr data-bib="${esc(r.bib)}" class="${r.status?"st-out":""}">
       <td>${r.lane ?? ""}</td><td class="bib">${esc(r.bib)}</td>
       <td><b>${esc(r.name||"")}</b><div class="small muted">${esc(r.birth_year||"")}</div></td><td class="small">${esc(r.team||"")}</td>
-      <td><input class="res" value="${esc(r.result||"")}" inputmode="decimal" placeholder="—" aria-label="Результат ${esc(r.bib)}"></td>
+      <td><input class="res" value="${esc(r.result||"")}" inputmode="decimal" placeholder="${rt === "time" ? "—" : rt === "points" ? "очки" : "м"}" aria-label="Результат ${esc(r.bib)}"></td>
       <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([k,t]) => `<option value="${k}" ${r.status===k?"selected":""}>${t}</option>`).join("")}</select></td>
       <td class="pl p${eData.place[r.bib]||""}">${eData.place[r.bib] ?? ""}</td></tr>`).join("")
     : '<tr><td colspan="7" class="empty">Участников нет. Загрузите стартовый список на этапе «Подготовка» или сформируйте забеги из заявок.</td></tr>';
@@ -2633,6 +2716,7 @@ $("uSave").onclick = async () => {
 
 /* ---------- запуск ---------- */
 (async function init(){
+  loadDisc();
   await loadMe(); await loadStatus(); await loadDevices();
   try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
   showTab();
