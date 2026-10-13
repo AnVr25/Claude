@@ -476,6 +476,11 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 .upnew-h{font-size:16px}.upnew-h b{font:600 18px var(--head)}
 .upchg{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .upchg li small{margin-left:8px}
+/* соревнование завершено: заметная полоса с одной кнопкой «Возобновить» */
+.finbar{display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;margin:0 0 14px;padding:12px 16px;border-radius:var(--r);
+  background:#FFF6E5;border:1px solid #F2C46D;border-left:4px solid #E09A10;color:var(--ink)}
+.finbar>div{flex:1 1 320px;display:flex;flex-direction:column;gap:2px}
+.finbar b{font:600 17px var(--head)}.finbar span{font-size:14px;color:var(--muted)}
 .roles2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin:0 0 10px}
 .roles2>div{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;display:flex;flex-direction:column;gap:4px}
 .roles2 b{font:600 16px var(--head)}.roles2 span{font-size:13px;color:var(--muted)}
@@ -606,6 +611,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 </nav>
 
 <main>
+<div class="finbar hide" id="finBar" role="status" aria-live="polite"></div>
 
 <!-- СТАРТ: Мастер подбора соревнования -->
 <section id="tab-welcome" class="hide">
@@ -1302,6 +1308,7 @@ function showTab(){
   if (onStep && lane.scrollWidth > lane.clientWidth) lane.scrollLeft = onStep.offsetLeft - (lane.clientWidth - onStep.offsetWidth) / 2;
   // в мастере протоколов своя навигация (шаги 1–5) — общая панель этапов скрыта, чтобы шаги не задваивались
   $("lane").classList.toggle("hide", !STEPS.includes(tab));
+  renderFinState();
   if (STEPS.includes(tab) && tab !== "wizard") store.set("ss.lastStep", tab);
   $("gear").classList.toggle("on", tab === "hw" || tab === "log" || tab === "users");
   closeMenus();
@@ -1407,7 +1414,7 @@ function evRow(e, td){
     <div class="date">${d ? `<b>${+d[2]}</b><span>${MON_S[+d[1]-1]}</span>` : "<b>—</b><span>без даты</span>"}</div>
     <div><div class="t">${esc(e.name)}${e.pub_site?'<span class="tag" title="Показывается в календаре fla65.ru">на сайте</span>':""}</div><div class="m">${esc([e.kind==="stadium"?"стадион":"массовый старт", meta].filter(Boolean).join(" · ") || "нет участников")}</div></div>
     <div class="state ${cls}">${esc(txt)}</div>
-    <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">Открыть снова</button>' : ""}${!ME || ME.role === "admin" ? '<button class="sm quiet danger" data-act="del">Удалить</button>' : ""}</div>
+    <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">↩️ Возобновить</button>' : ""}${!ME || ME.role === "admin" ? '<button class="sm quiet danger" data-act="del">Удалить</button>' : ""}</div>
   </div>`;
 }
 function renderEvents(){
@@ -1433,7 +1440,7 @@ function renderEvents(){
   $("lnkBoard").href = ev ? "/board?event="+ev.id : "/board";
   $("lnkProto").href = ev ? "/protocol?event="+ev.id : "/protocol";
   if (tabName()==="files") renderFilesTab();
-  renderWaves(); renderTimingHead(); renderRegHead(); renderLane();
+  renderWaves(); renderTimingHead(); renderRegHead(); renderLane(); renderFinState();
   if (tabName()==="home") renderArchive();
   if (STEPS.includes(tabName()) && !ev && document.body.dataset.view !== "home") showTab();
 }
@@ -1760,7 +1767,7 @@ $("evList").onclick = async (e) => {
   const card = e.target.closest(".evrow"); if (!card) return;
   const id = +card.dataset.id, ev = events.find(x=>x.id===id), act = e.target.dataset.act;
   try{
-    if (act === "reopen") { await api(`/api/events/${id}/reopen`, {}); return loadEvents(); }
+    if (act === "reopen") return reopenEv(id);
     if (act === "arch") { await api(`/api/events/${id}/archive`, {}); toast("Перенесено в архив"); loadEvents._sig = null; return loadEvents(); }
     if (act === "del") {
       if (!confirm(`Удалить «${ev.name}»? Отметки ридеров в архиве останутся; удалятся карточка, забеги, список участников и ручные отметки.`)) return;
@@ -2478,8 +2485,33 @@ async function doStart(time, wave){
 $("btnStart").onclick = () => doStart(null);
 $("btnManual").onclick = () => { const t=$("tManual").value.trim(); if(!t) return toast("Введите время ЧЧ:ММ:СС"); doStart(t); };
 $("btnReset").onclick = async () => { if (!confirm("Сбросить время старта? Результаты пересчитаются после нового старта.")) return; await api(`/api/events/${curId}/reset`, {}); await loadEvents(); loadResults(); };
-const finishEv = async () => { if (!confirm("Завершить соревнование?")) return; await api(`/api/events/${curId}/finish`, {}); await loadEvents(); toast("Соревнование завершено"); };
-$("btnFinish").onclick = finishEv; $("btnFinish2").onclick = finishEv;
+// «Завершить» ⇄ «Возобновить»: одна кнопка в каждом месте, где она есть (старт, забеги, ввод результатов, полоса сверху)
+const finishEv = async () => {
+  const ev = curEvent(); if (!ev) return;
+  if (!confirm(`Завершить «${ev.name}»?\n\n• протокол станет итоговым, сохранится снимок результатов;\n• регистрация закроется;\n• на сайте fla65.ru соревнование уйдёт в прошедшие.\n\nЕсли нажали случайно — всё вернёт кнопка «Возобновить соревнование».`)) return;
+  try{ await api(`/api/events/${ev.id}/finish`, {}); loadEvents._sig = null; await loadEvents(); toast("Соревнование завершено. Вернуть — «Возобновить соревнование»"); }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
+const reopenEv = async (id) => {
+  const ev = events.find(x => x.id === (id || curId)); if (!ev) return;
+  if (!confirm(`Возобновить «${ev.name}»?\n\n• соревнование снова «${ev.start_time ? "идёт" : "ждёт старта"}»${ev.archived ? ", вернётся из архива" : ""};\n• регистрация откроется снова, если она включена и срок приёма не прошёл;\n• на сайте fla65.ru — снова в текущих (обновится в течение минуты).\n\nВведённые результаты, сетка и протоколы сохраняются.`)) return;
+  try{ await api(`/api/events/${ev.id}/reopen`, {}); loadEvents._sig = null; await loadEvents(); toast("Соревнование возобновлено"); }
+  catch(e){ toast("Ошибка: "+e.message); }
+};
+const finToggle = () => { const ev = curEvent(); return ev && ev.status === "finished" ? reopenEv() : finishEv(); };
+function renderFinState(){
+  const ev = curEvent(), fin = !!ev && ev.status === "finished";
+  ["btnFinish", "btnFinish2", "eFinish"].forEach(i => { const b = $(i); if (!b) return;
+    b.textContent = fin ? "↩️ Возобновить соревнование" : "Завершить соревнование"; b.classList.toggle("primary", fin); });
+  if (ev && fin) $("btnFinish").disabled = false;
+  const bar = $("finBar"), show = fin && (STEPS.includes(tabName()) || tabName() === "wizard");
+  bar.classList.toggle("hide", !show);
+  if (show) bar.innerHTML = `<div><b>🏁 Соревнование завершено${ev.finished_at ? " " + esc(fmtDate(ev.finished_at.slice(0,10))) + " в " + esc(ev.finished_at.slice(11,16)) : ""}</b>
+    <span>Протокол итоговый · регистрация закрыта · на сайте — в прошедших${ev.archived ? " · в архиве" : ""}. Нажали случайно или старт перенесли — верните всё одной кнопкой.</span></div>
+    <button class="primary" type="button" id="finReopen">↩️ Возобновить соревнование</button>`;
+  const rb = $("finReopen"); if (rb) rb.onclick = () => reopenEv();
+}
+$("btnFinish").onclick = finToggle; $("btnFinish2").onclick = finToggle;
 $("wavesBody").onclick = async (e) => {
   const tr = e.target.closest("tr"); const act = e.target.dataset.act; if (!tr || !act || act==="time") return;
   const wave = tr.dataset.wave;
@@ -3157,7 +3189,7 @@ $("eSave").onclick = async () => {
     loadResults(); loadEvents._sig = null; loadEvents();
   }catch(e){ toast("Ошибка: "+e.message); }
 };
-$("eFinish").onclick = () => $("btnFinish").click();
+$("eFinish").onclick = finToggle;
 
 /* ---------- пользователи и вход ---------- */
 let ME = null;

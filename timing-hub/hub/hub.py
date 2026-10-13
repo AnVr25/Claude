@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "4.5.1"
+VERSION = "4.5.2"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -3213,9 +3213,13 @@ class Hub:
             self.store.audit(who, eid, "Сброс старта" + (f" «{wave}»" if wave else ""))
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "finish":
+            if ev.get("status") == "finished":          # повторное нажатие — без второго снимка и записи в журнале
+                return ok(self._event_view(ev))
             self.store.set_event_field(eid, status="finished", finished_at=fmt_db(now_local()))
             snap = self.snapshot_results(ev, who)
-            self.store.audit(who, eid, "Соревнование завершено", f"снимок результатов: {snap['name']}" if snap else "")
+            self.store.audit(who, eid, "Соревнование завершено",
+                             "регистрация закрыта, на сайте — в прошедших, протокол итоговый"
+                             + (f"; снимок результатов: {snap['name']}" if snap else ""))
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "snapshot":
             snap = self.snapshot_results(ev, who)
@@ -3332,9 +3336,20 @@ class Hub:
             self.store.audit(who, eid, "Удалён файл", f["name"])
             return ok({"deleted": sub_id})
         if action == "reopen":
-            self.store.set_event_field(eid, status="running" if ev.get("start_time") else "planned")
-            self.store.audit(who, eid, "Соревнование открыто снова")
-            return ok(self._event_view(self.store.get_event(eid)))
+            # «Возобновить»: всё как до «Завершить» — статус по старту, из архива назад, регистрация снова
+            # подчиняется своим настройкам (галочка и срок приёма), на сайте — снова в предстоящих / идущих.
+            # Результаты, сетка и снимки протоколов не трогаются.
+            new = "running" if ev.get("start_time") else "planned"
+            self.store.set_event_field(eid, status=new, finished_at=None, archived=0)
+            nv_ = self.store.get_event(eid)
+            reg_ok, why = self.reg_state(nv_)
+            self.store.audit(who, eid, "Соревнование возобновлено",
+                             "; ".join(x for x in (
+                                 f"было завершено {str(ev['finished_at'])[:16]}" if ev.get("finished_at") else "",
+                                 "возвращено из архива" if ev.get("archived") else "",
+                                 "идёт" if new == "running" else "ждёт старта",
+                                 "регистрация открыта" if reg_ok else f"регистрация: {why.lower()}") if x))
+            return ok(self._event_view(nv_))
         if action == "entries":
             rows, bad = self.parse_entries(str(data.get("text", "")))
             old = {e["bib"]: e for e in self.store.entries_rows(eid)}

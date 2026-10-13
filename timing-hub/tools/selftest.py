@@ -1160,7 +1160,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.5.1 и дата сборки 13.10.2026", st3["version"] == "4.5.1" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.5.2 и дата сборки 13.10.2026", st3["version"] == "4.5.2" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1433,6 +1433,47 @@ def main() -> int:
         check("4.4: страница пульта открывается, /api/system/scoreboard/control ведёт на неё, табло можно встроить в превью пульта",
               pg.status == 200 and "Пульт" in pgt and "/api/scoreboard/state" in pgt and loc4 == f"/scoreboard?event={se}"
               and bh.headers.get("X-Frame-Options") == "SAMEORIGIN", f"{loc4} {bh.headers.get('X-Frame-Options')}")
+        # 4.5.2: «Завершить» по ошибке — «Возобновить» возвращает всё: статус, архив, регистрацию, сайт; журнал пишет оба шага
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Перенос 4.5.2", "date": "2030-05-20", "kind": "stadium",
+                                                             "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+        ef = json.loads(txt)["id"]
+        code, txt = http("POST", f"/api/events/{ef}", json.dumps({"reg_open": True, "pub_site": True, "ours": True,
+                                                                   "reg_distances": "60 м"}).encode(), J)
+
+        def card_f():
+            return next(c for c in json.loads(pub("GET", "/r/api/calendar")[1])["events"] if c["name"] == "Перенос 4.5.2")
+
+        def ev_f():
+            return json.loads(http("GET", f"/api/events/{ef}")[1])
+        c0 = card_f()
+        http("POST", f"/api/events/{ef}/start", b"{}", J)
+        c1 = card_f()
+        code, txt = http("POST", f"/api/events/{ef}/finish", b"{}", J)
+        c2, e2_ = card_f(), ev_f()
+        nfiles = len(json.loads(http("GET", f"/api/events/{ef}/files")[1])["files"])
+        http("POST", f"/api/events/{ef}/finish", b"{}", J)
+        nfiles2 = len(json.loads(http("GET", f"/api/events/{ef}/files")[1])["files"])
+        check("4.5.2: «Завершить» — на сайте в прошедших, регистрация закрыта; повторное нажатие не плодит снимков",
+              c0["status"] == "planned" and c0["reg"] and c1["status"] == "running" and c1["reg"]
+              and c2["status"] == "finished" and c2["reg"] is None and e2_["finished_at"] and nfiles == nfiles2,
+              f"{c0['status']} {c1['status']} {c2['status']} {c2['reg']} {nfiles}/{nfiles2}")
+        http("POST", f"/api/events/{ef}/archive", b"{}", J)
+        code, txt = http("POST", f"/api/events/{ef}/reopen", b"{}", J)
+        c3, e3_ = card_f(), ev_f()
+        check("4.5.2: «Возобновить» — снова идёт, из архива назад, регистрация открыта, на сайте текущее с онлайн-результатами",
+              code == 200 and e3_["status"] == "running" and not e3_["archived"] and not e3_["finished_at"]
+              and c3["status"] == "running" and c3["reg"] and c3["reg"]["open"], f"{e3_.get('status')} {e3_.get('archived')} {c3}"[:300])
+        logf = [x for x in json.loads(http("GET", "/api/log")[1])["log"] if x.get("event_id") == ef]
+        acts = [x.get("action") for x in logf]
+        reo = next((x for x in logf if x.get("action") == "Соревнование возобновлено"), {})
+        check("4.5.2: журнал: завершение (одно), архив, возобновление — с пояснением, что вернулось",
+              acts.count("Соревнование завершено") == 1 and "Перенесено в архив" in acts and reo
+              and "возвращено из архива" in (reo.get("details") or "") and "регистрация открыта" in (reo.get("details") or ""),
+              str([(x.get("action"), x.get("details")) for x in logf])[:400])
+        http("POST", f"/api/events/{ef}/reset", b"{}", J)
+        http("POST", f"/api/events/{ef}/finish", b"{}", J)
+        http("POST", f"/api/events/{ef}/reopen", b"{}", J)
+        check("4.5.2: старт ещё не дан — после «Возобновить» соревнование ждёт старта", ev_f()["status"] == "planned")
         # 3.6: выполненный разряд по нормам ЕВСК (seed/rank_norms.json)
         vas = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Васильева"))
         beg = next(e["bib"] for e in jump if e["name"].startswith("Бегунов"))
