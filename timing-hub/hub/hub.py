@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "4.3.0"
+VERSION = "4.4.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -862,6 +862,23 @@ class Store:
             );
             """)
         add("registrations", (("relay", "TEXT"), ("leg", "INTEGER"), ("rank", "TEXT")))
+        # 4.4: состояние стадионного табло (пульт управления) — по соревнованию
+        self.con.execute("CREATE TABLE IF NOT EXISTS scoreboard(event_id INTEGER PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL)")
+
+    def get_scoreboard(self, eid: int) -> Optional[dict]:
+        row = self.con.execute("SELECT state, updated_at FROM scoreboard WHERE event_id = ?", (eid,)).fetchone()
+        if not row:
+            return None
+        try:
+            st = json.loads(row[0])
+        except ValueError:
+            return None
+        st["updated_at"] = row[1]
+        return st
+
+    def set_scoreboard(self, eid: int, state: dict) -> None:
+        self.con.execute("INSERT OR REPLACE INTO scoreboard(event_id, state, updated_at) VALUES (?,?,?)",
+                         (eid, json.dumps(state, ensure_ascii=False), fmt_db(now_local())))
 
     # ---- пользователи и сессии (вход через браузер)
     def users(self) -> list:
@@ -2998,6 +3015,39 @@ class Hub:
                 out.append(item)
             last = out[-1]["id"] if out else (since if since > 0 else self.store.last_id())
             return ok({"last_id": last, "reads": out})
+        if path == "/api/system/scoreboard/control":
+            return 302, "text/plain; charset=utf-8", "", {"Location": "/scoreboard" + (f"?event={int(qs['event'])}" if str(qs.get("event", "")).isdigit() else "")}
+        if path == "/api/scoreboard/state":
+            # пульт табло: GET — что сейчас показывать (табло спрашивает раз в 1,5 с), POST — секретарь/визуализатор меняет режим
+            if method == "GET":
+                eid_ = int(qs["event"]) if str(qs.get("event", "")).isdigit() else 0
+                ev_ = self.store.get_event(eid_) if eid_ else None
+                if ev_ is None:
+                    return err("соревнование не найдено", 404)
+                return ok(self.scoreboard_view(ev_))
+            try:
+                d = json.loads(body.decode("utf-8") or "{}")
+            except (ValueError, UnicodeDecodeError):
+                return err("неверные данные")
+            ev_ = self.store.get_event(int(d.get("event_id") or 0)) if str(d.get("event_id") or "").isdigit() else None
+            if ev_ is None:
+                return err("соревнование не найдено", 404)
+            mode = d.get("mode")
+            if mode not in self.SB_MODES:
+                return err("режим табло: auto, fixed или rotate")
+            keys = {g["key"] for g in self.scoreboard_groups(ev_)}
+            group = str(d.get("group") or d.get("wave_id") or "")
+            if mode == "fixed" and group not in keys:
+                return err("выберите вид программы для фиксации")
+            rot = d.get("rotate") if isinstance(d.get("rotate"), dict) else {}
+            interval = max(5, min(int(rot.get("interval") or 15), 120))
+            rgroups = [k for k in (rot.get("groups") or []) if k in keys][:40]
+            state = {"mode": mode, "group": group if mode == "fixed" else "", "rotate": {"interval": interval, "groups": rgroups},
+                     "by": actor}
+            self.store.set_scoreboard(ev_["id"], state)
+            self.store.audit(actor, ev_["id"], "Табло: " + self.SB_MODES[mode], group if mode == "fixed" else
+                             (f"каждые {interval} с" if mode == "rotate" else ""))
+            return ok(self.scoreboard_view(ev_))
         if path == "/api/disciplines" and method == "GET":
             data = self.disciplines()["data"]
             return ok({k: data.get(k) for k in ("version", "updated", "sources", "groups", "result_types", "ages", "disciplines", "presets")})
@@ -4405,6 +4455,44 @@ class Hub:
             self.store.delete_wave(eid, name)
         return {"waves": len(names), "entries": n}
 
+    # ---- стадионное табло: режимы и активные группы (вид программы × категория)
+    SB_MODES = {"auto": "авто-трансляция", "fixed": "фиксация дисциплины", "rotate": "ротация"}
+
+    def scoreboard_groups(self, ev: dict, res: Optional[dict] = None) -> list:
+        """Группы стартового протокола (дисциплина × категория): сколько участников, сколько результатов, когда последний."""
+        sl = self.startlist(ev)
+        res = res or self.compute(ev)
+        groups: dict = {}
+        for h in sl["heats"] + [{"distance": "", "category": "", "entries": sl["no_heat"]}]:
+            for e in h["entries"]:
+                d = e.get("distance") or h.get("distance") or ""
+                c = h.get("category") or e.get("category") or ""
+                if not d:
+                    continue
+                g = groups.setdefault(d + "|" + c, {"key": d + "|" + c, "distance": d, "category": c, "total": 0, "results": 0,
+                                                    "last_ms": None, "tech": self.discipline_kind(d) == "tech"})
+                g["total"] += 1
+        for x in res["finished"]:
+            g = groups.get((x.get("distance") or "") + "|" + (x.get("category") or ""))
+            if g:
+                g["results"] += 1
+                t = x.get("finish_epoch_ms") or x.get("entered_epoch_ms")
+                if t and (g["last_ms"] is None or t > g["last_ms"]):
+                    g["last_ms"] = t
+        return sorted(groups.values(), key=lambda g: (not g["tech"], g["distance"], g["category"]))
+
+    def scoreboard_view(self, ev: dict) -> dict:
+        res = self.compute(ev)
+        groups = self.scoreboard_groups(ev, res)
+        st = self.store.get_scoreboard(ev["id"]) or {"mode": "auto", "group": "", "rotate": {"interval": 15, "groups": []}}
+        keys = [g["key"] for g in groups]
+        rot = [k for k in (st.get("rotate") or {}).get("groups") or [] if k in keys] or \
+              [g["key"] for g in groups if g["tech"] and g["results"]] or [g["key"] for g in groups if g["results"]]
+        return {"event_id": ev["id"], "mode": st.get("mode", "auto"), "group": st.get("group", ""),
+                "rotate": {"interval": (st.get("rotate") or {}).get("interval", 15), "groups": rot,
+                           "chosen": (st.get("rotate") or {}).get("groups") or []},
+                "updated_at": st.get("updated_at"), "by": st.get("by", ""), "groups": groups, "server_ms": self._epoch_ms(now_local())}
+
     def startlist(self, ev: dict) -> dict:
         rows = self.store.entries_rows(ev["id"])
         # у каждого участника своя дисциплина (из заявки): в смешанном «общем списке» забег без дистанции,
@@ -4427,7 +4515,7 @@ class Hub:
         return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
 
     # ---- «Оборудование»: сервер, службы, VPN, кто подключён
-    PAGES = {"/": "Админка", "/judge": "Судья", "/sector": "Судья на секторе", "/announcer": "Диктор", "/board": "Табло", "/protocol": "Протокол"}
+    PAGES = {"/": "Админка", "/judge": "Судья", "/sector": "Судья на секторе", "/scoreboard": "Пульт табло", "/announcer": "Диктор", "/board": "Табло", "/protocol": "Протокол"}
 
     def _note_client(self, writer, headers: dict, path: str) -> None:
         peer = writer.get_extra_info("peername")
@@ -5709,14 +5797,14 @@ class Hub:
             return {"login": "-", "name": "", "role": "admin"}
         return None
 
-    JUDGE_GET = re.compile(r"/api/(clock|status|events|events/\d+(/(results|files|manual|startlist))?)")
-    JUDGE_POST = re.compile(r"/api/events/\d+/(manual(/\d+)?|start|waves)")
-    JUDGE_PAGES = ("/judge", "/board", "/announcer", "/protocol", "/api/me", "/api/logout")
+    JUDGE_GET = re.compile(r"/api/(clock|status|scoreboard/state|events|events/\d+(/(results|files|manual|startlist))?)")
+    JUDGE_POST = re.compile(r"/api/events/\d+/(manual(/\d+)?|start|waves)|/api/scoreboard/state")
+    JUDGE_PAGES = ("/judge", "/board", "/announcer", "/protocol", "/scoreboard", "/api/me", "/api/logout")
     ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
     # «Судья на секторе / секретарь вида»: только ввод результатов (шаг 4 мастера) и табло — ни заявок с личными данными,
     # ни сетки, ни настроек, ни оборудования
     SECTOR_PAGES = ("/sector", "/board", "/api/me", "/api/logout", "/api/me/password", "/api/clock", "/api/disciplines")
-    SECTOR_GET = re.compile(r"/api/events(/\d+(/(startlist|results))?)?")
+    SECTOR_GET = re.compile(r"/api/events(/\d+(/(startlist|results))?)?|/api/scoreboard/state")
     SECTOR_POST = re.compile(r"/api/events/\d+/results")
 
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -5990,8 +6078,8 @@ class Hub:
                 await self._send(writer, code, ctype, data, extra=extra)
             elif method != "GET":
                 await self._send(writer, 405, "text/plain", "метод не поддерживается")
-            elif path in ("/", "/board", "/judge", "/announcer", "/protocol", "/sector"):
-                name = {"/": "ui.html", "/board": "board.html", "/judge": "judge.html", "/sector": "sector.html",
+            elif path in ("/", "/board", "/judge", "/announcer", "/protocol", "/sector", "/scoreboard"):
+                name = {"/": "ui.html", "/board": "board.html", "/judge": "judge.html", "/sector": "sector.html", "/scoreboard": "scoreboard.html",
                         "/announcer": "announcer.html", "/protocol": "protocol.html"}[path]
                 page = self._ui_file(name)
                 if page is None:
@@ -6000,7 +6088,7 @@ class Hub:
                     # протокол показывается во встроенном предпросмотре мастера — только со страниц этого же сервера
                     await self._send(writer, 200, "text/html; charset=utf-8", page,
                                      extra={"X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff",
-                                            "Referrer-Policy": "same-origin"} if path == "/protocol" else None)
+                                            "Referrer-Policy": "same-origin"} if path in ("/protocol", "/board") else None)
             elif path.startswith("/assets/"):
                 a = self._asset(path[8:])
                 if a is None:

@@ -208,7 +208,7 @@ body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
 .wzp-pub label{min-height:40px}
 /* судья на секторе / секретарь вида: только ввод результатов — без настроек, оборудования, пользователей и удаления */
 body[data-role=sector] #lane,body[data-role=sector] #ipicoNav,body[data-role=sector] #healthBar,body[data-role=sector] .evswitch.scr,
-body[data-role=sector] #gear,body[data-role=sector] #wzpBack,body[data-role=sector] #wzpSteps,body[data-role=sector] .cartmount,
+body[data-role=sector] #gear,body[data-role=sector] #wzpSteps,body[data-role=sector] .cartmount,
 body[data-role=sector] #evMenu a[href="#home"],body[data-role=sector] #evMenu [data-new],body[data-role=sector] #evMenu hr,
 body[data-role=sector] .wzp-nav,body[data-role=sector] #wzpClear,body[data-role=sector] .wzp-title h1{display:none!important}
 body[data-role=sector] header .logos{pointer-events:none}
@@ -575,6 +575,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <div class="mi-row"><a id="lnkSector" target="_blank"><b>📱 Судья на секторе ↗</b><small>планшет ввода результатов: попытки в прыжках и метаниях, секундомеры</small></a><button type="button" class="mi-copy" id="cpSector" title="Скопировать ссылку для судей на поле">Копировать ссылку</button></div>
       <a id="lnkAnn" target="_blank"><b>Диктор ↗</b><small>кто подбегает к финишу</small></a>
       <a id="lnkBoard" target="_blank"><b>Табло ↗</b><small>для экрана у финиша</small></a>
+      <a id="lnkScore" target="_blank"><b>🎛️ Пульт управления стадионным табло ↗</b><small>что показывать на табло: авто, фиксация дисциплины, ротация</small></a>
       <a id="lnkProto" target="_blank"><b>Протокол ↗</b><small>результаты для печати и сайта</small></a>
     </div>
   </div>
@@ -1006,7 +1007,6 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 <!-- МАСТЕР ПРОТОКОЛОВ -->
 <section id="tab-wizard" class="hide">
   <div class="wzp-head">
-    <a class="btn" id="wzpBack" href="#reg">← К этапам соревнования</a>
     <div class="wzp-title"><h1>Мастер протоколов</h1><span class="small muted" id="wzpEv"></span></div>
   </div>
   <div class="wzp-top">
@@ -1299,7 +1299,7 @@ function showTab(){
   const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
   if (onStep && lane.scrollWidth > lane.clientWidth) lane.scrollLeft = onStep.offsetLeft - (lane.clientWidth - onStep.offsetWidth) / 2;
   // в мастере протоколов своя навигация (шаги 1–5) — общая панель этапов скрыта, чтобы шаги не задваивались
-  $("lane").classList.toggle("hide", !STEPS.includes(tab) || tab === "wizard");
+  $("lane").classList.toggle("hide", !STEPS.includes(tab));
   if (STEPS.includes(tab) && tab !== "wizard") store.set("ss.lastStep", tab);
   $("gear").classList.toggle("on", tab === "hw" || tab === "log" || tab === "users");
   closeMenus();
@@ -1426,6 +1426,7 @@ function renderEvents(){
     + `${mlist.length?"<hr>":""}<a href="#home"><b>Все соревнования и архив</b></a><button class="mi" data-new="1"><b>+ Новое соревнование</b></button>`;
   $("lnkJudge").href = ev ? "/judge?event="+ev.id : "/judge";
   $("lnkSector").href = ev ? "/sector?event="+ev.id : "/sector";
+  $("lnkScore").href = ev ? "/scoreboard?event="+ev.id : "/scoreboard";
   $("lnkAnn").href = ev ? "/announcer?event="+ev.id : "/announcer";
   $("lnkBoard").href = ev ? "/board?event="+ev.id : "/board";
   $("lnkProto").href = ev ? "/protocol?event="+ev.id : "/protocol";
@@ -2123,7 +2124,6 @@ const wzp = (() => {
   }
   async function open(){
     const e0 = ev(); if (!e0) { $("wzpBody").innerHTML = '<p class="muted">Выберите соревнование в меню вверху.</p>'; return; }
-    const back = store.get("ss.lastStep"); $("wzpBack").href = "#" + (back && back !== "wizard" ? back : "reg");
     $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
     if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }

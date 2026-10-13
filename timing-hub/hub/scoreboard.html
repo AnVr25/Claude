@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пульт табло — SakhStart</title>
+<link rel="stylesheet" href="/assets/brand.css">
+<style>
+/* Пульт управления стадионным табло: что показывать на экранах для зрителей. */
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ice);color:var(--ink);font:16px/1.45 var(--body)}
+button,select,input{font:inherit}
+:focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
+.top{background:var(--night);color:#fff;border-bottom:3px solid var(--track)}
+.top-in{max-width:1280px;margin:0 auto;padding:12px 18px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
+.top img{height:28px;width:auto}
+.top h1{margin:0;font:600 20px/1.2 var(--head);letter-spacing:.02em;flex:1 1 auto}
+.top select{min-height:40px;max-width:min(420px,100%);border-radius:var(--r);border:1px solid var(--night-line);background:var(--night-2);color:#fff;padding:6px 10px}
+.top a{color:#D5DEEA}
+main{max-width:1280px;margin:0 auto;padding:18px}
+.now{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-radius:10px;background:var(--panel);border:1px solid var(--line);margin:0 0 16px}
+.now b{font:600 18px/1.2 var(--head)}
+.now .live{display:inline-flex;align-items:center;gap:6px;font:700 13px var(--body);color:var(--ok)}
+.now .live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.now .muted{color:var(--muted);font-size:14px}
+.cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+h2{margin:0 0 10px;font:600 18px/1.2 var(--head)}
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.mode{text-align:left;padding:14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;display:grid;gap:4px;min-height:112px}
+.mode b{font:600 17px/1.2 var(--head)}
+.mode small{color:var(--muted);font-size:13.5px;line-height:1.35}
+.mode.on{border-color:var(--track);box-shadow:inset 0 0 0 2px var(--track)}
+.mode:hover{border-color:var(--track)}
+.groups{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+.g{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.g:first-child{border-top:0}
+.g.on{background:#E71E2510;box-shadow:inset 4px 0 0 var(--track)}
+.g .t b{display:block;font:600 16px/1.2 var(--head)}
+.g .t small{color:var(--muted);font-size:13px}
+.tag{display:inline-block;font:700 11px/1 var(--body);padding:4px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted);margin-right:6px;vertical-align:1px}
+.tag.tech{border-color:var(--start);color:var(--start)}
+.g label{display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.g input{width:18px;height:18px;accent-color:var(--track)}
+.btn{min-height:40px;padding:8px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-weight:700;white-space:nowrap}
+.btn:hover{border-color:var(--track);color:var(--track)}
+.btn.primary{background:var(--track);border-color:var(--track);color:#fff}
+.btn.primary:hover{filter:brightness(1.08);color:#fff}
+.rot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 0}
+.rot select{min-height:40px;border-radius:var(--r);border:1px solid var(--line);padding:6px 10px;background:var(--panel)}
+.prev{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--night)}
+.prev iframe{position:absolute;left:0;top:0;width:1600px;height:900px;border:0;transform-origin:0 0}
+.hint{color:var(--muted);font-size:13.5px;margin:8px 0 0}
+.empty{padding:22px;text-align:center;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--night);color:#fff;padding:10px 16px;border-radius:var(--r);opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media (max-width:900px){.cols{grid-template-columns:1fr}.modes{grid-template-columns:1fr}.mode{min-height:0}}
+@media (max-width:560px){.g{grid-template-columns:1fr 1fr}.g .t{grid-column:1/-1}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <img src="/assets/sakhstart-dark.svg" alt="SakhStart">
+  <h1>🎛️ Пульт управления стадионным табло</h1>
+  <select id="ev" aria-label="Соревнование"></select>
+  <a id="lnkBoard" target="_blank">Открыть табло ↗</a>
+</div></header>
+<main>
+  <div class="now" id="now" role="status" aria-live="polite"><span class="muted">Загрузка…</span></div>
+  <div class="cols">
+    <section>
+      <h2>Режим табло</h2>
+      <div class="modes" role="radiogroup" aria-label="Режим табло">
+        <button type="button" class="mode" data-mode="auto" role="radio"><b>▶️ Авто-трансляция</b><small>Последние введённые и финишные результаты по мере поступления, новые сверху.</small></button>
+        <button type="button" class="mode" data-mode="fixed" role="radio"><b>📌 Фиксация дисциплины</b><small>Таблица лидеров одной группы — с 1 места до последнего. Выберите группу ниже.</small></button>
+        <button type="button" class="mode" data-mode="rotate" role="radio"><b>🔁 Ротация / слайд-шоу</b><small>Группы с галочкой «в ротации» по кругу, каждая — на заданное время.</small></button>
+      </div>
+      <h2>Активные виды программы</h2>
+      <div class="groups" id="groups"><div class="empty">Загрузка…</div></div>
+      <div class="rot"><label for="iv">Смена слайда каждые</label>
+        <select id="iv"><option value="10">10 с</option><option value="15" selected>15 с</option><option value="20">20 с</option><option value="30">30 с</option><option value="60">60 с</option></select>
+        <button type="button" class="btn primary" id="rotGo">🔁 Запустить ротацию</button></div>
+      <p class="hint">Без галочек в ротацию идут технические виды, у которых уже есть результаты. Табло на всех экранах стадиона показывает один и тот же слайд.</p>
+    </section>
+    <section>
+      <h2>Что сейчас видят зрители</h2>
+      <div class="prev" id="prev"><iframe id="frame" title="Табло — предпросмотр" tabindex="-1"></iframe></div>
+      <p class="hint">Табло обновляется само каждые 1,5 с. На телевизоре откройте ссылку «Открыть табло» и нажмите F11.</p>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MODE={auto:"▶️ Авто-трансляция",fixed:"📌 Фиксация дисциплины",rotate:"🔁 Ротация / слайд-шоу"};
+let EVS=[], EID=+new URLSearchParams(location.search).get("event")||0, ST=null, busy=false;
+function toast(t){const e=$("toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),2600);}
+async function api(path,body){
+  const o={headers:{"X-Requested-With":"timing-hub"}};
+  if(body!==undefined){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body);}
+  const r=await fetch(path,o);
+  if(r.status===401){location.href="/login?next="+encodeURIComponent(location.pathname+location.search);throw new Error("нужно войти");}
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.status);return d;
+}
+const gname=k=>k.split("|").filter(Boolean).join(" · ");
+const ago=ms=>{if(!ms)return "";const s=Math.max(0,Math.round((Date.now()-ms)/1000));return s<60?"только что":s<3600?Math.round(s/60)+" мин назад":Math.round(s/3600)+" ч назад";};
+function render(){
+  if(!ST)return;
+  const cur=ST.mode==="fixed"?gname(ST.group):ST.mode==="rotate"?`${ST.rotate.groups.length} групп по ${ST.rotate.interval} с`:"последние результаты";
+  $("now").innerHTML=`<span class="live">на табло</span><b>${MODE[ST.mode]}</b><span>${esc(cur)}</span><span class="muted">${ST.updated_at?"переключено "+esc(ST.updated_at.slice(11,16))+(ST.by?" · "+esc(ST.by.split("@")[0]):""):"по умолчанию"}</span>`;
+  document.querySelectorAll(".mode").forEach(b=>{const on=b.dataset.mode===ST.mode;b.classList.toggle("on",on);b.setAttribute("aria-checked",String(on));});
+  $("iv").value=String(ST.rotate.interval);
+  const chosen=new Set(ST.rotate.chosen||[]);
+  $("groups").innerHTML=ST.groups.map(g=>{const on=ST.mode==="fixed"&&ST.group===g.key, inRot=ST.mode==="rotate"&&ST.rotate.groups.includes(g.key);
+    return `<div class="g${on||inRot?" on":""}"><div class="t"><b>${esc(gname(g.key))}</b><small><span class="tag${g.tech?" tech":""}">${g.tech?"техника":"бег"}</span>результатов ${g.results} из ${g.total}${g.last_ms?" · "+ago(g.last_ms):""}</small></div>
+      <label><input type="checkbox" data-rot="${esc(g.key)}" ${chosen.has(g.key)?"checked":""}> в ротации</label>
+      <button type="button" class="btn${on?" primary":""}" data-fix="${esc(g.key)}">${on?"📌 На табло":"📌 Зафиксировать"}</button></div>`;}).join("")
+    ||'<div class="empty">В соревновании пока нет участников в стартовом протоколе.</div>';
+}
+async function send(body){
+  if(!EID)return; busy=true;
+  try{ST=await api("/api/scoreboard/state",Object.assign({event_id:EID},body));render();toast("Табло переключено: "+MODE[ST.mode]);}
+  catch(e){toast("Ошибка: "+e.message);}finally{busy=false;}
+}
+const rotBody=()=>({rotate:{interval:+$("iv").value,groups:[...document.querySelectorAll("[data-rot]:checked")].map(x=>x.dataset.rot)}});
+document.querySelector(".modes").addEventListener("click",e=>{const b=e.target.closest("[data-mode]");if(!b)return;
+  if(b.dataset.mode==="fixed"){const g=ST&&(ST.group||(ST.groups.find(x=>x.results)||ST.groups[0]||{}).key);if(!g)return toast("Нет групп для фиксации");return send({mode:"fixed",group:g,...rotBody()});}
+  send({mode:b.dataset.mode,...rotBody()});});
+$("groups").addEventListener("click",e=>{const b=e.target.closest("[data-fix]");if(b)send({mode:"fixed",group:b.dataset.fix,...rotBody()});});
+$("groups").addEventListener("change",e=>{if(e.target.matches("[data-rot]")&&ST&&ST.mode==="rotate")send({mode:"rotate",...rotBody()});});
+$("rotGo").onclick=()=>send({mode:"rotate",...rotBody()});
+$("iv").onchange=()=>{if(ST&&ST.mode==="rotate")send({mode:"rotate",...rotBody()});};
+function scalePrev(){const p=$("prev"),f=$("frame");f.style.transform=`scale(${p.clientWidth/1600})`;}
+window.addEventListener("resize",scalePrev);
+async function poll(){if(busy||!EID)return;try{ST=await api(`/api/scoreboard/state?event=${EID}`);if(!document.querySelector("[data-rot]:focus"))render();}catch(e){$("now").innerHTML='<b>Нет связи с сервером</b>';}}
+function setEvent(id){EID=id;history.replaceState(null,"","/scoreboard?event="+id);$("lnkBoard").href="/board?event="+id;$("frame").src="/board?event="+id;scalePrev();poll();}
+(async function init(){
+  try{const r=await api("/api/events");EVS=r.events.filter(e=>!e.archived);}catch(e){$("now").innerHTML='<b>Нет связи с сервером</b>';return;}
+  if(!EVS.some(e=>e.id===EID))EID=(EVS.find(e=>e.status==="running")||EVS.find(e=>e.kind==="stadium")||EVS[0]||{}).id||0;
+  $("ev").innerHTML=EVS.map(e=>`<option value="${e.id}" ${e.id===EID?"selected":""}>${esc(e.name)}${e.date?" · "+e.date.split("-").reverse().join("."):""}</option>`).join("");
+  $("ev").onchange=e=>setEvent(+e.target.value);
+  if(EID)setEvent(EID);
+  setInterval(poll,3000);
+})();
+</script>
+</body>
+</html>

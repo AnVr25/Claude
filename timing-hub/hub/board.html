@@ -49,6 +49,9 @@ h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--
 /* вспышка при появлении нового результата */
 .r.new::after{content:"";position:absolute;inset:0;background:var(--track);opacity:0;animation:flash 1.4s ease-out}
 @keyframes flash{from{opacity:.6}to{opacity:0}}
+.r.top .p{color:var(--start);font-weight:700}
+.none{padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
+body[data-mode=fixed] .r:first-child,body[data-mode=rotate] .r:first-child{background:none;box-shadow:none}
 .list:empty::before{content:"Финишировавших пока нет";display:block;padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
 
 /* Низ: подпись и логотипы Сахалин → ФЛАСО */
@@ -71,8 +74,8 @@ h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--
     <div class="clock idle" id="clock">ожидание старта</div>
   </header>
   <main>
-    <h2>Последние финишировавшие — новые сверху</h2>
-    <div class="hd hide" id="hd"><span id="hdPlace">Место</span><span>Номер</span><span>Участник</span><span>Дисциплина</span><span>Результат</span></div>
+    <h2 id="title">Последние финишировавшие — новые сверху</h2>
+    <div class="hd hide" id="hd"><span id="hdPlace">Место</span><span>Номер</span><span>Участник</span><span id="hdD">Дисциплина</span><span>Результат</span></div>
     <div class="list" id="list"></div>
   </main>
   <footer class="foot">
@@ -92,26 +95,59 @@ async function get(p){const r=await fetch(p,{headers:{"X-Requested-With":"timing
 const MON=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 const dRu=d=>{const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d||"");return m?`${+m[3]} ${MON[+m[2]-1]} ${m[1]}`:(d||"");};
 async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_ms-Date.now();}catch(e){}}
+// Табло слушается пульта (/scoreboard): auto — последние результаты, fixed — таблица лидеров одной группы,
+// rotate — группы по кругу. Состояние спрашивается у сервера раз в 1,5 с, страница не перезагружается.
+let SB={mode:"auto"}, pageNo=0, pageAt=0, lastKey="";
+const PER_PAGE=10, PAGE_MS=8000;
+function renderAuto(r,hasW){
+  $("title").textContent="Последние результаты — новые сверху";
+  $("hdPlace").textContent=hasW?"Место в забеге":"Место"; $("hdD").textContent="Дисциплина";
+  // свежие сверху: финиш по чипу/судье или время ввода результата с сектора (метания, прыжки, секундомеры)
+  const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,PER_PAGE);
+  $("hd").classList.toggle("hide",!last.length);
+  $("list").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
+    const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
+    return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||(x.chip||"").slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
+}
+// таблица лидеров одной группы: от 1-го места до последнего; длинная — листается страницами по 10
+function renderGroup(r,key,suffix){
+  const [d,c]=key.split("|"), tech=r.finished.some(x=>x.distance===d&&(x.rt==="distance"||x.rt==="height"||(x.attempts||[]).length));
+  const list=r.finished.filter(x=>(x.distance||"")===d&&(x.category||"")===c).sort((a,b)=>(a.place_overall||999)-(b.place_overall||999));
+  if(key!==lastKey){pageNo=0;pageAt=Date.now();lastKey=key;}
+  const pages=Math.max(1,Math.ceil(list.length/PER_PAGE));
+  if(Date.now()-pageAt>PAGE_MS){pageNo=(pageNo+1)%pages;pageAt=Date.now();}
+  if(pageNo>=pages)pageNo=0;
+  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${pages>1?` · стр. ${pageNo+1} из ${pages}`:""}${suffix||""}`;
+  $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
+  const part=list.slice(pageNo*PER_PAGE,(pageNo+1)*PER_PAGE);
+  $("hd").classList.toggle("hide",!part.length);
+  $("list").innerHTML=part.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
+    const att=(x.attempts||[]).map(v=>v||"–").join("  ");
+    return `<div class="r ${isNew?"new":""}${x.place_overall<=3?" top":""}"><span class="p">${x.place_overall}</span><span class="b">${esc(x.bib)}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(tech?att:(x.team||""))}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("")
+    ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» результатов пока нет</div>`;
+}
 async function load(){
   if(!eid){$("name").textContent="Не выбрано соревнование";return;}
   try{
-    const r=await get(`/api/events/${encodeURIComponent(eid)}/results`);
-    const ev=r.event; startMs=ev.start_epoch_ms;
+    const [r,st]=await Promise.all([get(`/api/events/${encodeURIComponent(eid)}/results`),get(`/api/scoreboard/state?event=${encodeURIComponent(eid)}`).catch(()=>SB)]);
+    SB=st||SB;
+    const ev=r.event; startMs=SB.mode==="auto"?ev.start_epoch_ms:null;
     $("name").textContent=ev.name;
-    $("meta").textContent=[dRu(ev.date),ev.place,`финишировали: ${r.finished.length}`].filter(Boolean).join(" · ");
+    $("meta").textContent=[dRu(ev.date),ev.place,`результатов: ${r.finished.length}`].filter(Boolean).join(" · ");
     const hasW=(ev.waves||[]).length>0;
-    $("hdPlace").textContent=hasW?"Место в забеге":"Место";
-    // последние по времени прихода на финиш, а не по порядку забегов
-    // свежие сверху: финиш по чипу/судье или время ввода результата с сектора (метания, прыжки, секундомеры)
-    const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,10);
-    $("hd").classList.toggle("hide",!last.length);
-    $("list").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time,isNew=!first&&!seen.has(k);seen.add(k);
-      const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
-      return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||(x.chip||"").slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
+    document.body.dataset.mode=SB.mode;
+    if(SB.mode==="fixed"&&SB.group) renderGroup(r,SB.group,"");
+    else if(SB.mode==="rotate"&&SB.rotate&&SB.rotate.groups.length){
+      // все табло на стадионе показывают одну и ту же группу: номер слайда считается от времени сервера
+      const g=SB.rotate.groups, iv=(SB.rotate.interval||15)*1000, i=Math.floor((Date.now()+offset)/iv)%g.length;
+      renderGroup(r,g[i],` · ${i+1} / ${g.length}`);
+    } else renderAuto(r,hasW);
     first=false;
   }catch(e){$("meta").textContent="нет связи с сервером…";}
 }
-function tick(){const c=$("clock");if(startMs){c.classList.remove("idle");c.textContent=fmt(Date.now()+offset-startMs);}else{c.classList.add("idle");c.textContent="ожидание старта";}}
+function tick(){const c=$("clock");
+  if(SB.mode!=="auto"){c.classList.remove("idle");const t=new Date(Date.now()+offset);c.textContent=t.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});return;}
+  if(startMs){c.classList.remove("idle");c.textContent=fmt(Date.now()+offset-startMs);}else{c.classList.add("idle");c.textContent="ожидание старта";}}
 sync();load();setInterval(tick,100);setInterval(load,1500);setInterval(sync,60000);
 </script>
 </body>

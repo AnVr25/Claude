@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.3.0 и дата сборки 13.10.2026", st3["version"] == "4.3.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.4.0 и дата сборки 13.10.2026", st3["version"] == "4.4.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1372,6 +1372,48 @@ def main() -> int:
         c5, _, _ = spost(f"/api/events/{se}", {"name": "взлом"}, sck)
         check("4.0: судья на секторе может только сохранять результаты: сетка, удаление, очистка, настройки — запрещены",
               c1 == 200 and c2 == 403 and c3 == 403 and c4 == 403 and c5 == 403, f"{c1} {c2} {c3} {c4} {c5}")
+        # 4.4: пульт управления стадионным табло
+        code, txt = http("GET", f"/api/scoreboard/state?event={se}")
+        sb0 = json.loads(txt) if code == 200 else {}
+        gk = {g["key"]: g for g in sb0.get("groups", [])}
+        tk = next((k for k, g in gk.items() if g["tech"] and g["results"]), "")
+        check("4.4: табло по умолчанию в режиме авто-трансляции, пульт видит группы дисциплин с результатами",
+              code == 200 and sb0["mode"] == "auto" and tk and "server_ms" in sb0 and sb0["rotate"]["interval"] == 15, txt[:300])
+        code, txt = http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "fixed", "wave_id": tk}).encode(), J)
+        sb1 = json.loads(txt) if code == 200 else {}
+        code2, txt2 = http("GET", f"/api/scoreboard/state?event={se}")
+        check("4.4: фиксация дисциплины сохраняется и сразу отдаётся табло",
+              code == 200 and sb1["mode"] == "fixed" and sb1["group"] == tk and json.loads(txt2)["group"] == tk, txt[:300])
+        c1, _ = http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "kino"}).encode(), J)
+        c2, _ = http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "fixed", "group": "нет|такой"}).encode(), J)
+        c3, _ = http("POST", "/api/scoreboard/state", json.dumps({"event_id": 99999, "mode": "auto"}).encode(), J)
+        check("4.4: неизвестный режим, чужая группа, несуществующее соревнование — ошибка", c1 == 400 and c2 == 400 and c3 in (400, 404), f"{c1} {c2} {c3}")
+        code, txt = http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "rotate", "rotate": {"interval": 3, "groups": [tk, "нет|такой"]}}).encode(), J)
+        sb2 = json.loads(txt) if code == 200 else {}
+        check("4.4: ротация — интервал не меньше 5 с, в круг попадают только существующие группы",
+              code == 200 and sb2["mode"] == "rotate" and sb2["rotate"]["interval"] == 5 and sb2["rotate"]["groups"] == [tk], txt[:300])
+        cs1, _, _ = spost("/api/scoreboard/state", {"event_id": se, "mode": "auto"}, sck)
+        rq = urllib.request.Request(f"http://127.0.0.1:{p_web}/scoreboard?event={se}", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+        try:
+            urllib.request.build_opener(_NoRedir).open(rq, timeout=10)
+            locs = ""
+        except urllib.error.HTTPError as e_:
+            locs = e_.headers.get("Location", "")
+        check("4.4: судья на секторе видит состояние табло, но переключать его не может (пульт уводит на /sector)",
+              sget(f"/api/scoreboard/state?event={se}", sck) == 200 and cs1 == 403 and locs == "/sector", f"{cs1} {locs}")
+        http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "auto"}).encode(), J)
+        pg = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{p_web}/scoreboard?event={se}", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10)
+        pgt = pg.read().decode()
+        rq = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/system/scoreboard/control?event={se}", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+        try:
+            urllib.request.build_opener(_NoRedir).open(rq, timeout=10)
+            loc4 = ""
+        except urllib.error.HTTPError as e_:
+            loc4 = e_.headers.get("Location", "")
+        bh = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{p_web}/board?event={se}", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10)
+        check("4.4: страница пульта открывается, /api/system/scoreboard/control ведёт на неё, табло можно встроить в превью пульта",
+              pg.status == 200 and "Пульт" in pgt and "/api/scoreboard/state" in pgt and loc4 == f"/scoreboard?event={se}"
+              and bh.headers.get("X-Frame-Options") == "SAMEORIGIN", f"{loc4} {bh.headers.get('X-Frame-Options')}")
         # 3.6: выполненный разряд по нормам ЕВСК (seed/rank_norms.json)
         vas = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Васильева"))
         beg = next(e["bib"] for e in jump if e["name"].startswith("Бегунов"))
