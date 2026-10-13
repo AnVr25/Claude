@@ -1335,6 +1335,11 @@ def main() -> int:
         fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
         check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm]["done_rank"] == "КМС", str(fin9[grm])[:200])
         http("POST", f"/api/events/{e9}", json.dumps({"level": "region"}).encode(), J)
+        _, dtxt = http("GET", "/api/disciplines")
+        dd = {x["name"]: x for x in json.loads(dtxt)["disciplines"]}
+        mb = dd.get("Метание мяча/снаряда")
+        check("3.6: «Метание мяча/снаряда» есть в справочнике как техническая дисциплина (попытки, расстояние)",
+              mb and mb["attempts"] and mb["result"] == "distance" and mb["group"] == "throws" and "Метание снаряда" in mb["aliases"], str(mb)[:200])
         # смешанный общий список без единой дистанции: техника не должна читаться как время
         code, txt = http("POST", "/api/events", json.dumps({"name": "Смешанный список", "kind": "stadium", "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
         e10 = json.loads(txt)["id"]
