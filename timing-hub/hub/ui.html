@@ -804,7 +804,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="pagehead" style="margin-bottom:10px">
       <div><h2 style="margin:0">Забеги и стартовый протокол</h2>
         <p class="lead small">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</p></div>
-      <div class="row"><button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button><a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a></div>
+      <div class="row"><button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button><button class="primary" id="gList" title="Без деления на забеги и дорожки — один сквозной список, удобно для прыжков и метаний">Сформировать общим списком из подтверждённых</button><a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a></div>
     </div>
     <fieldset class="pmode" id="gPMode"><legend>Вид стартового протокола</legend>
       <label><input type="radio" name="pmode" value="heats" checked> <b>По забегам</b><span class="small muted"> — вертикальный беговой протокол</span></label>
@@ -1884,20 +1884,22 @@ $("gResetHeats").onclick = async () => {
   try{ const r = await api(`/api/events/${ev.id}/resetheats`, {}); toast(`Сетка сброшена: забегов ${r.waves}, участников в нераспределённых ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
   catch(err){ toast("Ошибка: "+err.message); }
 };
-$("gHeats").onclick = async () => {
+async function genHeats(mode){
   const ev = curEvent(); if (!ev) return;
   const lanes = +$("gLanes").value || 8;
-  if (regData && regData.counts.pending && !confirm(`${regData.counts.pending} заявок ещё на рассмотрении — они не попадут в забеги. Продолжить?`)) return;
-  if (ev.waves.length && !confirm("Забеги уже есть. Сформировать заново? Текущие забеги и стартовый список будут заменены (номера участников сохранятся).")) return;
-  try{ const r = await api(`/api/events/${ev.id}/heats`, {lanes}); toast(`Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
+  if (regData && regData.counts.pending && !confirm(`${regData.counts.pending} заявок ещё на рассмотрении — они не попадут в ${mode==="list"?"список":"забеги"}. Продолжить?`)) return;
+  if (ev.waves.length && !confirm(mode==="list" ? "Забеги уже есть. Заменить их одним общим списком? Номера участников сохранятся." : "Забеги уже есть. Сформировать заново? Текущие забеги и стартовый список будут заменены (номера участников сохранятся).")) return;
+  try{ const r = await api(`/api/events/${ev.id}/heats`, {lanes, mode}); toast(mode==="list" ? `Общий список сформирован, участников: ${r.entries}` : `Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
   catch(err){ toast("Ошибка: "+err.message); }
-};
+}
+$("gHeats").onclick = () => genHeats("heats");
+$("gList").onclick = () => genHeats("list");
 function renderHeats(sl){
   const names = sl.heats.map(h => h.name);
   const opt = (cur) => `<option value="">— без забега</option>` + names.map(n => `<option ${n===cur?"selected":""}>${esc(n)}</option>`).join("");
   $("gHeatsBox").innerHTML = sl.heats.map(h => `<div class="heat"><div class="hh"><b>${esc(h.name)}</b><span class="small muted">${esc([h.category,h.distance].filter(Boolean).join(" · "))} · ${h.entries.length} чел.${h.state!=="planned"?" · "+({running:"идёт",finished:"завершён"})[h.state]:""}</span></div>
     <table><thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Заявл.</th><th>Перенести</th></tr></thead><tbody>
-    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td><input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}></td><td><b>${esc(e.bib)}</b></td>
+    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td>${h.name==="Общий список"?'<span class="muted">—</span>':`<input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}>`}</td><td><b>${esc(e.bib)}</b></td>
       <td>${esc(e.name||"")}<div class="small muted">${esc([e.birth_year,e.team].filter(Boolean).join(" · "))}</div></td><td class="mono">${esc(e.seed||"")}</td>
       <td><select class="mv" ${h.state!=="planned"?"disabled":""}>${opt(h.name)}</select></td></tr>`).join("") || '<tr><td colspan="5" class="empty">пусто</td></tr>'}
     </tbody></table></div>`).join("") || '<div class="card empty">Забегов пока нет — подтвердите заявки и нажмите «Сформировать забеги».</div>';

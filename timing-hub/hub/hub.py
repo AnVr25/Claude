@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.2.1"
+VERSION = "3.3.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -3254,12 +3254,12 @@ class Hub:
             return ok(out)
         if action == "heats":
             try:
-                out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8)
+                out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8, "list" if data.get("mode") == "list" else "heats")
             except ValueError as e:
                 return err(str(e))
             if data.get("lanes"):
                 self.store.update_event(eid, {"reg_lanes": data["lanes"]})
-            self.store.audit(who, eid, "Сформированы забеги", f"{len(out['heats'])} забегов, {out['entries']} участников")
+            self.store.audit(who, eid, "Сформирован общий список" if data.get("mode") == "list" else "Сформированы забеги", f"{len(out['heats'])} забегов, {out['entries']} участников")
             try:
                 self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
                                self._startlist_csv(self.store.get_event(eid)).encode("utf-8"), "startlist", who, "Для судей")
@@ -3952,7 +3952,7 @@ class Hub:
                     order.append(c)
         return order[:n]
 
-    def generate_heats(self, ev: dict, lanes: int) -> dict:
+    def generate_heats(self, ev: dict, lanes: int, mode: str = "heats") -> dict:
         """Подтверждённые заявки → забеги по категории и дистанции, посев по лучшему результату:
         сильнейшие — в последнем забеге группы, внутри забега — на центральных дорожках."""
         eid = ev["id"]
@@ -3979,29 +3979,37 @@ class Hub:
             return b, "#" + b
 
         heats, rows, n = [], [], 0
-        for key in sorted(groups, key=lambda k: (dist_order.get(k[0], 99), k[0], cat_order.get(k[1], 99), k[1])):
-            sign = 1 if self.result_type(key[0]) == "time" else -1        # в прыжках и метаниях лучший — наибольший результат
-            lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, sign * (r["best_sec"] or 0), r["id"]))
-            k = math.ceil(len(lst) / lanes)
-            base, extra = divmod(len(lst), k)
-            sizes = [base + (1 if i >= k - extra else 0) for i in range(k)]   # полные забеги — последние
-            chunks, pos = [], 0
-            for size in reversed(sizes):            # от сильнейших
-                chunks.append(lst[pos:pos + size])
-                pos += size
-            chunks.reverse()                        # слабые забеги — первыми, сильнейший — последний
-            for chunk in chunks:
-                n += 1
-                name = f"Забег {n}"
-                heats.append({"name": name, "distance": key[0], "category": key[1], "count": len(chunk)})
-                order = self.lane_order(lanes)
-                for i, r in enumerate(chunk):
-                    bib, chip = bib_for(r)
-                    full = " ".join(x for x in (r["last_name"], r["first_name"]) if x)
-                    rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
-                                 "team": r.get("team"), "category": r.get("category"), "lane": order[i],
-                                 "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
-                                 "members": r.get("members"), "rank": r.get("rank"), "_ids": r.get("_ids") or [r["id"]]})
+        plan = []        # (дистанция, категория, участники, дорожки?)
+        if mode == "list":
+            # «Общим списком»: никакого деления на забеги и дорожки — один сквозной список
+            dists = {r["distance"] for r in regs}
+            lst = sorted(regs, key=lambda r: (dist_order.get(r["distance"], 99), cat_order.get(r.get("category") or "", 99), r["id"]))
+            plan.append((dists.pop() if len(dists) == 1 else "", "", lst, False))
+        else:
+            for key in sorted(groups, key=lambda k: (dist_order.get(k[0], 99), k[0], cat_order.get(k[1], 99), k[1])):
+                sign = 1 if self.result_type(key[0]) == "time" else -1        # в прыжках и метаниях лучший — наибольший результат
+                lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, sign * (r["best_sec"] or 0), r["id"]))
+                k = math.ceil(len(lst) / lanes)
+                base, extra = divmod(len(lst), k)
+                sizes = [base + (1 if i >= k - extra else 0) for i in range(k)]   # полные забеги — последние
+                chunks, pos = [], 0
+                for size in reversed(sizes):            # от сильнейших
+                    chunks.append(lst[pos:pos + size])
+                    pos += size
+                chunks.reverse()                        # слабые забеги — первыми, сильнейший — последний
+                plan += [(key[0], key[1], chunk, True) for chunk in chunks]
+        for dist, cat, chunk, use_lanes in plan:
+            n += 1
+            name = "Общий список" if mode == "list" else f"Забег {n}"
+            heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
+            order = self.lane_order(lanes)
+            for i, r in enumerate(chunk):
+                bib, chip = bib_for(r)
+                full = " ".join(x for x in (r["last_name"], r["first_name"]) if x)
+                rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
+                             "team": r.get("team"), "category": r.get("category"), "lane": order[i] if use_lanes else None,
+                             "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
+                             "members": r.get("members"), "rank": r.get("rank"), "_ids": r.get("_ids") or [r["id"]]})
         self.store.con.execute("BEGIN")
         try:
             self.store.con.execute("DELETE FROM waves WHERE event_id = ?", (eid,))
@@ -4011,7 +4019,7 @@ class Hub:
             raise
         self.store.set_entries(eid, rows)
         for h in heats:
-            self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=h["distance"])
+            self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=h["distance"] or None)
         for r in rows:
             for rid in r["_ids"]:
                 self.store.update_registration(rid, bib=r["bib"])

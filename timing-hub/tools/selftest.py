@@ -719,6 +719,13 @@ def main() -> int:
               code == 200 and rs["waves"] == 4 and rs["entries"] == 7 and not sl0["heats"] and len(sl0["no_heat"]) == 7
               and all(e["wave"] is None and e["lane"] is None for e in sl0["no_heat"]), txt[:300])
         check("сброс сетки: номера сохранены", sorted(int(e["bib"]) for e in sl0["no_heat"]) == list(range(1, 8)))
+        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4, "mode": "list"}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e4}/startlist")
+        sll = json.loads(txt)
+        check("общим списком: один сквозной список, без деления на забеги и дорожек, номера и пол сохранены",
+              code == 200 and len(sll["heats"]) == 1 and sll["heats"][0]["name"] == "Общий список"
+              and len(sll["heats"][0]["entries"]) == 7 and all(e["lane"] is None for e in sll["heats"][0]["entries"])
+              and not sll["no_heat"] and {e["sex"] for e in sll["heats"][0]["entries"]} == {"М", "Ж"}, txt[:300])
         http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
         sl = json.loads(txt)
@@ -1128,7 +1135,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.2.1 и дата сборки 13.10.2026", st3["version"] == "3.2.1" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.3.0 и дата сборки 13.10.2026", st3["version"] == "3.3.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
