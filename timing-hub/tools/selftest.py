@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.5.0 и дата сборки 13.10.2026", st3["version"] == "3.5.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.6.0 и дата сборки 13.10.2026", st3["version"] == "3.6.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1315,6 +1315,26 @@ def main() -> int:
               and fj["done_rank"] == "2 р.", str(fj)[:300])
         check("3.5: бег — официальный результат по трём секундомерам (среднее 8.33 → 8.4 вверх), разряд сохранён",
               fr["result"] == "8.4" and fr["sw"] == ["8.31", "8.40", "8.33"] and fr["done_rank"] == "3 юн." and fr["rt"] == "time", str(fr)[:300])
+        # 3.6: выполненный разряд по нормам ЕВСК (seed/rank_norms.json)
+        vas = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Васильева"))
+        beg = next(e["bib"] for e in jump if e["name"].startswith("Бегунов"))
+        grm = next(e["bib"] for e in jump if e["name"].startswith("Громова"))
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [
+            {"bib": vas, "t": ["9.1", "9.2", "9.15"], "auto": True},
+            {"bib": beg, "a": ["6.10", "X", "5.90"], "auto": True},
+            {"bib": grm, "a": ["5.75", "5.50"], "auto": True}]}).encode(), J)
+        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        check("3.6: разряд считается сам — 60 м девочка 15 лет 9.2 (ручной) → 1 юн.; длина юноша 16 лет 6.10 → 2 р.",
+              fin9[vas]["done_rank"] == "1 юн." and fin9[vas]["done_rank_src"] == "auto"
+              and fin9[beg]["done_rank"] == "2 р.", str({k: (v["result"], v["done_rank"]) for k, v in fin9.items()}))
+        check("3.6: на региональных соревнованиях потолок — I разряд (5.75 у девушки — норма КМС, засчитан 1 р.)",
+              fin9[grm]["done_rank"] == "1 р.", str(fin9[grm])[:200])
+        check("3.6: вписанный секретарём разряд главнее расчётного", fin9[j_bib]["done_rank"] == "2 р." and fin9[j_bib]["done_rank_src"] == "manual"
+              and fin9[j_bib]["done_rank_auto"] == "1 р.", str(fin9[j_bib])[:300])
+        http("POST", f"/api/events/{e9}", json.dumps({"level": "interregion"}).encode(), J)
+        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm]["done_rank"] == "КМС", str(fin9[grm])[:200])
+        http("POST", f"/api/events/{e9}", json.dumps({"level": "region"}).encode(), J)
         # смешанный общий список без единой дистанции: техника не должна читаться как время
         code, txt = http("POST", "/api/events", json.dumps({"name": "Смешанный список", "kind": "stadium", "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
         e10 = json.loads(txt)["id"]

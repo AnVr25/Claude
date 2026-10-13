@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.5.0"
+VERSION = "3.6.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2262,6 +2262,112 @@ class Hub:
     def discipline(cls, name) -> Optional[dict]:
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 
+    # ---- выполненные разряды по нормам ЕВСК (seed/rank_norms.json, из приложения к приказу Минспорта)
+    RANK_ORDER = ("МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн.")
+    RANK_MIN_AGE = {"МСМК": 16, "МС": 15, "КМС": 14}          # остальные разряды — с 10 лет
+    # статус соревнований (поле «уровень» события) → высший разряд, который на них можно выполнить
+    RANK_CAP = {"russia": "МС", "dfo": "МС", "interregion": "КМС", "region": "1 р.", "mass": "2 р."}
+    _NORMS = None
+    _MULTI = {"десяти": "10", "восьми": "8", "семи": "7", "шести": "6", "пяти": "5", "четырех": "4", "трое": "3", "тре": "3"}
+
+    @classmethod
+    def norm_key(cls, name) -> str:
+        """Название дисциплины → ключ для поиска норм: run:60, hurdles:110, jump:lj, throw:jt, multi:7 …
+        Пустая строка — дисциплина без норм (эстафеты, неизвестные)."""
+        t = re.sub(r"\s+", " ", str(name or "").lower().replace("ё", "е")).strip()
+        if not t or "эстафет" in t or re.search(r"\d\s*[x×х*]\s*\d", t) or "швед" in t:
+            return ""
+        if "борье" in t:
+            m = re.search(r"(\d+)\s*-?\s*борье", t)
+            n = m.group(1) if m else next((v for k, v in cls._MULTI.items() if k in t), "")
+            return f"multi:{n}" if n else ""
+        for k, v in (("шест", "jump:pv"), ("тройн", "jump:tj"), ("высот", "jump:hj"), ("длин", "jump:lj"), ("ядр", "throw:sp"),
+                     ("диск", "throw:dt"), ("молот", "throw:ht"), ("копь", "throw:jt"), ("гранат", "throw:gr"), ("мяч", "throw:ball")):
+            if k in t:
+                return v
+        if "миля" in t:
+            return "run:mile"
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(км|м)\b", t.replace("10 000", "10000")) or re.search(r"(\d+(?:[.,]\d+)?)", t)
+        if not m:
+            return ""
+        meters = float(m.group(1).replace(",", ".")) * (1000 if len(m.groups()) > 1 and m.group(2) == "км" else 1)
+        dist = f"{meters:g}"
+        if "ходьб" in t:
+            return f"walk:{dist}"
+        if "кросс" in t:
+            return f"cross:{dist}"
+        if "шоссе" in t or "марафон" in t:
+            return f"road:{dist}"
+        if "с/б" in t or "м/б" in t or "барьер" in t:
+            return f"hurdles:{dist}"
+        if "с/п" in t or "препятств" in t or "стипль" in t:
+            return f"steeple:{dist}"
+        return f"run:{dist}"
+
+    @classmethod
+    def rank_norms(cls) -> dict:
+        if cls._NORMS is None:
+            p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed", "rank_norms.json")
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, ValueError):
+                data = {"norms": []}
+            idx: dict = {}
+            for n in data.get("norms", []):
+                idx.setdefault((n["key"], n["sex"]), []).append(n)
+            cls._NORMS = {"data": data, "index": idx}
+        return cls._NORMS
+
+    @staticmethod
+    def age_group(age: int) -> str:
+        for lim in (12, 14, 16, 18, 20, 23):
+            if age < lim:
+                return f"u{lim}"
+        return "sen"
+
+    def rank_for(self, ev: dict, dist, sex, birth_year, value: float, hand: bool) -> str:
+        """Высший разряд, норму которого выполнил результат (value: секунды, метры или очки).
+        Учитываются пол, возраст в год соревнований, ручной/автохронометраж, круг (манеж — 200 м),
+        высота барьеров и масса снарядов по возрастной группе, минимальный возраст званий и статус соревнований."""
+        key = self.norm_key(dist)
+        sex = str(sex or "").upper()[:1]
+        if not key or sex not in ("М", "Ж") or value is None:
+            return ""
+        rows = self.rank_norms()["index"].get((key, sex))
+        if not rows:
+            return ""
+        try:
+            age = int(str(ev.get("date") or "")[:4] or dt.date.today().year) - int(str(birth_year)[:4])
+        except ValueError:
+            return ""
+        if age < 10:
+            return ""
+        grp = self.age_group(age)
+        venue = self.venue_for(ev) or {}
+        lap = "200" if "манеж" in (venue.get("name") or "").lower() or "(зал)" in str(dist) else "400"
+        timing = "hand" if hand else "auto"
+        cand = [r for r in rows if r.get("timing") in ("any", timing)] or rows
+        cand = [r for r in cand if not r.get("var") or r["var"] in ("water", "track")] or cand
+        laps = {r.get("lap") for r in cand}
+        if lap in laps:
+            cand = [r for r in cand if r.get("lap") in (lap, None)]
+        elif "400" in laps:                       # нет норм для круга 200 м — берутся нормы круга 400 м
+            cand = [r for r in cand if r.get("lap") in ("400", None)]
+        pick = [r for r in cand if grp in (r.get("ages") or [])] or [r for r in cand if not r.get("ages")]
+        if not pick:
+            return ""
+        norm = pick[0]
+        cap = self.RANK_CAP.get(ev.get("level") or "region", "1 р.")
+        allowed = self.RANK_ORDER[self.RANK_ORDER.index(cap):]
+        for rk in self.RANK_ORDER:
+            v = norm["v"].get(rk)
+            if v is None or rk not in allowed or age < self.RANK_MIN_AGE.get(rk, 10):
+                continue
+            if (value <= v + 1e-9) if norm["better"] == "lower" else (value >= v - 1e-9):
+                return rk
+        return ""
+
     @classmethod
     def discipline_kind(cls, name) -> str:
         """run — бег (время), tech — техника (попытки: прыжки, метания), other — очки и прочее."""
@@ -2503,6 +2609,16 @@ class Hub:
                          seconds=round(sec, 3), finish_at=fmt_db(first[chip][fin_dev]),
                          finish_epoch_ms=self._epoch_ms(first[chip][fin_dev]))
             prev_by_wave[w] = (txt, place)
+            # выполненный разряд: по нормам ЕВСК; вписанный секретарём — главнее
+            if chip in entered:
+                val = entered[chip][0] if rtype_of.get(chip, "time") == "time" else -entered[chip][0]
+                hand = bool(r.get("sw")) or (ev.get("timing") or "") in ("manual", "judge")
+            else:
+                val, hand = sec, (chip, fin_dev) in manual_set
+            auto_rk = self.rank_for(ev, r["distance"], r["sex"], r["birth_year"], val, hand) if not r.get("members") else ""
+            r["done_rank_auto"] = auto_rk
+            r["done_rank_src"] = "manual" if r["done_rank"] else ("auto" if auto_rk else "")
+            r["done_rank"] = r["done_rank"] or auto_rk
             res["finished"].append(r)
         # общий рейтинг: все забеги одной категории и дистанции вместе
         groups: dict = {}
@@ -2520,6 +2636,8 @@ class Hub:
                     tie = [r]
             res["groups"].append({"category": cat, "distance": dist, "count": len(lst)})
         res["groups"].sort(key=lambda g: (g["distance"], g["category"]))
+        res["rank_source"] = self.rank_norms()["data"].get("source", "")
+        res["rank_cap"] = self.RANK_CAP.get(ev.get("level") or "region", "1 р.")
         if ev.get("team_best"):
             res["teams"] = self.team_standings(res["finished"], int(ev["team_best"]))
         for chip, per in first.items():

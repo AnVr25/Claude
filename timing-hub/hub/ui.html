@@ -2065,7 +2065,8 @@ const wzp = (() => {
   const myHeats = () => W.sl ? W.sl.heats.filter(h => h.distance === W.disc || h.entries.some(e => e.distance === W.disc)) : [];
   async function load(){
     const e0 = ev(); if (!e0) return;
-    try{ const [r, sl] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`)]); W.regs = r.regs; W.sl = sl; }catch(err){ console.warn(err); }
+    try{ const [r, sl, rs] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
+      W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
   }
   async function open(){
     const e0 = ev(); if (!e0) return;
@@ -2146,6 +2147,8 @@ const wzp = (() => {
     const tech = k === "tech", q = `kind=results&mode=overall`;
     body.innerHTML = `<h2>Шаг 5. Итоговый протокол</h2>
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
+      <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
+        <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
       <div class="row"><button class="primary" type="button" id="wzpCartF">🛒 Добавить в корзину</button><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
   }
@@ -2159,11 +2162,12 @@ const wzp = (() => {
       const inp = (c, i, v, ph) => `<td><input class="${c}" data-i="${i}" value="${esc(v || "")}" placeholder="${ph || "—"}" inputmode="decimal" aria-label="${esc(c === "sw" ? "Секундомер " + (i + 1) : "Попытка " + (i + 1))}, ${esc(r.bib)}"></td>`;
       const main = tech ? [0,1,2,3,4,5].map(i => inp("att", i, (d.a || [])[i])).join("") : pts ? `<td><input class="one" value="${esc(r.result || "")}" inputmode="numeric" aria-label="Очки ${esc(r.bib)}"></td>` : [0,1,2].map(i => inp("sw", i, (d.t || [])[i])).join("");
       return `<tr data-bib="${esc(r.bib)}">${tech || pts ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td><td><b>${esc(r.name || "")}</b><div class="small muted">${esc(r.birth_year || "")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank || "")}</td>${main}
-        ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td><input class="dr" value="${esc(r.done_rank || "")}" list="wzpRanks" placeholder="—" aria-label="Выполненный разряд ${esc(r.bib)}" style="min-width:64px"></td>
+        ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td><input class="dr" value="${esc(r.done_rank || "")}" list="wzpRanks" placeholder="${esc((W.auto || {})[r.bib] || "—")}" title="${(W.auto || {})[r.bib] ? "По нормам ЕВСК: " + esc(W.auto[r.bib]) + ". Впишите, только если нужно иначе." : "По нормам разряд не выполнен (или нормы для дисциплины нет)"}" aria-label="Выполненный разряд ${esc(r.bib)}" style="min-width:64px"></td>
         <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([c, t]) => `<option value="${c}" ${r.status === c ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>`; };
     const sorted = es.slice().sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
     body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
-      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}</p>
+      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}
+        Выполненный разряд система считает сама по нормам ЕВСК и показывает серым после сохранения; вписывайте его только если нужно иначе.</p>
       <datalist id="wzpRanks">${RANKS.map(r => `<option value="${esc(r)}">`).join("")}</datalist>
       <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${sorted.map(row).join("") || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
       <div class="row"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button><span class="small muted">Enter — к следующему полю. Изменённые строки подсвечены.</span></div>${nav(true, "К итоговому протоколу")}`;
@@ -2200,6 +2204,7 @@ const wzp = (() => {
     if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); return render(); }
     if (e.target.name === "wzpSex") { W.sex = e.target.value; return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
+    if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
     const tr = e.target.closest("#wzpRows tr"); if (tr) tr.classList.add("dirty");
   });
   root.addEventListener("input", (e) => {
