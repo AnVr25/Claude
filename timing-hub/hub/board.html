@@ -52,7 +52,20 @@ h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--
 .r.top .p{color:var(--start);font-weight:700}
 .none{padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
 body[data-mode=fixed] .r:first-child,body[data-mode=rotate] .r:first-child{background:none;box-shadow:none}
-.list:empty::before{content:"Финишировавших пока нет";display:block;padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
+/* техника: столбец «Попытки» — шесть микро-ячеек через вертикальную черту; X — красный, «–» и r — серые, лучшая — белая */
+body[data-tech="1"] .r,body[data-tech="1"] .hd{grid-template-columns:2.4em 2.9em minmax(0,1fr) 11.4em 4.6em}
+.att{display:grid;grid-template-columns:repeat(var(--n,6),1fr);font-size:calc(.56em * 6 / max(6, var(--n,6)));line-height:1.5;font-variant-numeric:tabular-nums;
+  border:1px solid var(--bd-line);border-radius:4px;overflow:hidden}
+.att i{font-style:normal;text-align:center;padding:0 .2em;color:#C9D3E3;white-space:nowrap;border-left:1px solid var(--bd-line)}
+.att i:first-child{border-left:0}
+.att i.x{color:#FF5A5F;font-weight:700;background:rgba(231,30,37,.14)}
+.att i.s{color:var(--bd-muted)}
+.att i.e{color:var(--bd-line)}
+.att i.best{color:#fff;font-weight:700;background:rgba(255,255,255,.1);box-shadow:inset 0 -2px 0 var(--start)}
+/* длинная таблица: шапка на месте, лента участников плавно едет вниз и возвращается к лидерам */
+.track{will-change:transform}
+.list.fade-b{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 1.6em),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 1.6em),transparent)}
+.track:empty::before{content:"Финишировавших пока нет";display:block;padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
 
 /* Низ: подпись и логотипы Сахалин → ФЛАСО */
 .foot{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:clamp(8px,1.4vh,22px) var(--bd-pad);color:var(--bd-muted);font-size:clamp(12px,1vw,20px)}
@@ -76,7 +89,7 @@ body[data-mode=fixed] .r:first-child,body[data-mode=rotate] .r:first-child{backg
   <main>
     <h2 id="title">Последние финишировавшие — новые сверху</h2>
     <div class="hd hide" id="hd"><span id="hdPlace">Место</span><span>Номер</span><span>Участник</span><span id="hdD">Дисциплина</span><span>Результат</span></div>
-    <div class="list" id="list"></div>
+    <div class="list" id="list"><div class="track" id="track"></div></div>
   </main>
   <footer class="foot">
     <span class="txt">Предварительные результаты · F11 — во весь экран</span>
@@ -97,33 +110,66 @@ const dRu=d=>{const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(d||"");return m?`${+m[3]} ${
 async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_ms-Date.now();}catch(e){}}
 // Табло слушается пульта (/scoreboard): auto — последние результаты, fixed — таблица лидеров одной группы,
 // rotate — группы по кругу. Состояние спрашивается у сервера раз в 1,5 с, страница не перезагружается.
-let SB={mode:"auto"}, pageNo=0, pageAt=0, lastKey="";
-const PER_PAGE=10, PAGE_MS=8000;
+let SB={mode:"auto"}, lastKey="";
+const PER_PAGE=10;
+// Автопрокрутка длинной таблицы лидеров: топ стоит HOLD_TOP, затем лента плавно и равномерно едет вниз
+// до последнего участника, стоит HOLD_END и мягко возвращается к лидерам — по кругу. Шрифт не уменьшается.
+// Если в системе включено «уменьшить движение» — вместо плавной ленты листаем экранами раз в 8 с.
+const HOLD_TOP=7000, HOLD_END=4000, BACK=1400, ROWS_PER_S=0.6, STEP_MS=8000;
+const RM=matchMedia("(prefers-reduced-motion: reduce)");
+const SC={on:false,t0:performance.now()};
+function scrollY(over,row,vis){
+  const t=performance.now()-SC.t0;
+  if(RM.matches){const step=Math.max(row,Math.floor(vis/row)*row),n=Math.ceil(over/step)+1;return Math.min(over,Math.floor(t/STEP_MS)%n*step);}
+  const run=over/(row*ROWS_PER_S)*1000,k=t%(HOLD_TOP+run+HOLD_END+BACK);
+  if(k<HOLD_TOP)return 0;
+  if(k<HOLD_TOP+run)return over*(k-HOLD_TOP)/run;
+  if(k<HOLD_TOP+run+HOLD_END)return over;
+  const b=(k-HOLD_TOP-run-HOLD_END)/BACK;return over*(1-(1-Math.pow(1-b,3)));
+}
+function frame(){
+  const box=$("list"),tr=$("track"),over=SC.on?Math.max(0,tr.scrollHeight-box.clientHeight):0;
+  let y=0;
+  if(over>2){const r0=tr.querySelector(".r");y=scrollY(over,r0?r0.offsetHeight:40,box.clientHeight);}
+  tr.style.transform=y?`translateY(${-y.toFixed(1)}px)`:"";
+  const fb=over>2&&y<over-2; if(box.classList.contains("fade-b")!==fb)box.classList.toggle("fade-b",fb);
+  requestAnimationFrame(frame);
+}
+// попытки: 6 ячеек (или сколько положено виду), X — заступ, «–» — пропуск, r — отказ, лучшая подсвечена
+const nv=v=>String(v??"").replace(",",".").trim();
+function attCells(x){
+  const a=(x.attempts||[]).slice(),n=Math.max(6,a.length);while(a.length<n)a.push("");
+  const best=nv(x.result);let hit=false;
+  return `<span class="att" style="--n:${n}" aria-label="Попытки: ${esc(a.map(v=>v||"нет").join(", "))}">${a.map(v=>{const s=nv(v);
+    if(!s)return '<i class="e">·</i>';
+    if(/^[xх]$/i.test(s))return '<i class="x">X</i>';
+    if(/^[-–—]$/.test(s))return '<i class="s">–</i>';
+    if(/^[rр]$/i.test(s))return '<i class="s">r</i>';
+    if(!hit&&s===best){hit=true;return `<i class="best">${esc(s)}</i>`;}
+    return `<i>${esc(s)}</i>`;}).join("")}</span>`;
+}
 function renderAuto(r,hasW){
+  SC.on=false; lastKey=""; document.body.dataset.tech="";
   $("title").textContent="Последние результаты — новые сверху";
   $("hdPlace").textContent=hasW?"Место в забеге":"Место"; $("hdD").textContent="Дисциплина";
   // свежие сверху: финиш по чипу/судье или время ввода результата с сектора (метания, прыжки, секундомеры)
   const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,PER_PAGE);
   $("hd").classList.toggle("hide",!last.length);
-  $("list").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
+  $("track").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
     const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
     return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||(x.chip||"").slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
 }
-// таблица лидеров одной группы: от 1-го места до последнего; длинная — листается страницами по 10
+// таблица лидеров одной группы: от 1-го места до последнего; не влезает — плавная автопрокрутка (frame)
 function renderGroup(r,key,suffix){
   const [d,c]=key.split("|"), tech=r.finished.some(x=>x.distance===d&&(x.rt==="distance"||x.rt==="height"||(x.attempts||[]).length));
   const list=r.finished.filter(x=>(x.distance||"")===d&&(x.category||"")===c).sort((a,b)=>(a.place_overall||999)-(b.place_overall||999));
-  if(key!==lastKey){pageNo=0;pageAt=Date.now();lastKey=key;}
-  const pages=Math.max(1,Math.ceil(list.length/PER_PAGE));
-  if(Date.now()-pageAt>PAGE_MS){pageNo=(pageNo+1)%pages;pageAt=Date.now();}
-  if(pageNo>=pages)pageNo=0;
-  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${pages>1?` · стр. ${pageNo+1} из ${pages}`:""}${suffix||""}`;
+  if(key!==lastKey){SC.t0=performance.now();lastKey=key;}
+  SC.on=true; document.body.dataset.tech=tech?"1":"";
+  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>PER_PAGE?` · ${list.length} участников`:""}${suffix||""}`;
   $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
-  const part=list.slice(pageNo*PER_PAGE,(pageNo+1)*PER_PAGE);
-  $("hd").classList.toggle("hide",!part.length);
-  $("list").innerHTML=part.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
-    const att=(x.attempts||[]).map(v=>v||"–").join("  ");
-    return `<div class="r ${isNew?"new":""}${x.place_overall<=3?" top":""}"><span class="p">${x.place_overall}</span><span class="b">${esc(x.bib)}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(tech?att:(x.team||""))}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("")
+  $("hd").classList.toggle("hide",!list.length);
+  $("track").innerHTML=list.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
+    return `<div class="r ${isNew?"new":""}${x.place_overall<=3?" top":""}"><span class="p">${x.place_overall}</span><span class="b">${esc(x.bib)}</span><span class="n">${esc(x.name||"")}</span>${tech?attCells(x):`<span class="d">${esc(x.team||"")}</span>`}<span class="t">${esc(x.result||x.time)}</span></div>`;}).join("")
     ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» результатов пока нет</div>`;
 }
 async function load(){
@@ -148,7 +194,7 @@ async function load(){
 function tick(){const c=$("clock");
   if(SB.mode!=="auto"){c.classList.remove("idle");const t=new Date(Date.now()+offset);c.textContent=t.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});return;}
   if(startMs){c.classList.remove("idle");c.textContent=fmt(Date.now()+offset-startMs);}else{c.classList.add("idle");c.textContent="ожидание старта";}}
-sync();load();setInterval(tick,100);setInterval(load,1500);setInterval(sync,60000);
+sync();load();requestAnimationFrame(frame);setInterval(tick,100);setInterval(load,1500);setInterval(sync,60000);
 </script>
 </body>
 </html>
