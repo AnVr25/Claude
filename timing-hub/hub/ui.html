@@ -196,6 +196,13 @@ tr.rej td{opacity:.55}
 .pmode input{width:auto;min-height:0;margin:0 6px 0 0;accent-color:var(--track)}
 button.bigred{background:#C8161C;border-color:#C8161C;color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
 button.bigred:hover{background:#A31217}
+.cartbox{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);margin:14px 0;padding:12px 14px;display:grid;gap:8px}
+.cartbox h3{margin:0;font:700 15px var(--body)}
+.cartbox label{display:flex;gap:8px;align-items:baseline;min-height:32px;cursor:pointer}
+.cartbox input[type=checkbox]{width:auto;min-height:0;margin:0;accent-color:var(--track)}
+.cartbox .ci{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
+button.bigprint{background:var(--track);border-color:var(--track);color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
+button.bigprint:hover{filter:brightness(1.08)}
 .bibin{width:64px;min-height:0;padding:4px 6px;font-weight:700;text-align:center}
 .heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
 .heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -813,6 +820,17 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <label><input type="radio" name="pmode" value="list-landscape"> <b>Общим списком (альбомный / горизонтальный)</b><span class="small muted"> — широкая сетка попыток для прыжков и метаний, печать на A4 альбомно</span></label>
     </fieldset>
     <div class="row" style="margin:0 0 12px"><button class="bigred" id="gResetHeats">❌ Удалить все забеги / Сбросить сетку</button></div>
+    <div class="cartbox" id="gCartForms">
+      <h3>Бланки для печати</h3>
+      <p class="small muted" style="margin:0">Отметьте нужные бланки — по группам и полу — и добавьте их в корзину. Мальчики и девочки идут отдельными листами: в беге три секундомера, в прыжках и метаниях шесть попыток.</p>
+      <div id="gCartList"></div>
+      <div class="row"><button class="primary" id="gCartAdd">🛒 Добавить выделенные в корзину печати</button><button id="gCartAll">Выделить все</button></div>
+    </div>
+    <div class="cartbox" id="gCartBox">
+      <h3>Корзина печати <span class="small muted" id="gCartCnt"></span></h3>
+      <div id="gCartItems"></div>
+      <div class="row"><button class="bigprint" id="gCartPrint">🖨️ Сформировать единый файл для печати</button><button id="gCartClear">Очистить корзину</button></div>
+    </div>
     <div class="heats" id="gHeatsBox"></div>
     <div id="gLoose"></div>
   </div>
@@ -1910,7 +1928,52 @@ function renderHeats(sl){
     ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><input class="bibin mono" value="${esc(e.bib)}" aria-label="Нагрудный номер"></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
     ${loose.map(x => `<tr data-reg="${x.id}"><td><input class="bibin mono" placeholder="авто" title="Можно вписать номер самому; пусто — выдастся следующий" aria-label="Нагрудный номер"></td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
     </tbody></table></div>` : "";
+  renderCartForms(sl);
 }
+/* ---------- корзина печати: бланки по группам и полу → один документ ---------- */
+const sexOfE = (e) => { const x = String(e.sex||"").toUpperCase(); if (x==="М"||x==="Ж") return x; const c = String(e.category||"").toLowerCase();
+  if (/юнош|мальч|мужч|^муж/.test(c)) return "М"; if (/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return ""; };
+const cartKey = () => "ss.cart." + curId;
+function cartGet(){ try{ const v = JSON.parse(localStorage.getItem(cartKey()) || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+function cartSet(a){ try{ localStorage.setItem(cartKey(), JSON.stringify(a)); }catch(e){ toast("Браузер не сохраняет корзину — проверьте настройки приватности"); } renderCart(); }
+let cartForms = [];
+function renderCartForms(sl){
+  const groups = {};
+  sl.heats.concat((sl.no_heat||[]).length ? [{category:"", distance:"", entries:sl.no_heat}] : []).forEach(h => h.entries.forEach(e => {
+    const d = e.distance || h.distance || "", c = h.category || e.category || "", k = d + "|" + c;
+    const g = groups[k] || (groups[k] = {gk:k, d, c, M:0, F:0, O:0}); const x = sexOfE(e); g[x==="М"?"M":x==="Ж"?"F":"O"]++;
+  }));
+  cartForms = [];
+  Object.values(groups).sort((a,b) => a.gk.localeCompare(b.gk, "ru", {numeric:true})).forEach(g => {
+    const word = (sf) => { const base = [g.c, g.d].filter(Boolean).join(" "); if (!sf) return base || "Все участники";
+      const sw = sf==="М" ? "Мальчики" : "Девочки"; return (new RegExp(sf==="М"?"юнош|мальч|мужч":"девуш|девоч|женщ","i").test(g.c) ? "" : sw + " ") + (base || "все"); };
+    if (g.M && g.F) { cartForms.push({gk:g.gk, sf:"", n:g.M+g.F+g.O}); cartForms.push({gk:g.gk, sf:"М", n:g.M}); cartForms.push({gk:g.gk, sf:"Ж", n:g.F}); }
+    else cartForms.push({gk:g.gk, sf:"", n:g.M+g.F+g.O});
+    cartForms.filter(f => f.gk === g.gk).forEach(f => { f.label = "Старт: " + word(f.sf); });
+  });
+  $("gCartList").innerHTML = cartForms.map((f,i) => `<label><input type="checkbox" data-i="${i}"> <b>${esc(f.label)}</b> <span class="small muted">${f.n} уч.</span></label>`).join("") || '<p class="small muted" style="margin:0">Бланков пока нет — сформируйте забеги или общий список.</p>';
+  renderCart();
+}
+function renderCart(){
+  const a = cartGet();
+  $("gCartCnt").textContent = a.length ? "— бланков: " + a.length : "";
+  $("gCartItems").innerHTML = a.map((it,i) => `<div class="ci"><span>${i+1}. ${esc(it.label)}</span><button data-rm="${i}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("") || '<p class="small muted" style="margin:0">Корзина пуста. Отметьте бланки выше и нажмите «Добавить выделенные в корзину печати».</p>';
+  $("gCartPrint").disabled = !a.length; $("gCartClear").disabled = !a.length;
+}
+$("gCartAll").onclick = () => { const cb = [...$("gCartList").querySelectorAll("input")]; const on = cb.some(c => !c.checked); cb.forEach(c => c.checked = on); };
+$("gCartAdd").onclick = () => {
+  const sel = [...$("gCartList").querySelectorAll("input:checked")].map(c => cartForms[+c.dataset.i]).filter(Boolean);
+  if (!sel.length) return toast("Отметьте галочками нужные бланки");
+  const v = pmodeVal(), mode = v === "heats" ? "heats" : "list", orient = v === "list-landscape" ? "landscape" : "portrait";
+  const a = cartGet(); let added = 0;
+  sel.forEach(f => { if (a.some(x => x.gk === f.gk && x.sf === f.sf && x.mode === mode && x.orient === orient)) return;
+    a.push({gk:f.gk, sf:f.sf, mode, orient, label:f.label + (mode === "list" ? " · общим списком" : "")}); added++; });
+  cartSet(a); $("gCartList").querySelectorAll("input:checked").forEach(c => c.checked = false);
+  toast(added ? `В корзину добавлено бланков: ${added}` : "Эти бланки уже в корзине");
+};
+$("gCartItems").addEventListener("click", (e) => { const b = e.target.closest("[data-rm]"); if (!b) return; const a = cartGet(); a.splice(+b.dataset.rm, 1); cartSet(a); });
+$("gCartClear").onclick = () => { if (confirm("Очистить корзину печати?")) cartSet([]); };
+$("gCartPrint").onclick = () => { if (curId == null) return; if (!cartGet().length) return toast("Корзина пуста"); window.open(`/protocol?event=${curId}&kind=cart`, "_blank"); };
 async function moveEntry(tr, body){
   try{
     if (tr.dataset.reg) await api(`/api/events/${curId}/entry`, Object.assign({reg_id:+tr.dataset.reg}, body));

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.3.1"
+VERSION = "3.4.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4074,6 +4074,14 @@ class Hub:
 
     def startlist(self, ev: dict) -> dict:
         rows = self.store.entries_rows(ev["id"])
+        # у каждого участника своя дисциплина (из заявки): в смешанном «общем списке» забег без дистанции,
+        # а бланк техники (6 попыток) определяется именно по ней
+        rd = {r["id"]: r.get("distance") or "" for r in self.store.registrations(ev["id"])}
+        for r in rows:
+            d = rd.get(r.get("reg_id")) or ""
+            r["distance"] = d
+            r["rtype"] = self.result_type(d) if d else ""
+            r["slots"] = self.attempt_slots(d) if d else 0
         heats = []
         for w in self.store.waves(ev["id"]):
             lst = sorted([r for r in rows if r["wave"] == w["name"]], key=lambda r: (r["lane"] is None, r["lane"] or 0,

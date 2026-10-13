@@ -726,6 +726,9 @@ def main() -> int:
               code == 200 and len(sll["heats"]) == 1 and sll["heats"][0]["name"] == "Общий список"
               and len(sll["heats"][0]["entries"]) == 7 and all(e["lane"] is None for e in sll["heats"][0]["entries"])
               and not sll["no_heat"] and {e["sex"] for e in sll["heats"][0]["entries"]} == {"М", "Ж"}, txt[:300])
+        check("3.4: у участника в списке своя дисциплина, тип результата и число попыток (для бланка техники)",
+              all({"distance", "rtype", "slots"} <= set(e) for e in sll["heats"][0]["entries"])
+              and all(e["rtype"] == "time" and e["slots"] == 0 for e in sll["heats"][0]["entries"] if e["distance"]), txt[:300])
         b1 = sll["heats"][0]["entries"][0]["bib"]; b2 = sll["heats"][0]["entries"][1]["bib"]
         code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b1, "new_bib": "501"}).encode(), J)
         code2, txt2 = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b2, "new_bib": "501"}).encode(), J)
@@ -1146,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.3.1 и дата сборки 13.10.2026", st3["version"] == "3.3.1" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.4.0 и дата сборки 13.10.2026", st3["version"] == "3.4.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
