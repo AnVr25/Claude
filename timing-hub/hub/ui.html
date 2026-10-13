@@ -391,6 +391,14 @@ html{scrollbar-gutter:stable}
 .dp-sum{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:14px;color:var(--muted)}
 .dp-empty{padding:10px 0;color:var(--muted);font-size:14px}
 /* 3.0: Мастер подбора соревнования, панели направлений */
+.hpick{margin:0 0 18px;padding:14px;border-radius:12px;transition:box-shadow .3s}
+.hpick .wl-k{margin:0 0 8px}
+.hpick.ask{box-shadow:0 0 0 3px var(--track)}
+.hp-card{min-height:0;padding:18px 20px}
+.hp-card b{font-size:21px}
+.hp-card.on{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
+@media (max-width:720px){.hp-cards{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.hpick{transition:none}}
 .welcome{max-width:880px;margin:4vh auto 0;text-align:center}
 .wl-k{font:600 14px var(--head);letter-spacing:.8px;text-transform:uppercase;color:var(--track);margin:0 0 8px}
 .welcome h1{font-size:40px;margin:0 0 8px}
@@ -625,6 +633,21 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div><p class="dir-chip" id="dirChip"></p><h1 id="homeTitle">Соревнования</h1><p class="lead" id="homeLead">Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.</p></div>
     <div class="row"><button class="hide" id="calImport" title="Перенести календарь федерации 2026 года с сайта fla65.ru">Загрузить календарь ФЛАСО 2026</button><button class="primary" id="btnNew">Новое соревнование</button></div>
   </div>
+  <div class="hpick" id="homePick">
+    <p class="wl-k">Мастер подбора соревнования</p>
+    <div class="wl-cards hp-cards" role="group" aria-label="Что проводим">
+      <button type="button" class="wl-card hp-card" data-pick="ipico" id="hpIpico">
+        <b>Массовый забег с электронным хронометражем</b><span class="wl-sub">Система IPICO · Wiclax</span>
+        <small>Кроссы, полумарафоны, городские забеги. Открывает оборудование: ридеры, порты, Wiclax, проверку чипов.</small>
+        <span class="wl-go">Открыть оборудование IPICO →</span>
+      </button>
+      <button type="button" class="wl-card hp-card" data-pick="stadium" id="hpStadium">
+        <b>Соревнования на стадионе и в манеже</b><span class="wl-sub">Мастер формирования · World Athletics</span>
+        <small>Дисциплины из справочника и готовые программы, возрастные группы, онлайн-заявки. Чиповое оборудование скрыто.</small>
+        <span class="wl-go">Создать соревнование по шагам →</span>
+      </button>
+    </div>
+  </div>
   <div class="panel ipico-block hide" id="ipicoBlock">
     <div class="ib-head"><div><h2>Настройка оборудования IPICO</h2><p class="small muted" style="margin:2px 0 0">Всё, что нужно проверить до старта: ридеры, порты, Wiclax и связь с чипами.</p></div><span class="ib-st" id="ibSt">—</span></div>
     <div class="ib-grid">
@@ -632,6 +655,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <a href="#hw-timing" class="ib-it adm"><b>Wiclax</b><small id="ibWiclax">передача отметок в Wiclax</small></a>
       <a href="#check" class="ib-it" id="ibChips"><b>Проверка чипов</b><small>проносите чип над ковриком — экран покажет, чей он</small></a>
     </div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="ibNew">Создать массовый забег</button></div>
   </div>
   <div class="panel stadium-block hide" id="stadiumBlock">
     <h2>Мастер формирования соревнования</h2>
@@ -1230,6 +1254,7 @@ function renderHome(){
   $("homeLead").textContent = DIR === "ipico" && filt ? "Сначала проверьте оборудование, затем выберите старт — откроется нужный этап." : DIR === "stadium" && filt ? "Создайте соревнование по шагам или выберите готовое — откроется нужный этап." : "Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.";
   $("ipicoBlock").classList.toggle("hide", DIR !== "ipico");
   $("stadiumBlock").classList.toggle("hide", DIR !== "stadium");
+  document.querySelectorAll(".hp-card").forEach(c => { const on = c.dataset.pick === DIR; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
   const lk = $("dirAllLink") || $("dirOnlyLink"); if (lk) lk.onclick = (e) => { e.preventDefault(); dirAll = !dirAll; renderHome(); renderEvents(); renderArchive(); };
 }
 function updateIpico(){
@@ -1239,11 +1264,17 @@ function updateIpico(){
   $("ibWiclax").textContent = w.classList.contains("ok") ? "подключён, отметки передаются" : "пока не подключён";
 }
 $("ibChips").onclick = (e) => { if (!curEvent()) { e.preventDefault(); toast("Сначала выберите соревнование в списке ниже"); } };
-document.querySelectorAll(".wl-card").forEach(c => c.onclick = () => { setDir(c.dataset.dir); location.hash = "#home"; });
+document.querySelectorAll(".wl-card[data-dir]").forEach(c => c.onclick = () => { setDir(c.dataset.dir); location.hash = "#home"; });
+// карточки на главной: IPICO — оборудование; стадион — сразу пошаговое создание (сценарий задаёт карточка, а не память браузера)
+document.querySelectorAll(".hp-card").forEach(c => c.onclick = () => {
+  const d = c.dataset.pick; dirAll = false; setDir(d); renderHome(); renderEvents(); renderArchive();
+  if (d === "stadium") wzOpen("stadium"); else { wzClose(); $("ipicoBlock").scrollIntoView({block:"nearest", behavior:"smooth"}); }
+});
 $("wlAll").onclick = () => { if (DIR) dirAll = true; };
-$("sbStart").onclick = () => wzOpen();
+$("sbStart").onclick = () => wzOpen("stadium");
+$("ibNew").onclick = () => wzOpen("mass");
 // «Система»: вкладки общие · хронометраж · сети · пользователи · журнал
-const SYS_TABS = [["hw", "⚙️ Общие настройки и обновления", 1], ["hw-timing", "📟 Хронометраж и оборудование (IPICO, Wiclax)", 1],
+const SYS_TABS = [["hw", "⚙️ Система и обновления", 1], ["hw-timing", "📟 Хронометраж IPICO и Wiclax", 1],
   ["hw-net", "🔒 Сетевые доступы и VPN", 1], ["users", "👥 Пользователи", 1], ["log", "Журнал действий", 0]];
 function renderSysNav(active){
   const adm = !ME || ME.role === "admin";
@@ -1309,7 +1340,7 @@ $("evMenu").addEventListener("click", (e) => {
   if (e.target.closest('a[href="#home"]') && DIR) dirAll = true;
   const b = e.target.closest("[data-id],[data-new]"); if (!b) return;
   closeMenus();
-  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => wzOpen(), 0); return; }
+  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => wzOpen(""), 0); return; }
   openEvent(+b.dataset.id);
 });
 const MON_S = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
@@ -1528,7 +1559,7 @@ $("fFinish").onchange = () => {
   if (v) { const o=document.createElement("option"); o.textContent=v; $("fFinish").insertBefore(o, $("fFinish").lastChild); $("fFinish").value=v; }
   else $("fFinish").value="";
 };
-$("btnNew").onclick = () => wzOpen();
+$("btnNew").onclick = () => wzOpen("");
 /* ---------- справочник дисциплин лёгкой атлетики и выбор дисциплин ---------- */
 let DISC = null, discLoading = null;
 const discKey = (n) => String(n || "").toLowerCase().replace(/(\d)[xх*](\d)/g, "$1×$2").replace(/[\s.\-]+/g, "").replace(/ё/g, "е");
@@ -1589,17 +1620,21 @@ const WZ_TYPES = [
   {id:"judge", b:"Стадион: судья с телефоном", small:"Манеж и стадион. Судья на финише нажимает на телефоне — время идёт само.", kind:"stadium", timing:"judge", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]},
   {id:"manual", b:"Стадион: результаты впишем вручную", small:"Секундомер или готовый протокол. Секретарь вводит результаты после забега.", kind:"stadium", timing:"manual", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]}];
 const WZ_TITLES = {type:"Как ведём время", base:"Название и дата", dists:"Дисциплины", groups:"Возрастные группы", reg:"Онлайн-заявки"};
-const wz = {i:0, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true};
+const wz = {kind:"", i:0, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true};
 function wzType(){ return WZ_TYPES.find(t => t.id === wz.type); }
-function wzTypes(){ return DIR === "stadium" ? WZ_TYPES.filter(t => t.kind === "stadium") : WZ_TYPES; }
+function wzTypes(){ return wz.kind === "stadium" ? WZ_TYPES.filter(t => t.kind === "stadium") : wz.kind === "mass" ? WZ_TYPES.filter(t => t.kind === "mass") : WZ_TYPES; }
+// стадион и манеж: хронометраж → название и дата → дисциплины (справочник World Athletics, готовые программы) → группы → заявки;
+// массовый забег (IPICO): название и дата → дистанции
 function wzFlow(){
   const t = wzType();
-  if (!t) return ["type", "base", "dists"];
-  if (t.kind === "mass") return DIR === "ipico" ? ["base", "dists"] : ["type", "base", "dists"];
+  if (wz.kind === "mass" || (t && t.kind === "mass")) return ["base", "dists"];
   return ["type", "base", "dists", "groups", "reg"];
 }
-function wzOpen(){
-  Object.assign(wz, {i:0, type:DIR === "ipico" ? "mass" : null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
+// kind: «stadium» | «mass»; пусто — направление ещё не выбрано: сначала карточки «Мастера подбора»
+function wzOpen(kind){
+  if (!kind) { wzClose(); location.hash = "#home"; const p = $("homePick"); p.classList.add("ask"); p.scrollIntoView({block:"nearest", behavior:"smooth"});
+    setTimeout(() => p.classList.remove("ask"), 2400); toast("Выберите, что проводим: массовый забег или соревнования на стадионе"); return; }
+  Object.assign(wz, {kind, i:0, type:kind === "mass" ? "mass" : null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
   $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wzDraw();
   $("wizard").scrollIntoView({block:"nearest"});
 }
@@ -1618,10 +1653,10 @@ function wzPairs(){   // правила идут парами «мужской, 
 }
 async function wzDraw(){
   const flow = wzFlow(), id = flow[Math.min(wz.i, flow.length - 1)], n = wz.i + 1, b = $("wzBody");
-  $("wzStep").textContent = wz.type ? `Шаг ${n} из ${flow.length}` : `Шаг ${n}`;
+  $("wzStep").textContent = `${wz.kind === "mass" ? "Массовый забег" : "Стадион и манеж"} · шаг ${n} из ${flow.length}`;
   $("wzDots").innerHTML = flow.map((_, k) => `<i class="${k < n ? "on" : ""}"></i>`).join("");
   $("wzBack").classList.toggle("hide", wz.i === 0); $("wzNext").textContent = n === flow.length && wz.type ? "Создать соревнование" : "Далее →";
-  if (id === "type") b.innerHTML = `<h2 id="wzTitle">${DIR === "stadium" ? "Как ведём время?" : "Что за соревнование?"}</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
+  if (id === "type") b.innerHTML = `<h2 id="wzTitle">${wz.kind === "stadium" ? "Как ведём время?" : "Что за соревнование?"}</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
     <div class="wz-cards" role="radiogroup" aria-label="Тип соревнования">${wzTypes().map(t => `<button type="button" role="radio" aria-checked="${wz.type === t.id}" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
   if (id === "base") b.innerHTML = `<h2 id="wzTitle">Как называется и когда проходит?</h2><p class="wz-sub">Так увидят участники на сайте и в протоколе.</p>
     <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="${wzType() && wzType().kind === "mass" ? "Ночной забег по набережной" : "Кубок Сахалинской области"}" value="${esc(wz.name)}"></div>

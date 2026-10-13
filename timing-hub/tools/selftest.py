@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.1.0 и дата сборки 13.10.2026", st3["version"] == "4.1.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.2.0 и дата сборки 13.10.2026", st3["version"] == "4.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
