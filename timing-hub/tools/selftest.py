@@ -609,6 +609,10 @@ def main() -> int:
               pv1 == 200 and pv2 == 200 and pv3 == 200 and "РОО «Федерация лёгкой атлетики Сахалинской области»" in pvt
               and "pd@example.ru" in pvt and "152-ФЗ" in pvt and "в Российской Федерации" in pvt and "TLS" in pvt and "HttpOnly" in pvt
               and "{{" not in pvt and "ЕВСК" in pvt and "СНИЛС" in pvt and pvt == pvt2 and 'href="/privacy"' in regt, f"{pv1} {pv2} {pv3}")
+        check("5.0.2: в Политике — реквизиты РСОО «ФЛАСО» по умолчанию, ответственный за ПДн, сроки хранения; ни слова о Яндексе и аналитике",
+              "РСОО «ФЛАСО»" in pvt and "6501159635" in pvt and "1056500009521" in pvt and "Шаронов Виталий Александрович" in pvt
+              and "ул. М. Горького, д. 7а" in pvt and "Яндекс" not in pvt and "Метрик" not in pvt and "30 дней" in pvt and "3 лет" in pvt,
+              "реквизиты/сроки")
         dbc = _sql.connect(cfg["db_path"])
         trow = dbc.execute("SELECT is_verified, verification_token, password_hash FROM trainers WHERE email = 'coach@example.ru'").fetchone()
         dbc.close()
@@ -1301,7 +1305,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 5.0.1 и дата сборки 13.10.2026", st3["version"] == "5.0.1" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 5.0.2 и дата сборки 13.10.2026", st3["version"] == "5.0.2" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",

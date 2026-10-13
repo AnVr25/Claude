@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "5.0.1"
+VERSION = "5.0.2"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -5728,6 +5728,39 @@ class Hub:
             return 200, {"ok": True}
         return None
 
+    # ---- сроки хранения ПДн (раздел 5 Политики конфиденциальности /privacy)
+    RETENTION = {"unverified_days": 7, "trainer_idle_days": 3 * 365, "audit_days": 3 * 365}
+
+    def apply_retention(self) -> dict:
+        """Неподтверждённые регистрации тренеров — 7 дней; тренер без входа 3 года — удаляется;
+        истёкшие сеансы; журнал действий старше 3 лет."""
+        now = now_local()
+        cut_unv = fmt_db(now - dt.timedelta(days=self.RETENTION["unverified_days"]))
+        cut_idle = fmt_db(now - dt.timedelta(days=self.RETENTION["trainer_idle_days"]))
+        cut_aud = fmt_db(now - dt.timedelta(days=self.RETENTION["audit_days"]))
+        con = self.store.con
+        gone = [r[0] for r in con.execute(
+            "SELECT id FROM trainers WHERE (is_verified = 0 AND created_at < ?) "
+            "OR (is_verified = 1 AND COALESCE(last_login, verified_at, created_at) < ?)", (cut_unv, cut_idle))]
+        for tid in gone:
+            self.store.delete_trainer(tid)
+        ses = con.execute("DELETE FROM sessions WHERE expires_at < ?", (fmt_db(now),)).rowcount
+        aud = con.execute("DELETE FROM audit WHERE ts < ?", (cut_aud,)).rowcount
+        if gone:
+            self.store.audit("система", None, "Сроки хранения ПДн", f"удалено учётных записей тренеров: {len(gone)}")
+        return {"trainers": len(gone), "sessions": ses, "audit": aud}
+
+    async def _retention_loop(self) -> None:
+        while not self.stopping.is_set():
+            try:
+                self.apply_retention()
+            except Exception:
+                log.exception("Сроки хранения ПДн: ошибка очистки")
+            try:
+                await asyncio.wait_for(self.stopping.wait(), timeout=3600)
+            except asyncio.TimeoutError:
+                pass
+
     # ---- запуск
     async def start(self) -> None:
         for src in self.sources.values():
@@ -5743,6 +5776,7 @@ class Hub:
                 log.info("[%s] буду подключаться к %s:%s", src.id, src.cfg["host"], src.cfg["port"])
             else:
                 log.info("[%s] приём по HTTP: POST /api/reads?source=%s", src.id, src.id)
+        self.tasks.append(asyncio.ensure_future(self._retention_loop()))
         wc = self.cfg["wiclax"]
         srv = await asyncio.start_server(
             lambda r, w: WiclaxClient(self, r, w, self.wiclax_devices, int(wc["listen_port"])).run(),
@@ -6039,22 +6073,38 @@ class Hub:
             "Если вы не регистрировались — просто удалите это письмо, без кода учётная запись не откроется.\n\n"
             "Федерация лёгкой атлетики Сахалинской области · SakhStart")
 
-    OPERATOR_DEFAULT = "Региональная общественная организация «Федерация лёгкой атлетики Сахалинской области» (ФЛАСО)"
+    # Реквизиты оператора ПДн — из карточки организации РСОО «ФЛАСО»; любое поле можно заменить в config.json → "operator"
+    OPERATOR_DEFAULT = {
+        "name": "Региональная спортивная общественная организация «Федерация легкой атлетики Сахалинской области»",
+        "short": "РСОО «ФЛАСО»",
+        "inn": "6501159635",
+        "ogrn": "1056500009521",
+        "address": "Сахалинская область, г. Южно-Сахалинск, ул. М. Горького, д. 7а",
+        "responsible": "Шаронов Виталий Александрович",
+        "email": "sakhathletics@bk.ru",
+        "phone": "+7 (4242) 55-95-55",
+    }
+
+    def operator_info(self) -> dict:
+        op = self.cfg.get("operator") or {}
+        return {k: str(op.get(k) or v) for k, v in self.OPERATOR_DEFAULT.items()}
 
     def privacy_page(self) -> str:
-        """Политика конфиденциальности: hub/privacy.html + реквизиты оператора из config.json → "operator"."""
+        """Политика обработки ПДн: hub/privacy.html + реквизиты оператора (OPERATOR_DEFAULT / config.json → "operator")."""
         tpl = self._ui_file("privacy.html") or "нет privacy.html"
-        op = self.cfg.get("operator") or {}
-        e = html.escape
-        rows = [("ИНН", op.get("inn")), ("ОГРН", op.get("ogrn")), ("Адрес", op.get("address")),
-                ("Электронная почта", op.get("email")), ("Телефон", op.get("phone"))]
-        contacts = "".join(f"<li><b>{k}:</b> {e(str(v))}</li>" for k, v in rows if v)
-        if not op.get("email"):
-            contacts += ("<li>Обращения принимаются письменно по адресу Оператора или через раздел «Контакты» "
-                         "на сайте <a href=\"https://fla65.ru\">fla65.ru</a>.</li>")
+        op, e = self.operator_info(), html.escape
+        rows = [("Полное наименование", op["name"]), ("Краткое наименование", op["short"]), ("ИНН", op["inn"]),
+                ("ОГРН", op["ogrn"]), ("Адрес", op["address"]),
+                ("Ответственный за организацию обработки персональных данных", op["responsible"]),
+                ("Электронная почта", f'<a href="mailto:{e(op["email"])}">{e(op["email"])}</a>' if op["email"] else ""),
+                ("Телефон", e(op["phone"]))]
+        table = "".join(f"<tr><th scope=\"row\">{k}</th><td>{v if k in ('Электронная почта', 'Телефон') else e(v)}</td></tr>"
+                        for k, v in rows if v)
         base = self.public_base() or ""
-        return (tpl.replace("{{OPERATOR}}", e(op.get("name") or self.OPERATOR_DEFAULT))
-                .replace("{{CONTACTS}}", contacts)
+        mail = f'<a href="mailto:{e(op["email"])}">{e(op["email"])}</a>' if op["email"] else "адрес Оператора"
+        return (tpl.replace("{{OP_TABLE}}", table).replace("{{OP_SHORT}}", e(op["short"]))
+                .replace("{{OP_FULL}}", e(op["name"])).replace("{{OP_EMAIL}}", mail)
+                .replace("{{OP_ADDRESS}}", e(op["address"])).replace("{{OP_RESPONSIBLE}}", e(op["responsible"]))
                 .replace("{{SITE}}", e(base.replace("https://", "").replace("http://", "") or "reg.fla65.ru")))
 
     def privacy_hash(self) -> str:
