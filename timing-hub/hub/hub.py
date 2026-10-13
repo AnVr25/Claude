@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "5.0.2"
+VERSION = "5.1.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -879,7 +879,13 @@ class Store:
                          ("token_sent_at", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1"), ("last_login", "TEXT"),
                          ("verified_at", "TEXT"), ("verified_by", "TEXT"),
                          # 5.0.1: согласие на обработку ПДн — флаг, когда дано и с какой редакцией политики
-                         ("consent_accepted", "INTEGER NOT NULL DEFAULT 0"), ("consent_at", "TEXT"), ("consent_hash", "TEXT")))
+                         ("consent_accepted", "INTEGER NOT NULL DEFAULT 0"), ("consent_at", "TEXT"), ("consent_hash", "TEXT"),
+                         # 5.1: согласие и ознакомление с Политикой — отдельно (ст. 9 152-ФЗ в ред. с 01.09.2025)
+                         ("policy_hash", "TEXT")))
+        add("registrations", (("policy_hash", "TEXT"), ("anonymized_at", "TEXT")))
+        # архив редакций текстов согласий: по отпечатку из заявки/учётной записи можно показать точный текст
+        self.con.execute("""CREATE TABLE IF NOT EXISTS consent_texts(
+            hash TEXT PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL)""")
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
 
@@ -969,11 +975,22 @@ class Store:
     def update_trainer(self, tid: int, **f) -> None:
         for k in ("name", "team", "password_hash", "is_verified", "verification_token", "token_expires", "token_attempts",
                   "token_sent_at", "active", "last_login", "verified_at", "verified_by", "consent_accepted", "consent_at",
-                  "consent_hash"):
+                  "consent_hash", "policy_hash"):
             if k in f:
                 self.con.execute(f"UPDATE trainers SET {k} = ? WHERE id = ?", (f[k], tid))
         if "password_hash" in f or f.get("active") == 0 or f.get("is_verified") == 0:
             self.con.execute("DELETE FROM sessions WHERE login = ?", (f"trainer:{tid}",))
+
+    def save_consent_text(self, h: str, kind: str, text: str) -> None:
+        self.con.execute("INSERT OR IGNORE INTO consent_texts(hash, kind, text, created_at) VALUES (?,?,?,?)",
+                         (h, kind, text, fmt_db(now_local())))
+
+    def consent_texts(self) -> list:
+        rows = self._rows(self.con.execute("SELECT hash, kind, text, created_at FROM consent_texts ORDER BY created_at DESC"))
+        for r in rows:
+            r["used"] = (self.con.execute("SELECT COUNT(*) FROM registrations WHERE consent_hash = ?", (r["hash"],)).fetchone()[0]
+                         + self.con.execute("SELECT COUNT(*) FROM trainers WHERE consent_hash = ?", (r["hash"],)).fetchone()[0])
+        return rows
 
     def delete_trainer(self, tid: int) -> None:
         self.con.execute("DELETE FROM trainers WHERE id = ?", (tid,))
@@ -1268,8 +1285,8 @@ class Store:
                   "best", "best_sec", "category", "representative", "contact", "status", "note", "bib", "relay", "leg", "rank")
 
     def add_registration(self, eid: int, d: dict) -> int:
-        cols = [k for k in self.REG_FIELDS if k in d] + ["consent_at", "consent_hash", "created_at", "event_id"]
-        vals = [d[k] for k in self.REG_FIELDS if k in d] + [d["consent_at"], d.get("consent_hash"),
+        cols = [k for k in self.REG_FIELDS if k in d] + ["consent_at", "consent_hash", "policy_hash", "created_at", "event_id"]
+        vals = [d[k] for k in self.REG_FIELDS if k in d] + [d["consent_at"], d.get("consent_hash"), d.get("policy_hash"),
                                                              fmt_db(now_local()), eid]
         cur = self.con.execute(f"INSERT INTO registrations({', '.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                vals)
@@ -3872,15 +3889,45 @@ class Hub:
     def consent_text(self, ev: dict) -> str:
         if ev.get("reg_consent"):
             return ev["reg_consent"]
-        op = ev.get("organizer") or "организатору соревнований"
-        return (f"Я даю согласие {op} на обработку персональных данных участника (фамилия, имя, отчество, "
-                f"дата рождения, пол, команда, тренер, спортивный результат, контактные данные) с целью "
-                f"регистрации, проведения соревнований «{ev['name']}» и подготовки стартовых и итоговых "
-                f"протоколов, включая размещение в протоколах фамилии, имени, года рождения, команды и результата. "
-                f"Согласие действует до достижения целей обработки и может быть отозвано письменным заявлением. "
-                f"Если участнику нет 18 лет, согласие даёт его родитель (законный представитель). "
-                f"Порядок обработки и защиты данных — в Политике конфиденциальности: "
-                f"{(self.public_base() or '') + '/privacy'}.")
+        op = self.operator_info()
+        days = self.retention_days()
+        return (f"Я, действуя свободно, своей волей и в своём интересе (а если участнику нет 18 лет — как его родитель "
+                f"или иной законный представитель), даю согласие оператору — {op['name']} (ИНН {op['inn']}, "
+                f"адрес: {op['address']}) — на обработку персональных данных участника: фамилия, имя, отчество, "
+                f"дата рождения, пол, команда (спортивная школа, клуб), тренер, спортивный разряд, дистанции и заявочный "
+                f"результат, стартовый номер, результаты соревнований (время, попытки, место, выполненный разряд), "
+                f"контактный телефон или e-mail, ФИО законного представителя.\n\n"
+                f"Цели: регистрация и участие в соревнованиях «{ev['name']}»; формирование стартовых и итоговых "
+                f"протоколов; расчёт выполненных спортивных разрядов по ЕВСК и подготовка документов для их присвоения; "
+                f"работа судей, хронометраж; отображение фамилии, имени, стартового номера и результата на табло "
+                f"и их объявление диктором на месте соревнований.\n\n"
+                f"Действия: сбор, запись, систематизация, накопление, хранение, уточнение, извлечение, использование, "
+                f"предоставление доступа судьям, организаторам и тренерам с подтверждённой учётной записью, передача "
+                f"в органы, присваивающие спортивные разряды, обезличивание, блокирование, удаление, уничтожение — "
+                f"с использованием средств автоматизации и без них.\n\n"
+                f"Дата рождения, контакты и ФИО законного представителя обезличиваются через {days} дней после "
+                f"окончания соревнований; итоговые протоколы хранятся как документы, подтверждающие спортивные "
+                f"результаты. Согласие действует до достижения целей обработки и может быть отозвано письменным "
+                f"заявлением оператору (e-mail {op['email']}).")
+
+    def retention_days(self) -> int:
+        """Через сколько дней после окончания соревнований обезличивать заявки (config.json → retention)."""
+        try:
+            return max(1, int((self.cfg.get("retention") or {}).get("applications_days") or 180))
+        except (TypeError, ValueError):
+            return 180
+
+    def trainer_consent_text(self) -> str:
+        op = self.operator_info()
+        return (f"Я, действуя свободно, своей волей и в своём интересе, даю согласие оператору — {op['name']} "
+                f"(ИНН {op['inn']}, адрес: {op['address']}) — на обработку моих персональных данных: фамилия, имя, "
+                f"отчество, спортивная школа или клуб, адрес электронной почты, дата и время входов в личный кабинет.\n\n"
+                f"Цели: регистрация и работа личного кабинета тренера, доступ к стартовым и итоговым протоколам "
+                f"соревнований, связь по вопросам соревнований.\n\n"
+                f"Действия: сбор, запись, хранение, уточнение, использование, блокирование, удаление и уничтожение — "
+                f"с использованием средств автоматизации. Учётная запись без входа в течение 3 лет удаляется "
+                f"автоматически. Согласие действует до удаления учётной записи и может быть отозвано письменным "
+                f"заявлением оператору (e-mail {op['email']}).")
 
     def reg_state(self, ev: dict) -> tuple:
         """(открыта ли регистрация, причина)"""
@@ -4043,12 +4090,17 @@ class Hub:
                 continue
             ids.append(self.store.add_registration(ev["id"], {
                 **clean, "distance": name, "best": best or None, "best_sec": self.parse_best(best),
-                "status": status, "note": note, "consent_at": fmt_db(now_local()), "consent_hash": chash}))
+                "status": status, "note": note, "consent_at": fmt_db(now_local()), "consent_hash": chash,
+                "policy_hash": self.privacy_hash()}))
         return ids, dup
 
     def _consent_hash(self, ev: dict) -> str:
-        import hashlib
-        return hashlib.sha256(self.consent_text(ev).encode("utf-8")).hexdigest()[:16]
+        """Отпечаток текста согласия; сам текст кладётся в архив редакций (consent_texts) — чтобы при проверке
+        показать, с каким именно текстом согласился человек."""
+        text = self.consent_text(ev)
+        h = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        self.store.save_consent_text(h, f"Участник · {ev['name']}", text)
+        return h
 
     def submit_registration(self, ev: dict, data: dict) -> tuple:
         """Заявка одного участника с публичной формы. → (код, ответ)"""
@@ -4060,6 +4112,8 @@ class Hub:
         errs, clean, picks = self.check_person(ev, data)
         if not data.get("consent"):
             errs["consent"] = "нужно согласие на обработку персональных данных"
+        if not data.get("policy"):
+            errs["policy"] = "подтвердите, что ознакомились с Политикой конфиденциальности"
         if errs:
             return 400, {"error": "Проверьте поля формы", "fields": errs}
         ids, dup = self._store_person(ev, clean, picks, self._consent_hash(ev))
@@ -4185,6 +4239,8 @@ class Hub:
                 fe["contact"] = "укажите телефон или e-mail для связи"
             if not data.get("consent"):
                 fe["consent"] = "нужно подтвердить наличие согласий"
+            if not data.get("policy"):
+                fe["policy"] = "подтвердите, что ознакомились с Политикой конфиденциальности"
             if fe:
                 return 400, {"error": "Проверьте поля формы", "fields": fe}
         chk = self.check_team(ev, data, rows)
@@ -4221,6 +4277,8 @@ class Hub:
                 fe["contact"] = "укажите телефон или e-mail для связи"
             if not data.get("consent"):
                 fe["consent"] = "нужно подтвердить наличие согласий"
+            if not data.get("policy"):
+                fe["policy"] = "подтвердите, что ознакомились с Политикой конфиденциальности"
         regs = [r for r in self.store.registrations(ev["id"]) if r["status"] != "rejected" and r["distance"] == spec["name"]]
         if relay and any((r.get("relay") or "").lower() == relay.lower() for r in regs):
             fe["relay"] = f"команда «{relay}» уже заявлена — добавьте номер, например «{relay}-2»"
@@ -4249,7 +4307,7 @@ class Hub:
             ids.append(self.store.add_registration(ev["id"], {
                 **cl, "team": team, "distance": spec["name"], "relay": relay, "leg": i, "status": status,
                 "note": f"эстафета «{relay}», этап {i}" + (f" · {coach}" if coach and actor == "форма" else ""),
-                "consent_at": fmt_db(now_local()), "consent_hash": chash}))
+                "consent_at": fmt_db(now_local()), "consent_hash": chash, "policy_hash": self.privacy_hash()}))
         self.store.audit(actor, ev["id"], "Заявка эстафеты", f"{relay} · {spec['name']}: "
                          + ", ".join(f"{x['last_name']} {x['first_name']}" for x in clean))
         return 201, {"ok": True, "ids": ids, "relay": relay, "distance": spec["name"],
@@ -4753,7 +4811,39 @@ class Hub:
         out["readers"] = st["sources"]
         out["wiclax"] = st["wiclax_clients"]
         out["clock_warn_sec"] = float(self.cfg["clock_warn_sec"])
+        out["offsite"] = self.offsite_state()
         return out
+
+    # ---- 5.1: внешние зашифрованные копии (tools/offsite-backup.sh из cron), проверка восстановления
+    @property
+    def offsite_dir(self) -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(self.cfg["db_path"])), "offsite")
+
+    def offsite_state(self) -> dict:
+        st: dict = {}
+        try:
+            st = json.load(open(os.path.join(self.offsite_dir, "status.json"), encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        try:
+            files = sorted(f for f in os.listdir(self.offsite_dir) if f.startswith("sakhstart-") and f.endswith(".db.gz.enc"))
+        except OSError:
+            files = []
+        st["copies"] = len(files)
+        st["latest"] = files[-1] if files else ""
+        st["installed"] = os.path.isdir(self.offsite_dir)
+        return st
+
+    def offsite_latest(self) -> Optional[tuple]:
+        st = self.offsite_state()
+        if not st["latest"]:
+            return None
+        p = os.path.join(self.offsite_dir, st["latest"])
+        try:
+            with open(p, "rb") as fh:
+                return st["latest"], fh.read()
+        except OSError:
+            return None
 
     # ---- обмен с Wiclax: импорт файла соревнования .clax и экспорт стартового списка
     @staticmethod
@@ -4855,7 +4945,7 @@ class Hub:
             cat = r["category"] or wv.get("category") or ""
             parcours = " ".join(x for x in (dist, cat) if x) or (r["wave"] or "")
             w.writerow([r["bib"], last, first, mid, {"М": "M", "Ж": "F"}.get(sex, ""), r["birth_year"] or "",
-                        ".".join(reversed(rg["birth_date"].split("-"))) if rg.get("birth_date") else "",
+                        ".".join(reversed(rg["birth_date"].split("-"))) if rg.get("birth_date") and not rg.get("anonymized_at") else "",
                         r["team"] or "", parcours, cat, r.get("coach") or "", "" if r["chip"].startswith("#") else r["chip"]])
         from urllib.parse import quote
         return 200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(), {
@@ -5132,7 +5222,8 @@ class Hub:
                 parcours[pc] = {"name": pc, "distance": int(meters), "start": start}
             entries.append({"bib": r["bib"], "name": " ".join(x for x in (last.upper(), first.upper(), mid) if x),
                             "club": r["team"] or "", "sex": {"М": "M", "Ж": "F"}.get(sex, sex),
-                            "birth": rg.get("birth_date") or None, "year": r["birth_year"] or "",
+                            "birth": (rg.get("birth_date") or None) if not rg.get("anonymized_at") else None,
+                            "year": r["birth_year"] or "",
                             "parcours": pc, "chip": "" if (r["chip"] or "").startswith("#") else (r["chip"] or "")})
         return {"name": ev["name"], "date": ev.get("date") or now_local().strftime("%Y-%m-%d"),
                 "organizer": ev.get("organizer") or "", "parcours": list(parcours.values()), "entries": entries}
@@ -5746,9 +5837,25 @@ class Hub:
             self.store.delete_trainer(tid)
         ses = con.execute("DELETE FROM sessions WHERE expires_at < ?", (fmt_db(now),)).rowcount
         aud = con.execute("DELETE FROM audit WHERE ts < ?", (cut_aud,)).rowcount
+        # заявки: через N дней после окончания соревнований — без контактов, представителя и полной даты рождения
+        # (год остаётся: он нужен протоколам и разрядам)
+        cut_ev = (now - dt.timedelta(days=self.retention_days())).strftime("%Y-%m-%d")
+        anon = 0
+        for e in self.store.list_events():
+            end = e.get("date_end") or e.get("date")
+            if not end or str(end)[:10] >= cut_ev:
+                continue
+            anon += con.execute(
+                "UPDATE registrations SET contact = NULL, representative = NULL, "
+                "birth_date = CASE WHEN birth_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' "
+                "THEN substr(birth_date, 1, 4) || '-01-01' ELSE birth_date END, anonymized_at = ? "
+                "WHERE event_id = ? AND anonymized_at IS NULL", (fmt_db(now), e["id"])).rowcount
         if gone:
             self.store.audit("система", None, "Сроки хранения ПДн", f"удалено учётных записей тренеров: {len(gone)}")
-        return {"trainers": len(gone), "sessions": ses, "audit": aud}
+        if anon:
+            self.store.audit("система", None, "Сроки хранения ПДн",
+                             f"обезличено заявок: {anon} (контакты, представитель, дата рождения → год)")
+        return {"trainers": len(gone), "sessions": ses, "audit": aud, "applications": anon}
 
     async def _retention_loop(self) -> None:
         while not self.stopping.is_set():
@@ -5936,7 +6043,7 @@ class Hub:
         return None
 
     # только администратор: сервер и обновления, оборудование IPICO/Wiclax, VPN, учётные записи, сырые отметки
-    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users|trainers)(/.*)?|/raw|/simple")
+    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users|trainers|consents)(/.*)?|/raw|/simple")
     JUDGE_OPEN = ("/api/system/scoreboard/control",)                 # пульт табло — судейский, хоть и под /api/system
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 
@@ -6105,6 +6212,7 @@ class Hub:
         return (tpl.replace("{{OP_TABLE}}", table).replace("{{OP_SHORT}}", e(op["short"]))
                 .replace("{{OP_FULL}}", e(op["name"])).replace("{{OP_EMAIL}}", mail)
                 .replace("{{OP_ADDRESS}}", e(op["address"])).replace("{{OP_RESPONSIBLE}}", e(op["responsible"]))
+                .replace("{{APP_DAYS}}", str(self.retention_days()))
                 .replace("{{SITE}}", e(base.replace("https://", "").replace("http://", "") or "reg.fla65.ru")))
 
     def privacy_hash(self) -> str:
@@ -6146,7 +6254,10 @@ class Hub:
         return run + rest
 
     def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
-        """(код, ответ, доп. заголовки). sub: register | verify | resend | login | logout | me | events."""
+        """(код, ответ, доп. заголовки). sub: consent | register | verify | resend | login | logout | me | events."""
+        if sub == "consent" and method == "GET":         # текст согласия — показывается в форме отдельно от Политики
+            text = self.trainer_consent_text()
+            return 200, {"text": text, "hash": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]}, None
         if sub in ("me", "events") and method == "GET":
             u = self.protocol_viewer(headers)
             if not u:
@@ -6189,7 +6300,9 @@ class Hub:
             if len(pwd) < 8:
                 errs["password"] = "Пароль — не короче 8 символов"
             if not (d.get("consent_accepted") is True or d.get("consent") is True):
-                errs["consent"] = "Нужно согласие на обработку персональных данных и с Политикой конфиденциальности"
+                errs["consent"] = "Нужно согласие на обработку персональных данных"
+            if not (d.get("policy_accepted") is True or d.get("policy") is True):
+                errs["policy"] = "Подтвердите, что ознакомились с Политикой конфиденциальности"
             if errs:
                 return 400, {"error": "Проверьте поля формы", "fields": errs}, None
             t = self.store.trainer_by_email(email)
@@ -6202,8 +6315,11 @@ class Hub:
             else:
                 self.store.add_trainer(name, team, email, self.hash_password(pwd))
             t = self.store.trainer_by_email(email)
+            ctext = self.trainer_consent_text()
+            chash = hashlib.sha256(ctext.encode("utf-8")).hexdigest()[:16]
+            self.store.save_consent_text(chash, "Тренер · личный кабинет", ctext)
             self.store.update_trainer(t["id"], consent_accepted=1, consent_at=fmt_db(now_local()),
-                                      consent_hash=self.privacy_hash())
+                                      consent_hash=chash, policy_hash=self.privacy_hash())
             sent = self._issue_code(t)
             self.store.audit(f"тренер {email}@{ip}", None, "Тренер: регистрация",
                              f"{name} · {team}" + ("" if sent else " · почта не настроена, нужно подтверждение администратора"))
@@ -6426,7 +6542,7 @@ class Hub:
                 await self._send(writer, 200, J, '{"ok":true}',
                                  extra={"Set-Cookie": f"{self.SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
                 return
-            mt = re.fullmatch(r"/api/auth/trainer/(register|verify|resend|login|logout|me)", path)
+            mt = re.fullmatch(r"/api/auth/trainer/(consent|register|verify|resend|login|logout|me)", path)
             if mt:
                 code, res, extra = self.trainer_api(method, mt.group(1), headers, body, client_ip)
                 await self._send(writer, code, J, json.dumps(res, ensure_ascii=False), extra=extra)
@@ -6481,6 +6597,25 @@ class Hub:
                 if path == "/api/me" or path.startswith("/api/users") or path == "/api/me/password":
                     code, res = self.users_api(method, path, body, user, actor)
                     await self._send(writer, code, J, json.dumps(res, ensure_ascii=False))
+                    return
+                if path == "/api/system/backup/latest" and method == "GET":    # только администратор (ADMIN_ONLY)
+                    got = self.offsite_latest()
+                    if not got:
+                        await self._send(writer, 404, J, json.dumps({"error": "внешних копий пока нет"}, ensure_ascii=False))
+                    else:
+                        self.store.audit(actor, None, "Скачана зашифрованная копия базы", got[0])
+                        await self._send(writer, 200, "application/octet-stream", got[1],
+                                         extra={"Content-Disposition": f'attachment; filename="{got[0]}"'})
+                    return
+                if path == "/api/system/retention" and method == "POST":       # применить сроки хранения сейчас
+                    res = self.apply_retention()
+                    self.store.audit(actor, None, "Сроки хранения ПДн применены вручную", json.dumps(res, ensure_ascii=False))
+                    await self._send(writer, 200, J, json.dumps(res, ensure_ascii=False))
+                    return
+                if path == "/api/consents" and method == "GET":
+                    await self._send(writer, 200, J, json.dumps({"consents": self.store.consent_texts(),
+                                                                 "policy_hash": self.privacy_hash(),
+                                                                 "retention_days": self.retention_days()}, ensure_ascii=False))
                     return
                 if path == "/api/trainers" or path.startswith("/api/trainers/"):
                     code, res = self.trainers_admin(method, path, actor)
@@ -6622,7 +6757,7 @@ class Hub:
             page = self._ui_file("reg.html")
             return 200, "text/html; charset=utf-8", page or "нет reg.html", None
         # 5.0: личный кабинет тренера (тот же обработчик доступен в панели как /api/auth/trainer/…)
-        mt = re.fullmatch(r"/r/api/(?:auth/trainer/(register|verify|resend|login|logout|me)|trainer/(events))", path)
+        mt = re.fullmatch(r"/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))", path)
         if mt:
             code, out, extra = self.trainer_api(method, mt.group(1) or mt.group(2), headers, body, client)
             return code, J, json.dumps(out, ensure_ascii=False), extra

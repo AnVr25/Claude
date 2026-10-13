@@ -61,14 +61,14 @@ a{color:inherit}
 label.f{display:block;font-size:14px;font-weight:700;margin-bottom:6px;line-height:1.3}
 label.f i{font-style:normal;color:var(--track)}
 label.f small{font-size:13px;font-weight:400;color:var(--muted)}
-input[type=text],input[type=date],input[type=tel],input:not([type]){display:block;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:11px 12px;min-height:48px;width:100%;margin:0;-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
+input[type=text],input[type=date],input[type=tel],input[type=email],input[type=password],input:not([type]){display:block;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:11px 12px;min-height:48px;width:100%;margin:0;-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
 input[type=date]{line-height:24px}
 input::placeholder{color:var(--muted);opacity:.8}
 input:hover{border-color:var(--hover-line)}
 input:focus{outline:3px solid var(--focus);outline-offset:0;border-color:var(--track)}
 .err{color:var(--bad);font-size:13px;font-weight:700;margin-top:5px;line-height:1.3}
 .err:empty{display:none}
-.bad input[type=text],.bad input[type=date],.bad input:not([type]){border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
+.bad input[type=text],.bad input[type=date],.bad input[type=email],.bad input[type=password],.bad input:not([type]){border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
 
 /* переключатели (пол) */
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -275,6 +275,9 @@ button.lnk:hover{background:none;color:var(--bad)}
 .tev .chips span{font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
 .tev .chips .run{color:var(--bad);border-color:var(--track)}
 .notice.calm{border-left-color:var(--line)}
+.ctext{max-height:240px;overflow:auto;white-space:pre-line;font-size:14px;line-height:1.5;background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:0 0 14px}
+.ctext:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.cons h2{font-size:19px}
 .vn{color:inherit;text-decoration:underline;text-decoration-color:#E71E25;text-underline-offset:3px}
 .vn:hover{color:#fff;text-decoration-thickness:2px}
 </style>
@@ -308,6 +311,18 @@ const fsize=n=>!n?"":n<1024*1024?Math.max(1,Math.round(n/1024))+" КБ":(n/10485
 const LOGOS=`<div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div>`;
 const band=inner=>`<header class="band"><div class="in">${LOGOS}${inner||""}</div></header>`;
 
+/* ---------- 5.1: согласие — отдельный блок с полным текстом и своей отметкой (ст. 9 152-ФЗ с 01.09.2025),
+   ознакомление с Политикой — отдельной отметкой ---------- */
+const TEAM_CONSENT="Подтверждаю, что у меня есть согласия всех участников этой заявки (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных на условиях, изложенных выше";
+function consentBlock(id,text,label){
+  return `<div class="card cons"><h2>Согласие на обработку персональных данных</h2>
+    <div class="ctext" tabindex="0" role="region" aria-label="Текст согласия">${esc(text)}</div>
+    <label class="consent" id="w_${id}"><input type="checkbox" id="${id}"><span>${esc(label)} <i class="req">*</i></span></label>
+    <div class="err" id="e_${id}"></div></div>`;
+}
+function policyBlock(id){
+  return `<label class="consent" id="w_${id}"><input type="checkbox" id="${id}"><span>Я ознакомлен(а) с <a href="/privacy" target="_blank" rel="noopener">Политикой обработки персональных данных</a> <i class="req">*</i></span></label><div class="err" id="e_${id}"></div>`;
+}
 /* ---------- 5.0: личный кабинет тренера: регистрация → код из письма → закрытые протоколы ---------- */
 const TAPI="/r/api/auth/trainer/";
 async function tpost(path,obj){
@@ -365,20 +380,24 @@ function tRegister(){
       <div class="full">${field("t_email","Электронная почта",1,'type="email" autocomplete="email" inputmode="email" maxlength="254"',"— на неё придёт код")}</div>
       <div class="full">${field("t_password","Пароль",1,'type="password" autocomplete="new-password" minlength="8" maxlength="200"',"— не короче 8 символов")}</div>
     </div>
-    <label class="consent" id="w_t_consent" style="margin-top:16px"><input type="checkbox" id="t_consent"><span>Я даю согласие на обработку моих персональных данных (ФИО, спортивная школа или клуб, электронная почта) и соглашаюсь с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
-    <div class="err" id="e_t_consent"></div>
+  </form>
+  ${consentBlock("t_consent",TS.consent||"Текст согласия загружается…","Я даю согласие на обработку моих персональных данных на условиях, изложенных выше")}
+  <form class="card" id="tr2" novalidate>
+    ${policyBlock("t_policy")}
     <div class="hp" aria-hidden="true"><input id="t_website" tabindex="-1" autocomplete="off"></div>
     <button type="submit" id="trGo" disabled aria-describedby="trHint">Зарегистрироваться и получить код</button>
-    <div class="tswitch muted" id="trHint" style="font-size:14px;margin-top:8px">Кнопка включится, когда вы отметите согласие.</div><div class="formerr" id="trErr" role="alert"></div>
+    <div class="tswitch muted" id="trHint" style="font-size:14px;margin-top:8px">Кнопка включится, когда вы отметите согласие и ознакомление с Политикой.</div><div class="formerr" id="trErr" role="alert"></div>
     <div class="tswitch">Уже зарегистрированы? <button type="button" class="lnk" id="toLogin">Войти</button></div>
   </form>`,1);
   $("toLogin").onclick=()=>tLogin();
-  // без согласия регистрация невозможна: кнопка выключена, пока галочка не стоит
-  const cOn=()=>{ const on=$("t_consent").checked; $("trGo").disabled=!on; $("trHint").classList.toggle("hide",on); if(on) $("e_t_consent").textContent=""; };
-  $("t_consent").onchange=cOn;
-  $("tr").onsubmit=async e=>{ e.preventDefault(); $("trErr").textContent="";
-    if(!$("t_consent").checked){ cOn(); return; }
-    const body={name:$("t_name").value.trim(),team:$("t_team").value.trim(),email:$("t_email").value.trim(),password:$("t_password").value,consent_accepted:$("t_consent").checked,website:$("t_website").value};
+  if(!TS.consent) fetch(TAPI+"consent").then(r=>r.json()).then(d=>{ TS.consent=d.text; const b=document.querySelector(".cons .ctext"); if(b) b.textContent=d.text; }).catch(()=>{});
+  // без согласия и ознакомления с Политикой регистрация невозможна: кнопка выключена, пока обе отметки не стоят
+  const cOn=()=>{ const on=$("t_consent").checked&&$("t_policy").checked; $("trGo").disabled=!on; $("trHint").classList.toggle("hide",on);
+    if($("t_consent").checked) $("e_t_consent").textContent=""; if($("t_policy").checked) $("e_t_policy").textContent=""; };
+  $("t_consent").onchange=cOn; $("t_policy").onchange=cOn;
+  const submit=async e=>{ e.preventDefault(); $("trErr").textContent="";
+    if(!($("t_consent").checked&&$("t_policy").checked)){ cOn(); return; }
+    const body={name:$("t_name").value.trim(),team:$("t_team").value.trim(),email:$("t_email").value.trim(),password:$("t_password").value,consent_accepted:$("t_consent").checked,policy_accepted:$("t_policy").checked,website:$("t_website").value};
     const errs={};
     if(body.name.split(/\s+/).length<2) errs.name="Укажите фамилию и имя";
     if(body.team.length<2) errs.team="Укажите спортивную школу или клуб";
@@ -394,6 +413,7 @@ function tRegister(){
     if(d.verify){ TS.email=body.email; return tVerify(d.error); }
     $("trErr").textContent=d.error||"Не удалось зарегистрироваться";
   };
+  $("tr").onsubmit=submit; $("tr2").onsubmit=submit;    // Enter в полях данных — та же отправка
 }
 function tVerify(msg){
   tshell("Подтверждение почты","",`
@@ -602,10 +622,9 @@ function render(keep){
       <div class="err" id="e_distances"></div>
       <div class="hint">Лучший результат нужен, чтобы поставить вас в забег с соперниками вашего уровня.</div>
     </div>
+    ${consentBlock("consent",d.consent,"Я, как совершеннолетний участник или законный представитель (родитель/опекун) несовершеннолетнего спортсмена, даю согласие на обработку персональных данных (ФИО, дата рождения, разряд, команда, результаты попыток) на условиях, изложенных выше, для формирования протоколов соревнований")}
     <div class="card">
-      <label class="consent" id="w_consent"><input type="checkbox" id="consent"><span>Я, как совершеннолетний участник или законный представитель (родитель/опекун) несовершеннолетнего спортсмена, даю согласие на обработку персональных данных (ФИО, год рождения, разряд, команда, результаты попыток) в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> для формирования протоколов соревнований <i class="req">*</i></span></label>
-      <div class="err" id="e_consent"></div>
-      <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
+      ${policyBlock("policy")}
       <label class="remember"><input type="checkbox" id="remember"${me?" checked":""}><span>Запомнить данные участника на этом устройстве — в следующий раз заполнить в одно касание</span></label>
     </div>
     <div class="hp" aria-hidden="true"><input id="website" tabindex="-1" autocomplete="off"></div>
@@ -661,11 +680,8 @@ function renderRelay(){
       </div>
     </div>
     <div class="card"><h2>Состав по этапам</h2><div id="legs"></div><div class="err" id="e_r_members"></div></div>
-    <div class="card">
-      <label class="consent" id="w_r_consent"><input type="checkbox" id="r_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
-      <div class="err" id="e_r_consent"></div>
-      <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
-    </div>
+    ${consentBlock("r_consent",d.consent,TEAM_CONSENT)}
+    <div class="card">${policyBlock("r_policy")}</div>
     <div class="hp" aria-hidden="true"><input id="r_website" tabindex="-1" autocomplete="off"></div>
     <button id="r_send" type="submit">Отправить заявку эстафеты</button>
     <div class="formerr" id="formErr"></div>
@@ -686,11 +702,12 @@ async function relaySubmit(ev){
     if(!m.birth_date)loc[`r${i}_birth_date`]="укажите дату"; if(!m.sex)loc[`r${i}_sex`]="пол"; if(!m.rank)loc[`r${i}_rank`]="разряд или «Б/р»";});
   ["team","coach","contact"].forEach(x=>{ if(!$("r_"+x).value.trim()) loc["r_"+x]="обязательное поле"; });
   if(!$("r_consent").checked) loc.r_consent="нужно подтвердить";
+  if(!$("r_policy").checked) loc.r_policy="подтвердите ознакомление с Политикой";
   if(Object.keys(loc).length){showErr(loc);return;}
   RELAY.keep={distance:$("r_distance").value,team:$("r_team").value,relay:$("r_relay").value,coach:$("r_coach").value,contact:$("r_contact").value};
   $("r_send").disabled=true; $("r_send").textContent="Отправляем…";
   try{
-    const r=await fetch(`/r/${slug}/relay`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...RELAY.keep,members,consent:true,website:$("r_website").value})});
+    const r=await fetch(`/r/${slug}/relay`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...RELAY.keep,members,consent:true,policy:true,website:$("r_website").value})});
     const d=await r.json().catch(()=>({}));
     if(r.status===201) return relayDone(d);
     const f={}; Object.entries(d.fields||{}).forEach(([k,v])=>f["r_"+k]=v);
@@ -733,11 +750,8 @@ function renderTeam(){
         <div class="err" id="e_file"></div></div></div>
       <div id="t_preview"></div>
     </div>
-    <div class="card">
-      <label class="consent" id="w_t_consent"><input type="checkbox" id="t_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
-      <div class="err" id="e_t_consent"></div>
-      <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
-    </div>
+    ${consentBlock("t_consent",d.consent,TEAM_CONSENT)}
+    <div class="card">${policyBlock("t_policy")}</div>
     <div class="hp" aria-hidden="true"><input id="t_website" tabindex="-1" autocomplete="off"></div>
     <button id="t_send" type="submit" disabled>Отправить заявку команды</button>
     <div class="formerr" id="formErr"></div>
@@ -780,12 +794,13 @@ async function teamSubmit(ev){
   if(!$("t_coach").value.trim())loc.t_coach="обязательное поле";
   if(!$("t_contact").value.trim())loc.t_contact="обязательное поле";
   if(!$("t_consent").checked)loc.t_consent="нужно подтвердить";
+  if(!$("t_policy").checked)loc.t_policy="подтвердите ознакомление с Политикой";
   if(!TEAM.check)loc.file="загрузите файл";
   if(Object.keys(loc).length){showErr(loc);return;}
   tKeep();
   $("t_send").disabled=true; $("t_send").textContent="Отправляем…";
   try{
-    const body={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value,consent:true,website:$("t_website").value,
+    const body={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value,consent:true,policy:true,website:$("t_website").value,
       rows:TEAM.check.rows.map(x=>Object.assign({_row:x.row},x.raw))};
     const r=await fetch(`/r/${slug}/team`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const d=await r.json().catch(()=>({}));
@@ -829,7 +844,7 @@ async function submit(ev){
   const body={last_name:$("last_name").value,first_name:$("first_name").value,middle_name:$("middle_name").value,
     birth_date:$("birth_date").value,sex:(document.querySelector('input[name=sex]:checked')||{}).value||"",rank:$("rank").value,
     team:$("team").value,coach:$("coach").value,contact:$("contact").value,representative:$("representative").value,
-    consent:$("consent").checked,website:$("website").value,
+    consent:$("consent").checked,policy:$("policy").checked,website:$("website").value,
     distances:[...document.querySelectorAll('input[name=dist]:checked')].map(c=>({distance:c.value,best:c.closest(".drow").querySelector("[data-best]").value}))};
   const loc={};
   if(!body.last_name.trim())loc.last_name="обязательное поле";
@@ -841,6 +856,7 @@ async function submit(ev){
   if(!body.distances.length)loc.distances="выберите дистанцию";
   if(body.birth_date&&age(body.birth_date)<18&&!body.representative.trim())loc.representative="укажите ФИО родителя";
   if(!body.consent)loc.consent="нужно согласие";
+  if(!body.policy)loc.policy="подтвердите ознакомление с Политикой";
   if(Object.keys(loc).length){showErr(loc);return;}
   $("send").disabled=true; $("send").textContent="Отправляем…";
   try{

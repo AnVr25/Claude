@@ -586,11 +586,11 @@ def main() -> int:
         TA = "/r/api/auth/trainer/"
         c1, d1, _ = tpost(TA + "register", {"name": "Иванова", "team": "", "email": "не почта", "password": "123"})
         c2, d2, _ = tpost(TA + "register", {"name": "Иванова Мария", "team": "СШОР", "email": "coach@example.ru",
-                                             "password": "coach-pass-1", "consent": True}, xrw=False)
+                                             "password": "coach-pass-1", "consent": True, "policy": True}, xrw=False)
         check("5.0: регистрация тренера проверяет ФИО, школу, почту, пароль и согласие; без X-Requested-With — отказ",
-              c1 == 400 and set(d1.get("fields", {})) == {"name", "team", "email", "password", "consent"} and c2 == 403, f"{c1} {d1} {c2}")
+              c1 == 400 and set(d1.get("fields", {})) == {"name", "team", "email", "password", "consent", "policy"} and c2 == 403, f"{c1} {d1} {c2}")
         c3, d3, _ = tpost(TA + "register", {"name": "Иванова Мария Петровна", "team": "СШОР по лёгкой атлетике",
-                                             "email": "Coach@Example.ru", "password": "coach-pass-1", "consent": True})
+                                             "email": "Coach@Example.ru", "password": "coach-pass-1", "consent": True, "policy": True})
         msg_, code_ = last_mail()
         cn1, dn1, _ = tpost(TA + "register", {"name": "Сидоров Олег", "team": "ДЮСШ", "email": "sid@example.ru",
                                                "password": "sid-pass-123", "consent_accepted": False})
@@ -632,13 +632,13 @@ def main() -> int:
         c8, d8, h8 = tpost(TA + "login", {"email": "coach@example.ru", "password": "wrong-pass"})
         c9, d9, h9 = tpost(TA + "login", {"email": "COACH@example.ru", "password": "coach-pass-1"})
         c10, d10, _ = tpost(TA + "register", {"name": "Иванова Мария", "team": "СШОР", "email": "coach@example.ru",
-                                               "password": "other-pass-1", "consent": True})
+                                               "password": "other-pass-1", "consent": True, "policy": True})
         check("5.0: вход тренера по почте и паролю; неверный пароль — отказ; повторная регистрация той же почты — «войдите»",
               c8 == 401 and c9 == 200 and (h9.get("Set-Cookie") or "").startswith("ss_session=") and c10 == 409 and d10.get("login"),
               f"{c8} {c9} {c10}")
         # перебор кода: после 5 неверных попыток — только новый код
         tpost(TA + "register", {"name": "Петров Сергей", "team": "ДЮСШ Холмск", "email": "petrov@example.ru",
-                                "password": "petrov-pass-1", "consent": True})
+                                "password": "petrov-pass-1", "consent": True, "policy": True})
         _, code2 = last_mail()
         wrong = [tpost(TA + "verify", {"email": "petrov@example.ru", "code": f"{(int(code2) + i) % 10 ** 6:06d}"})[0] for i in range(1, 6)]
         c11, d11, _ = tpost(TA + "verify", {"email": "petrov@example.ru", "code": code2})
@@ -804,7 +804,7 @@ def main() -> int:
 
         def reg(last, first, bd, sex, dists, **kw):
             body = {"last_name": last, "first_name": first, "birth_date": bd, "sex": sex, "team": "СШОР",
-                    "consent": True, "representative": "Родитель", "distances": dists, "rank": "1р", **kw}
+                    "consent": True, "policy": True, "representative": "Родитель", "distances": dists, "rank": "1р", **kw}
             c, t, _ = pub("POST", f"/r/{slug}", json.dumps(body).encode())
             return c, json.loads(t)
 
@@ -813,6 +813,42 @@ def main() -> int:
         for i, (ln, fn, best) in enumerate(runners):
             code, out = reg(ln, fn, f"2010-0{i + 1}-15", "М", [{"distance": "60 м", "best": best}])
         check("заявка принята, категория определена по году и полу", code == 201 and out["category"] == "Юноши", str(out))
+        # 5.1: согласие отдельно от Политики; архив редакций согласий; обезличивание заявок по сроку
+        body_np = {"last_name": "Безполитики", "first_name": "Иван", "birth_date": "2010-05-05", "sex": "М", "team": "СШОР",
+                   "consent": True, "representative": "Родитель", "distances": [{"distance": "60 м"}], "rank": "1р"}
+        cnp, tnp, _ = pub("POST", f"/r/{slug}", json.dumps(body_np).encode())
+        check("5.1: без отдельной отметки об ознакомлении с Политикой заявка не принимается, согласие — отдельно",
+              cnp == 400 and "policy" in json.loads(tnp).get("fields", {}) and "consent" not in json.loads(tnp).get("fields", {}), tnp[:200])
+        _, ctx = http("GET", "/api/consents")
+        cons = json.loads(ctx)
+        cpart = [c for c in cons["consents"] if c["kind"].startswith("Участник")]
+        ctr = [c for c in cons["consents"] if c["kind"].startswith("Тренер")]
+        dbq = _sql.connect(cfg["db_path"])
+        ph = dbq.execute("SELECT consent_hash, policy_hash FROM registrations WHERE last_name = 'Быстров'").fetchone()
+        dbq.close()
+        check("5.1: тексты согласий хранятся по редакциям (участник, тренер) с числом согласий; у заявки — отпечатки согласия и Политики",
+              cpart and cpart[0]["used"] >= 6 and "табло" in cpart[0]["text"] and "ИНН 6501159635" in cpart[0]["text"]
+              and ctr and ctr[0]["used"] >= 1 and ph and ph[0] == cpart[0]["hash"] and ph[1] == cons["policy_hash"]
+              and cons["retention_days"] == 180, str([(c["kind"], c["used"]) for c in cons["consents"]])[:300])
+        ca, cta, _ = pub("GET", "/r/api/auth/trainer/consent")
+        check("5.1: текст согласия тренера отдаётся форме отдельно от Политики", ca == 200 and "личного кабинета тренера" in json.loads(cta)["text"], cta[:200])
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Старое первенство", "date": "2020-01-10", "kind": "stadium",
+                                                             "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+        eo = json.loads(txt)["id"]
+        _, txt = http("POST", f"/api/events/{eo}", json.dumps({"reg_open": True, "reg_distances": "60 м"}).encode(), J)
+        so = json.loads(txt)["reg_path"].rsplit("/", 1)[-1]
+        pub("POST", f"/r/{so}", json.dumps({"last_name": "Давнишний", "first_name": "Пётр", "birth_date": "2012-07-15", "sex": "М",
+                                            "team": "СШОР", "consent": True, "policy": True, "representative": "Давнишняя Анна",
+                                            "contact": "+7 900 000-00-00", "distances": [{"distance": "60 м"}], "rank": "Б/р"}).encode())
+        code, txt = http("POST", "/api/system/retention", b"{}", J)
+        ro = json.loads(txt)
+        dbq = _sql.connect(cfg["db_path"])
+        an = dbq.execute("SELECT birth_date, contact, representative, anonymized_at FROM registrations WHERE last_name = 'Давнишний'").fetchone()
+        fresh = dbq.execute("SELECT contact, anonymized_at FROM registrations WHERE last_name = 'Быстров'").fetchone()
+        dbq.close()
+        check("5.1: заявки прошедших соревнований обезличиваются по сроку: без контактов и представителя, от даты рождения — год; свежие не трогаются",
+              code == 200 and ro.get("applications", 0) >= 1 and an and an[0] == "2012-01-01" and an[1] is None and an[2] is None and an[3]
+              and fresh and fresh[1] is None, f"{ro} {an} {fresh}")
         code, out = reg("Бегова", "Анна", "2011-03-03", "Ж", [{"distance": "60 м", "best": "8,6"}, {"distance": "300 м", "best": "49.0"}])
         check("одна заявка на две дистанции", code == 201 and len(out["ids"]) == 2 and out["category"] == "Девушки", str(out))
         code, out = reg("Быстров", "Иван", "2010-01-15", "М", ["60 м"])
@@ -950,16 +986,17 @@ def main() -> int:
               and good[0]["distance"] == "60 м" and good[0]["best"] == "8,1", str(good[0]))
         rows = [dict(x["raw"], _row=x["row"]) for x in ck["rows"]]
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "Тренеров Т.Т.", "contact": "8-900",
-                            "consent": True, "rows": rows}).encode(), {"Content-Type": "application/json"})
+                            "consent": True, "policy": True, "rows": rows}).encode(), {"Content-Type": "application/json"})
         check("команда с ошибками в файле не принимается", code == 400 and out.get("check", {}).get("bad") == 1, str(out)[:200])
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "", "contact": "", "consent": False,
                             "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
-        check("без тренера, контакта и согласия — ошибка", code == 400 and set(out.get("fields", {})) == {"coach", "contact", "consent"}, str(out))
+        check("без тренера, контакта, согласия и отметки о Политике — ошибка", code == 400
+              and set(out.get("fields", {})) == {"coach", "contact", "consent", "policy"}, str(out))
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "Тренеров Т.Т.", "contact": "8-900",
-                            "consent": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
+                            "consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
         check("командная заявка принята: 2 участника", code == 201 and out["added"] == 2, str(out))
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "Тренеров Т.Т.", "contact": "8-900",
-                            "consent": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
+                            "consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
         check("повторная отправка той же команды — повторы пропущены", code == 201 and out["added"] == 0 and len(out["duplicates"]) == 2, str(out))
         _, txt = http("GET", f"/api/events/{e4}/regs")
         kr = [r for r in json.loads(txt)["regs"] if r["team"] == "Корсаков"]
@@ -1218,7 +1255,7 @@ def main() -> int:
 
         def reg8(last, bd, dist, sex="М"):
             c, t, _ = pub("POST", f"/r/{s8}", json.dumps({"last_name": last, "first_name": "Тест", "birth_date": bd, "sex": sex,
-                          "team": "СШОР", "consent": True, "representative": "Родитель", "distances": [dist], "rank": "Б/р"}).encode())
+                          "team": "СШОР", "consent": True, "policy": True, "representative": "Родитель", "distances": [dist], "rank": "Б/р"}).encode())
             return c, json.loads(t)
         r1, r2 = reg8("Первый", "2010-01-01", "5 км"), reg8("Второй", "2010-02-02", "5 км")
         r3 = reg8("Третий", "2010-03-03", "5 км")
@@ -1233,7 +1270,7 @@ def main() -> int:
         legs = [{"last_name": f"Бегун{c}", "first_name": "Этап", "birth_date": f"2010-0{i + 1}-10", "sex": "М", "rank": "2 юн."}
                 for i, c in enumerate("АБВГ")]
         relay = {"distance": "4×100 м", "team": "СШОР", "relay": "СШОР-1", "coach": "Тренеров", "contact": "+79240000000",
-                 "consent": True, "members": legs}
+                 "consent": True, "policy": True, "members": legs}
         c, t, _ = pub("POST", f"/r/{s8}/relay", json.dumps({**relay, "members": legs[:3]}).encode())
         check("2.8: эстафета без участника на 4-м этапе — ошибка этапа", c == 400 and "4" in json.loads(t).get("members", {}), t[:300])
         c, t, _ = pub("POST", f"/r/{s8}/relay", json.dumps(relay).encode())
@@ -1305,7 +1342,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 5.0.2 и дата сборки 13.10.2026", st3["version"] == "5.0.2" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 5.1.0 и дата сборки 13.10.2026", st3["version"] == "5.1.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1426,7 +1463,7 @@ def main() -> int:
         s9 = json.loads(txt)["reg_path"].rsplit("/", 1)[-1]
 
         def reg9(last, sex, dists, year="2011"):
-            body = {"last_name": last, "first_name": "Тест", "birth_date": f"{year}-03-03", "sex": sex, "team": "СШОР", "consent": True,
+            body = {"last_name": last, "first_name": "Тест", "birth_date": f"{year}-03-03", "sex": sex, "team": "СШОР", "consent": True, "policy": True,
                     "representative": "Родитель", "distances": dists, "rank": "1р"}
             c, t, _ = pub("POST", f"/r/{s9}", json.dumps(body).encode())
             return c
@@ -1670,7 +1707,7 @@ def main() -> int:
         http("POST", f"/api/events/{e10}", json.dumps({"reg_open": True, "reg_distances": "60 м\nПрыжок в длину"}).encode(), J)
         sl10 = json.loads(http("GET", f"/api/events/{e10}")[1])["reg_path"].rsplit("/", 1)[-1]
         for ln, dd in (("Смешанов", "60 м"), ("Прыгунов", "Прыжок в длину")):
-            pub("POST", f"/r/{sl10}", json.dumps({"last_name": ln, "first_name": "Тест", "birth_date": "2010-01-01", "sex": "М", "team": "К", "consent": True,
+            pub("POST", f"/r/{sl10}", json.dumps({"last_name": ln, "first_name": "Тест", "birth_date": "2010-01-01", "sex": "М", "team": "К", "consent": True, "policy": True,
                  "representative": "Р", "distances": [{"distance": dd}], "rank": "Б/р"}).encode())
         http("POST", f"/api/events/{e10}/regs", json.dumps({"approve_all": True}).encode(), J)
         http("POST", f"/api/events/{e10}/heats", json.dumps({"mode": "list"}).encode(), J)

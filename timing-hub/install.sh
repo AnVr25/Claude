@@ -66,7 +66,7 @@ echo "  ОС: ${PRETTY_NAME}, виртуализация: ${VIRT:-нет}"
 step "Ставлю пакеты (WireGuard, firewall, Python, синхронизация времени)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q wireguard-tools qrencode ufw python3 sqlite3 chrony cron curl iproute2 >/dev/null
+apt-get install -y -q wireguard-tools qrencode ufw python3 sqlite3 chrony cron curl iproute2 openssl rsync >/dev/null
 PYV="$(python3 -c 'import sys; print("%d%02d" % sys.version_info[:2])')"
 [[ "$PYV" -ge 310 ]] || die "нужен Python 3.10 или новее (стоит $(python3 --version))"
 
@@ -290,6 +290,20 @@ chown -R ${SVC_USER}:${SVC_USER} "\$D"
 find "\$D" -name 'reads-*.db' -mtime +30 -delete
 EOF
 chmod 755 /etc/cron.daily/timing-hub-backup
+
+# 5.1: внешняя зашифрованная копия + проверка восстановления (ключ /etc/timing-hub/backup.key, настройка — offsite.env)
+install -m 755 "$KIT_DIR/tools/offsite-backup.sh" /usr/local/sbin/timing-offsite-backup
+install -m 755 "$KIT_DIR/tools/restore-check.sh" /usr/local/sbin/timing-restore-check
+cat > /etc/cron.daily/timing-hub-offsite <<EOF
+#!/bin/sh
+DATA_DIR=${DATA_DIR} CFG_DIR=${CFG_DIR} SVC_USER=${SVC_USER} /usr/local/sbin/timing-offsite-backup >/var/log/timing-hub-offsite.log 2>&1
+EOF
+chmod 755 /etc/cron.daily/timing-hub-offsite
+if [[ -f "$DATA_DIR/reads.db" ]]; then
+  DATA_DIR="$DATA_DIR" CFG_DIR="$CFG_DIR" SVC_USER="$SVC_USER" /usr/local/sbin/timing-offsite-backup \
+    >/var/log/timing-hub-offsite.log 2>&1 && echo "  Внешняя копия базы: создана и проверена" \
+    || echo "  Внешняя копия базы: см. /var/log/timing-hub-offsite.log"
+fi
 
 # состояние VPN, служб и сертификата для вкладки «Оборудование» (обновляется каждые 10 с)
 if [[ -f "$KIT_DIR/sysinfo.sh" ]]; then

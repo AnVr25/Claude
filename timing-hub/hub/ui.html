@@ -1086,6 +1086,9 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="panel"><h3>Службы</h3><div id="hwSvc"></div></div>
   </div>
 
+  <h2 style="margin-top:20px">Внешние резервные копии</h2>
+  <div class="panel" id="offBox"><div class="small muted">Загрузка…</div></div>
+
   <h2 style="margin-top:20px">Обновление сервера</h2>
   <div class="panel upd">
     <div class="row between">
@@ -1208,6 +1211,11 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <thead><tr><th>Тренер</th><th>Школа / клуб</th><th>Почта</th><th>Статус</th><th>Последний вход</th><th></th></tr></thead>
     <tbody id="trBody"></tbody>
   </table></div>
+  <details class="panel" style="margin-top:14px" id="cnBox">
+    <summary><b>Редакции текстов согласий</b> <span class="small muted" id="cnMeta"></span></summary>
+    <p class="small muted">Каждая заявка и учётная запись тренера хранит отпечаток текста согласия, с которым человек согласился. Здесь — сами тексты по отпечаткам: их можно показать при проверке.</p>
+    <div id="cnList"></div>
+  </details>
 </section>
 
 <!-- СИСТЕМА: журнал -->
@@ -1326,7 +1334,7 @@ function showTab(){
   if (tab === "results" || tab === "timing") loadResults();
   if (tab === "timing") { loadManual(); applyTimingMode(); }
   if (tab !== "timing") document.body.dataset.mode = "";
-  if (tab === "users") { loadUsers(); loadTrainers(); }
+  if (tab === "users") { loadUsers(); loadTrainers(); loadConsents(); }
   if (tab === "prep") renderSite();
   if (tab === "files") renderPub();
   if (tab === "check") { loadCheck(); loadPickup(); }
@@ -1947,7 +1955,7 @@ function renderRegs(){
   $("gBody").innerHTML = list.slice().reverse().map(x => `<tr data-id="${x.id}" class="${x.status==="rejected"?"rej":""}">
     <td class="mono small">${x.id}</td>
     <td><b>${esc(x.last_name)} ${esc(x.first_name)}</b> <span class="small muted">${esc(x.middle_name||"")}</span>
-      <div class="small muted">${esc(x.birth_date.split("-").reverse().join("."))}${x.representative?" · предст.: "+esc(x.representative):""}${x.contact?" · "+esc(x.contact):""}</div>
+      <div class="small muted">${x.anonymized_at ? esc(x.birth_date.slice(0,4)) + " г.р. · заявка обезличена" : esc(x.birth_date.split("-").reverse().join("."))}${x.representative?" · предст.: "+esc(x.representative):""}${x.contact?" · "+esc(x.contact):""}</div>
       ${x.dup_of?`<div class="dupe">повтор заявки №${x.dup_of}</div>`:""}${x.note?`<div class="small muted">${esc(x.note)}</div>`:""}</td>
     <td>${esc(x.sex)}</td>
     <td><select class="cell" data-f="rank" aria-label="Разряд"${x.rank ? "" : ' style="border-color:var(--warn)"'}>${rankOpts(x.rank, "укажите")}</select></td>
@@ -2701,6 +2709,19 @@ const fmtAgo = (s) => s == null ? "—" : s < 60 ? `${s} с назад` : s < 36
 const fmtUp = (s) => { if (s == null) return "—"; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d?d+" дн ":"")+h+" ч "+m+" мин"; };
 const svcState = {active:'<span class="dot ok"></span>работает', inactive:'<span class="dot bad"></span>остановлена', failed:'<span class="dot bad"></span>ошибка', activating:'<span class="dot"></span>запускается'};
 let hwData = null;
+// 5.1: зашифрованная копия базы раз в сутки + проверка восстановления; копия может уходить на другой сервер
+function renderOffsite(o){
+  const ok = (v, yes, no) => v === "ok" ? `<span style="color:var(--ok)">✓ ${yes}</span>` : `<span style="color:var(--track)">✕ ${no}</span>`;
+  if (!o.at) { $("offBox").innerHTML = `<p class="small muted" style="margin:0">Копий пока нет. Их делает служба <b>timing-offsite-backup</b> раз в сутки; первая копия появится после установки этой версии. Ключ шифрования — <span class="mono">/etc/timing-hub/backup.key</span>: сохраните его отдельно от сервера, без него копию не открыть.</p>`; return; }
+  $("offBox").innerHTML = `<div class="kv">
+    <span>Последняя копия</span><b>${esc(o.at.slice(0,16))} · ${esc(o.file || "")} · ${Math.max(1, Math.round((o.size || 0) / 1024))} КБ</b>
+    <span>Проверка восстановления</span><b>${ok(o.check, "пройдена", "не пройдена")} <span class="small muted">${esc(o.check_detail || "")}</span></b>
+    <span>Другой сервер</span><b>${o.remote === "off" ? '<span class="muted">не настроен — копии здесь, скачивайте их на компьютер Федерации</span>' : ok(o.remote, "скопировано на " + esc(o.remote_host || ""), "не удалось: " + esc(o.remote_error || ""))}</b>
+    <span>Хранится копий</span><b>${o.copies} из ${o.keep || 14}</b>
+    <span>Ключ шифрования</span><b class="mono">${esc(o.key_fingerprint || "")} <span class="small muted" style="font-family:var(--body)">— отпечаток; сам ключ /etc/timing-hub/backup.key храните отдельно</span></b>
+  </div>
+  <div class="row" style="margin-top:10px"><a class="btn sm" href="/api/system/backup/latest" download>⬇ Скачать последнюю копию (зашифрована)</a></div>`;
+}
 async function loadHw(){
   try{ hwData = await api("/api/system"); }catch(e){ return; }
   const d = hwData, sv = d.server;
@@ -2729,6 +2750,7 @@ async function loadHw(){
     <div style="margin-top:8px">Диск: свободно ${fmtBytes(sv.disk_free)} из ${fmtBytes(sv.disk_total)}${bar(diskUsed)}</div>
     <div class="kv" style="margin-top:10px"><span>База отметок</span><span>${fmtBytes(sv.db_size)}</span><span>Файлы</span><span>${fmtBytes(sv.files_size)}</span>
     <span>Резервные копии</span><span>${sv.backups ? `${sv.backups} шт., последняя ${esc(sv.backup_last.at)}` : '<span style="color:var(--start)">ещё не было</span>'}</span></div>`;
+  renderOffsite(d.offsite || {});
   $("hwSvc").innerHTML = d.services.map(x => `<div class="svc">${svcState[x.state] || esc(x.state)}<span style="flex:1"></span><b>${esc(x.name)}</b></div>`).join("") || '<div class="small muted">Нет данных — после обновления сервера появятся через минуту.</div>';
   $("hwWiclax").innerHTML = d.wiclax.map(c => `<tr><td class="mono">${esc(c.peer)}</td><td class="mono">${c.port||""}${c.devices?` <span class="small muted">(${esc(c.devices.join(", "))})</span>`:""}</td><td class="mono small">${esc((c.since||"").slice(5,19))}</td><td>${c.sent}</td><td>${c.live?"передача включена":"пауза"}</td></tr>`).join("")
     || '<tr><td colspan="5" class="empty">Wiclax не подключён. В Wiclax: устройство «Общий», 10.66.0.1, порт 9854.</td></tr>';
@@ -3251,6 +3273,13 @@ async function loadTrainers(){
     <td class="small muted">${esc((t.last_login || "не входил").slice(0,16))}</td>
     <td class="uact">${t.is_verified ? "" : '<button class="sm" data-tact="verify">Подтвердить</button> '}<button class="sm" data-tact="${t.active ? "block" : "unblock"}">${t.active ? "Заблокировать" : "Разблокировать"}</button> <button class="sm danger" data-tact="delete">Удалить</button></td></tr>`).join("")
     || '<tr><td colspan="6" class="empty">Тренеров пока нет — отправьте им ссылку на страницу входа.</td></tr>';
+}
+async function loadConsents(){
+  let d; try{ d = await api("/api/consents"); }catch(e){ return; }
+  $("cnMeta").textContent = `· редакций: ${d.consents.length} · заявки обезличиваются через ${d.retention_days} дн. после соревнований · Политика ${d.policy_hash}`;
+  $("cnList").innerHTML = d.consents.map(c => `<div style="border-top:1px solid var(--line);padding:10px 0">
+    <div class="small"><b>${esc(c.kind)}</b> · <span class="mono">${esc(c.hash)}</span> · с ${esc((c.created_at||"").slice(0,10).split("-").reverse().join("."))} · согласий: ${c.used}</div>
+    <div class="small muted" style="white-space:pre-line;margin-top:4px">${esc(c.text)}</div></div>`).join("") || '<p class="small muted">Пока ни одного согласия.</p>';
 }
 $("trBody").addEventListener("click", async (e) => {
   const act = e.target.dataset.tact, tr = e.target.closest("tr"); if (!act || !tr) return;
