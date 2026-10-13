@@ -42,7 +42,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "2.8"
+VERSION = "3.0.0"
+BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
 
@@ -2639,6 +2640,11 @@ class Hub:
                 out.append(item)
             last = out[-1]["id"] if out else (since if since > 0 else self.store.last_id())
             return ok({"last_id": last, "reads": out})
+        if path == "/api/default-rules" and method == "GET":
+            # возрастные группы по образцу положений ВФЛА для года соревнований (для мастера создания)
+            y = str(qs.get("year", ""))
+            ev0 = {"date": f"{y}-06-01"} if y.isdigit() and 1990 <= int(y) <= 2100 else None
+            return ok({"rules": self.default_rules(ev0), "year": int(y) if ev0 else now_local().year})
         if path == "/api/calendar":
             if method == "POST" and data.get("import"):
                 out = self.import_calendar(int(data.get("year") or now_local().year), who)
@@ -3829,6 +3835,7 @@ class Hub:
         sv = out["server"]
         sv["hostname"] = socket.gethostname()
         sv["version"] = VERSION
+        sv["build_date"] = BUILD_DATE
         sv["python"] = sys.version.split()[0]
         sv["time"] = fmt_db(now_local())[:19]
         off = -time.altzone if time.localtime().tm_isdst > 0 else -time.timezone
@@ -4071,7 +4078,7 @@ class Hub:
             log_tail = open(os.path.join(d, "last.log"), encoding="utf-8", errors="replace").read()[-4000:]
         except OSError:
             pass
-        return {"version": VERSION, "pending": os.path.exists(os.path.join(d, "incoming.zip")),
+        return {"version": VERSION, "build_date": BUILD_DATE, "pending": os.path.exists(os.path.join(d, "incoming.zip")),
                 "helper": os.path.isdir(d), "status": st, "log": log_tail}
 
     def receive_update(self, body: bytes, actor: str) -> tuple:
@@ -5620,6 +5627,7 @@ class Hub:
                     "queue": c.queue.qsize(), "last_commands": list(c.commands)} for c in self.wiclax_clients]
         st = {
             "version": VERSION,
+            "build_date": BUILD_DATE,
             "server_time": t(now_local()),
             "server_epoch_ms": int(time.time() * 1000),
             "timezone": time.strftime("%Z %z"),

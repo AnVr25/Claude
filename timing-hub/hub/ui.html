@@ -311,6 +311,44 @@ td.res{font:600 18px var(--head)}
 .datalinks a{color:var(--ink);text-underline-offset:3px}
 
 /* формат соревнования, сайт, ввод результатов, пользователи */
+/* 3.0: Мастер подбора соревнования, панели направлений */
+.welcome{max-width:880px;margin:4vh auto 0;text-align:center}
+.wl-k{font:600 14px var(--head);letter-spacing:.8px;text-transform:uppercase;color:var(--track);margin:0 0 8px}
+.welcome h1{font-size:40px;margin:0 0 8px}
+.wl-lead{color:var(--muted);font-size:17px;margin:0 auto 24px;max-width:560px}
+.wl-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;text-align:left}
+.wl-card{display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:100%;min-width:0;white-space:normal;box-sizing:border-box;min-height:260px;padding:26px 24px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:400;cursor:pointer;box-shadow:0 1px 2px rgba(11,29,55,.06);transition:border-color .15s,box-shadow .15s,transform .15s}
+.wl-card:hover{border-color:var(--track);box-shadow:0 4px 18px rgba(11,29,55,.12);transform:translateY(-2px)}
+.wl-card:focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
+.wl-ic{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:50%;background:#E71E250F;color:var(--track);margin-bottom:6px}
+.wl-card b{font:600 24px/1.15 var(--head)}
+.wl-sub{font:600 14px var(--head);letter-spacing:.5px;text-transform:uppercase;color:var(--track)}
+.wl-card small{font-size:15px;color:var(--muted);line-height:1.4}
+.wl-go{margin-top:auto;font:600 16px var(--head);color:var(--track)}
+.wl-more{margin:22px 0 0;font-size:15px}
+.dir-chip{display:inline-flex;align-items:center;gap:8px;margin:0 0 6px;font:600 13px var(--head);letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.dir-chip b{color:var(--track)}
+.dir-chip a{font-weight:400;text-transform:none;letter-spacing:0}
+.ipico-block{border-left:4px solid var(--track);margin-bottom:16px}
+.ib-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.ib-head h2{font-size:22px;margin:0}
+.ib-st{font:600 14px var(--head);padding:6px 12px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
+.ib-st.ok{background:#17905A1A;color:var(--ok)}.ib-st.warn{background:#F3481D1A;color:#C23A14}.ib-st.bad{background:#E71E251A;color:#C8161C}
+.ib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.ib-it{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);color:inherit;text-decoration:none;min-height:64px}
+.ib-it:hover{border-color:var(--track)}
+.ib-it b{font:600 17px var(--head)}.ib-it small{color:var(--muted);font-size:13px}
+.stadium-block{margin-bottom:16px}
+.stadium-block h2{font-size:22px;margin:0}
+.sb-steps{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.sb-steps span{font-size:14px;padding:6px 12px;border-radius:999px;background:var(--ice);border:1px solid var(--line);color:var(--muted)}
+.ipico-nav{display:none;flex-direction:column;justify-content:center;padding:4px 12px;border-radius:var(--r);background:var(--track);color:#fff;text-decoration:none;line-height:1.1;min-height:40px;white-space:nowrap}
+.ipico-nav b{font:600 14px var(--head);letter-spacing:.3px}.ipico-nav small{font-size:11px;opacity:.9}
+.ipico-nav:hover{background:#C8161C}
+body[data-dir=ipico]:not([data-view=welcome]):not([data-adm="0"]) .ipico-nav{display:flex}
+body[data-dir=stadium] .health,body[data-dir=stadium] .ipico-only,body[data-dir=stadium] #hVpn{display:none!important}
+body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!important}
+@media (max-width:640px){.wl-cards{grid-template-columns:1fr}.wl-card{min-height:0}.welcome h1{font-size:30px}.ib-grid{grid-template-columns:1fr}.ipico-nav small{display:none}}
 .wiz{max-width:760px;margin-bottom:18px;padding:20px 22px}
 .wz-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .wz-step{font:600 14px var(--head);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
@@ -410,10 +448,10 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body data-view="home">
+<body data-view="welcome">
 
 <header class="bar">
-  <a class="logos" href="#home" title="Все соревнования">
+  <a class="logos" href="#welcome" title="Мастер подбора соревнования">
     <img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалин — маяк России">
     <img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО">
     <span class="lg-sep"></span>
@@ -427,7 +465,8 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     </button>
     <div class="menu" id="evMenu"></div>
   </div>
-  <div class="health">
+  <a class="ipico-nav" id="ipicoNav" href="#hw" title="Ридеры, порты, Wiclax, проверка чипов"><b>Оборудование IPICO</b><small id="ipicoNavSt">ридеры</small></a>
+  <div class="health" id="healthBar">
     <a class="h" id="hReaders" href="#hw" title="Ридеры на связи">Ридеры —</a>
     <a class="h" id="hWiclax" href="#hw" title="Подключение Wiclax">Wiclax</a>
     <a class="h" id="hVpn" href="#hw" title="Устройства в VPN">VPN —</a>
@@ -469,15 +508,55 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <main>
 
-<!-- ГЛАВНАЯ: соревнования и архив -->
+<!-- СТАРТ: Мастер подбора соревнования -->
+<section id="tab-welcome" class="hide">
+  <div class="welcome">
+    <p class="wl-k">Мастер подбора соревнования</p>
+    <h1 id="wlTitle">Что будем проводить?</h1>
+    <p class="wl-lead">Выберите направление — откроется панель с нужными инструментами. Сменить направление можно в любой момент.</p>
+    <div class="wl-cards" role="group" aria-label="Направление работы">
+      <button type="button" class="wl-card" data-dir="ipico" id="wlIpico">
+        <span class="wl-ic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c0-6 4-11 8-11s8 5 8 11"/><path d="M8 18c0-3 2-6 4-6s4 3 4 6"/><path d="M3 20h18"/></svg></span>
+        <b>Массовый забег с хронометражем</b>
+        <span class="wl-sub">Система IPICO</span>
+        <small>Кроссы, полумарафоны, городские забеги. Чипы и ридеры на финише, автоматический результат, Wiclax.</small>
+        <span class="wl-go">Выбрать →</span>
+      </button>
+      <button type="button" class="wl-card" data-dir="stadium" id="wlStadium">
+        <span class="wl-ic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="5"/><rect x="7" y="10" width="10" height="4" rx="2"/></svg></span>
+        <b>Соревнования на стадионе</b>
+        <span class="wl-sub">Трек / Лёгкая атлетика</span>
+        <small>Манеж и стадион. Дисциплины, возрастные группы, онлайн-заявки; результаты ведёт судья или секретарь.</small>
+        <span class="wl-go">Выбрать →</span>
+      </button>
+    </div>
+    <p class="wl-more"><a href="#home" id="wlAll">Показать все соревнования и архив</a></p>
+  </div>
+</section>
+
+<!-- ГЛАВНАЯ: панель направления, соревнования и архив -->
 <section id="tab-home" class="hide">
   <div class="pagehead">
-    <div><h1>Соревнования</h1><p class="lead">Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.</p></div>
+    <div><p class="dir-chip" id="dirChip"></p><h1 id="homeTitle">Соревнования</h1><p class="lead" id="homeLead">Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.</p></div>
     <div class="row"><button class="hide" id="calImport" title="Перенести календарь федерации 2026 года с сайта fla65.ru">Загрузить календарь ФЛАСО 2026</button><button class="primary" id="btnNew">Новое соревнование</button></div>
+  </div>
+  <div class="panel ipico-block hide" id="ipicoBlock">
+    <div class="ib-head"><div><h2>Настройка оборудования IPICO</h2><p class="small muted" style="margin:2px 0 0">Всё, что нужно проверить до старта: ридеры, порты, Wiclax и связь с чипами.</p></div><span class="ib-st" id="ibSt">—</span></div>
+    <div class="ib-grid">
+      <a href="#hw" class="ib-it adm"><b>Ридеры и порты</b><small id="ibReaders">подключение ридеров к серверу</small></a>
+      <a href="#hw" class="ib-it adm"><b>Wiclax</b><small id="ibWiclax">передача отметок в Wiclax</small></a>
+      <a href="#check" class="ib-it" id="ibChips"><b>Проверка чипов</b><small>проносите чип над ковриком — экран покажет, чей он</small></a>
+    </div>
+  </div>
+  <div class="panel stadium-block hide" id="stadiumBlock">
+    <h2>Мастер формирования соревнования</h2>
+    <p class="small muted" style="margin:2px 0 10px">Пять коротких шагов: как ведём время, название и дата, дисциплины, возрастные группы, онлайн-заявки.</p>
+    <div class="sb-steps"><span>1 Хронометраж</span><span>2 Название и дата</span><span>3 Дисциплины</span><span>4 Возрастные группы</span><span>5 Онлайн-заявки</span></div>
+    <button class="primary" id="sbStart">Создать соревнование по шагам</button>
   </div>
   <div id="evFormHome"></div>
   <div class="panel wiz hide" id="wizard" role="region" aria-labelledby="wzTitle">
-    <div class="wz-top"><span class="wz-step" id="wzStep">Шаг 1 из 3</span><div class="wz-dots"><i></i><i></i><i></i></div><button class="wz-x" id="wzClose" aria-label="Закрыть" title="Закрыть">✕</button></div>
+    <div class="wz-top"><span class="wz-step" id="wzStep">Шаг 1</span><div class="wz-dots" id="wzDots"></div><button class="wz-x" id="wzClose" aria-label="Закрыть" title="Закрыть">✕</button></div>
     <div id="wzBody"></div>
     <div class="row wz-nav"><button id="wzBack">← Назад</button><span class="spacer"></span><button class="primary" id="wzNext">Далее →</button></div>
     <p class="small muted wz-all"><a href="#" id="wzFull">Все параметры сразу</a> — для опытных: хронометраж, судьи, командный зачёт и другое.</p>
@@ -1023,14 +1102,40 @@ const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">
 
 /* ---------- навигация: главная, этапы соревнования, система ---------- */
 const STEPS = ["prep","reg","check","timing","results","files"];
-const ALIAS = {overview:"home", events:"home", archive:"home", "":"home"};
-function tabName(){ const t = (location.hash||"#home").slice(1); return ALIAS[t] ?? t; }
+const ALIAS = {overview:"home", events:"home", archive:"home", "":"welcome"};
+function tabName(){ const t = (location.hash||"#welcome").slice(1); return ALIAS[t] ?? t; }
+/* Направление работы (3.0): «ipico» — массовый забег с чипами, «stadium» — стадион. Запоминается в браузере. */
+let DIR = store.get("ss.dir"); if (DIR !== "ipico" && DIR !== "stadium") DIR = null;
+let dirAll = false;
+const DIR_NAME = {ipico:"Массовый забег · IPICO", stadium:"Стадион · лёгкая атлетика"};
+const inDir = (e) => !DIR || dirAll || (DIR === "stadium" ? e.kind === "stadium" : e.kind !== "stadium");
+function setDir(d){ DIR = d; dirAll = false; store.set("ss.dir", d || ""); applyDir(); }
+function applyDir(){ document.body.dataset.dir = DIR || ""; }
+function renderHome(){
+  const filt = DIR && !dirAll;
+  $("dirChip").innerHTML = DIR ? `Направление: <b>${esc(DIR_NAME[DIR])}</b> · <a href="#welcome">сменить</a> · ${filt ? '<a href="#home" id="dirAllLink">показать все</a>' : '<a href="#home" id="dirOnlyLink">только это направление</a>'}` : "";
+  $("homeTitle").textContent = !filt ? "Соревнования" : DIR === "ipico" ? "Массовые забеги" : "Соревнования на стадионе";
+  $("homeLead").textContent = DIR === "ipico" && filt ? "Сначала проверьте оборудование, затем выберите старт — откроется нужный этап." : DIR === "stadium" && filt ? "Создайте соревнование по шагам или выберите готовое — откроется нужный этап." : "Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.";
+  $("ipicoBlock").classList.toggle("hide", DIR !== "ipico");
+  $("stadiumBlock").classList.toggle("hide", DIR !== "stadium");
+  const lk = $("dirAllLink") || $("dirOnlyLink"); if (lk) lk.onclick = (e) => { e.preventDefault(); dirAll = !dirAll; renderHome(); renderEvents(); renderArchive(); };
+}
+function updateIpico(){
+  const r = $("hReaders"), w = $("hWiclax"), cls = (r.className.match(/\b(ok|warn|bad)\b/) || [])[1] || "";
+  $("ibSt").textContent = r.textContent; $("ibSt").className = "ib-st " + cls; $("ipicoNavSt").textContent = r.textContent;
+  $("ibReaders").textContent = /\d+\/\d+/.test(r.textContent) ? "на связи: " + r.textContent.replace(/\D*(\d+\/\d+)\D*/, "$1") : "подключение ридеров к серверу";
+  $("ibWiclax").textContent = w.classList.contains("ok") ? "подключён, отметки передаются" : "пока не подключён";
+}
+$("ibChips").onclick = (e) => { if (!curEvent()) { e.preventDefault(); toast("Сначала выберите соревнование в списке ниже"); } };
+document.querySelectorAll(".wl-card").forEach(c => c.onclick = () => { setDir(c.dataset.dir); location.hash = "#home"; });
+$("wlAll").onclick = () => { if (DIR) dirAll = true; };
+$("sbStart").onclick = () => wzOpen();
 function showTab(){
   let tab = tabName();
   if (!document.getElementById("tab-"+tab)) tab = "home";
   if ((tab === "hw" || tab === "users") && ME && ME.role !== "admin") tab = "log";
   if (STEPS.includes(tab) && !curEvent()) tab = "home";
-  document.body.dataset.view = tab;
+  document.body.dataset.view = tab; applyDir();
   document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
   document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === tab));
   const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
@@ -1055,6 +1160,7 @@ function showTab(){
 window.addEventListener("hashchange", () => { showTab(); window.scrollTo(0, 0); });
 function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? "timing" : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
 function openEvent(id){
+  const e0 = events.find(x => x.id === id); if (e0) setDir(e0.kind === "stadium" ? "stadium" : "ipico");
   selectEvent(id);
   const t = tabName(), step = STEPS.includes(t) ? t : defaultStep(curEvent());
   if (location.hash !== "#"+step) location.hash = "#"+step; else showTab();
@@ -1073,9 +1179,10 @@ $("scrBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("scrMenu"); };
 document.addEventListener("click", (e) => { if (!e.target.closest(".menu") && !e.target.closest(".more")) closeMenus(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
 $("evMenu").addEventListener("click", (e) => {
+  if (e.target.closest('a[href="#home"]') && DIR) dirAll = true;
   const b = e.target.closest("[data-id],[data-new]"); if (!b) return;
   closeMenus();
-  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => openForm(null, "home"), 0); return; }
+  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => wzOpen(), 0); return; }
   openEvent(+b.dataset.id);
 });
 const MON_S = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
@@ -1093,7 +1200,7 @@ async function loadStatus(){
     $("stReads").textContent = "· всего в базе " + st.totals.reads;
     const live = st.sources.filter(s => s.mode !== "http"), on = live.filter(s=>s.connected).length;
     setPill("hReaders", `Ридеры ${on}/${live.length}`, !live.length ? "" : on === live.length ? "ok" : on ? "warn" : "bad");
-    setPill("hWiclax", "Wiclax", st.wiclax_clients.length ? "ok" : "");
+    setPill("hWiclax", "Wiclax", st.wiclax_clients.length ? "ok" : ""); updateIpico();
     if (tabName()==="hw") loadReaders();
   }catch(e){ console.warn(e); }
 }
@@ -1138,18 +1245,19 @@ function evRow(e, td){
   </div>`;
 }
 function renderEvents(){
-  const td = localDate(), active = events.filter(e => !e.archived);
+  const td = localDate(), active = events.filter(e => !e.archived && inDir(e));
+  renderHome();
   const now = active.filter(e => e.status === "running" || (e.date && e.date <= td && (e.date_end || e.date) >= td));
   const soon = active.filter(e => !now.includes(e) && e.date && e.date > td).sort((a,b) => a.date.localeCompare(b.date));
   const rest = active.filter(e => !now.includes(e) && !soon.includes(e));
   const grp = (t, l) => l.length ? `<h2 class="group">${t}</h2>` + l.map(e => evRow(e, td)).join("") : "";
   $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Прошли — ещё не в архиве", rest)
-    || `<div class="panel empty">${events.length ? "Все соревнования в архиве. Создайте новое или верните из архива." : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
+    || `<div class="panel empty">${events.length ? (DIR && !dirAll && events.some(e => !e.archived) ? "В этом направлении соревнований пока нет — создайте новое кнопкой выше или нажмите «показать все»." : "Все соревнования в архиве. Создайте новое или верните из архива.") : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
   $("calImport").classList.toggle("hide", events.some(e => e.pub_site) || !(ME && ME.role !== "judge"));
   const ev = curEvent();
   $("evBtnName").textContent = ev ? ev.name : "Выберите соревнование";
   $("evBtnMeta").textContent = ev ? ([fmtDate(ev.date), ev.place].filter(Boolean).join(" · ") || "без даты") + (ev.archived ? " · архив" : "") : "все соревнования и архив";
-  const mlist = active.slice(); if (ev && ev.archived) mlist.unshift(ev);
+  const mlist = events.filter(e => !e.archived); if (ev && ev.archived) mlist.unshift(ev);
   $("evMenu").innerHTML = mlist.map(e => `<button class="mi ${e.id===curId?"sel":""}" data-id="${e.id}"><b class="${e.status==="running"?"live":""}">${esc(e.name)}</b><small>${esc([fmtDate(e.date), e.place].filter(Boolean).join(" · ") || "без даты")}${e.archived?" · архив":""}</small></button>`).join("")
     + `${mlist.length?"<hr>":""}<a href="#home"><b>Все соревнования и архив</b></a><button class="mi" data-new="1"><b>+ Новое соревнование</b></button>`;
   $("lnkJudge").href = ev ? "/judge?event="+ev.id : "/judge";
@@ -1292,58 +1400,96 @@ $("fFinish").onchange = () => {
   else $("fFinish").value="";
 };
 $("btnNew").onclick = () => wzOpen();
-/* ---------- мастер «Новое соревнование»: 3 шага ---------- */
+/* ---------- мастер «Новое соревнование»: шаги зависят от направления ---------- */
 const WZ_TYPES = [
   {id:"mass", b:"Забег на улице", small:"Кроссы, полумарафоны, массовые старты. Время считают чипы и ридеры на финише.", kind:"mass", timing:"chips", dists:["1 км","3 км","5 км","10 км","21,1 км","42,2 км"]},
   {id:"judge", b:"Стадион: судья с телефоном", small:"Манеж и стадион. Судья на финише нажимает на телефоне — время идёт само.", kind:"stadium", timing:"judge", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]},
   {id:"manual", b:"Стадион: результаты впишем вручную", small:"Секундомер или готовый протокол. Секретарь вводит результаты после забега.", kind:"stadium", timing:"manual", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]}];
-const wz = {step:1, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true};
+const WZ_TITLES = {type:"Как ведём время", base:"Название и дата", dists:"Дисциплины", groups:"Возрастные группы", reg:"Онлайн-заявки"};
+const wz = {i:0, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true};
+function wzType(){ return WZ_TYPES.find(t => t.id === wz.type); }
+function wzTypes(){ return DIR === "stadium" ? WZ_TYPES.filter(t => t.kind === "stadium") : WZ_TYPES; }
+function wzFlow(){
+  const t = wzType();
+  if (!t) return ["type", "base", "dists"];
+  if (t.kind === "mass") return DIR === "ipico" ? ["base", "dists"] : ["type", "base", "dists"];
+  return ["type", "base", "dists", "groups", "reg"];
+}
 function wzOpen(){
-  Object.assign(wz, {step:1, type:null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true});
-  $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wz.focus = true; wzDraw();
+  Object.assign(wz, {i:0, type:DIR === "ipico" ? "mass" : null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
+  $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wzDraw();
   $("wizard").scrollIntoView({block:"nearest"});
 }
 function wzClose(){ $("wizard").classList.add("hide"); }
-function wzType(){ return WZ_TYPES.find(t => t.id === wz.type); }
-function wzDraw(){
-  const b = $("wzBody"), n = wz.step;
-  $("wzStep").textContent = `Шаг ${n} из 3`;
-  document.querySelectorAll(".wz-dots i").forEach((d, i) => d.classList.toggle("on", i < n));
-  $("wzBack").classList.toggle("hide", n === 1); $("wzNext").textContent = n === 3 ? "Создать соревнование" : "Далее →";
-  if (n === 1) b.innerHTML = `<h2 id="wzTitle">Что за соревнование?</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
-    <div class="wz-cards" role="radiogroup" aria-label="Тип соревнования">${WZ_TYPES.map(t => `<button type="button" role="radio" aria-checked="${wz.type === t.id}" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
-  if (n === 2) b.innerHTML = `<h2 id="wzTitle">Как называется и когда проходит?</h2><p class="wz-sub">Так увидят участники на сайте и в протоколе.</p>
-    <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="Кубок Сахалинской области" value="${esc(wz.name)}"></div>
+async function wzLoadRules(){
+  const y = (wz.date || "").slice(0, 4) || String(new Date().getFullYear());
+  if (wz.rulesYear === y && wz.rules) return;
+  try{ const r = await api("/api/default-rules?year=" + y); wz.rules = r.rules.split("\n").filter(Boolean).map(l => { const p = l.split(";"); return {line:l, name:p[0], sex:p[1]}; }); }
+  catch(e){ wz.rules = []; }
+  wz.rulesYear = y; wz.sel = wz.rules.map((_, i) => i);
+}
+function wzPairs(){   // правила идут парами «мужской, женский» — выбираем группу целиком
+  const out = []; for (let k = 0; k + 1 < (wz.rules || []).length; k += 2) { const m = wz.rules[k], f = wz.rules[k + 1];
+    out.push({idx:[k, k + 1], label:m.name.replace(/^(\S+)/, "$1 / " + f.name.split(" ")[0])}); }
+  return out;
+}
+async function wzDraw(){
+  const flow = wzFlow(), id = flow[Math.min(wz.i, flow.length - 1)], n = wz.i + 1, b = $("wzBody");
+  $("wzStep").textContent = wz.type ? `Шаг ${n} из ${flow.length}` : `Шаг ${n}`;
+  $("wzDots").innerHTML = flow.map((_, k) => `<i class="${k < n ? "on" : ""}"></i>`).join("");
+  $("wzBack").classList.toggle("hide", wz.i === 0); $("wzNext").textContent = n === flow.length && wz.type ? "Создать соревнование" : "Далее →";
+  if (id === "type") b.innerHTML = `<h2 id="wzTitle">${DIR === "stadium" ? "Как ведём время?" : "Что за соревнование?"}</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
+    <div class="wz-cards" role="radiogroup" aria-label="Тип соревнования">${wzTypes().map(t => `<button type="button" role="radio" aria-checked="${wz.type === t.id}" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
+  if (id === "base") b.innerHTML = `<h2 id="wzTitle">Как называется и когда проходит?</h2><p class="wz-sub">Так увидят участники на сайте и в протоколе.</p>
+    <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="${wzType() && wzType().kind === "mass" ? "Ночной забег по набережной" : "Кубок Сахалинской области"}" value="${esc(wz.name)}"></div>
     <div><label for="wzDate">Дата *</label><input id="wzDate" type="date" value="${esc(wz.date)}"></div>
     <div><label for="wzCity">Город</label><input id="wzCity" value="${esc(wz.city)}"></div>
     <div class="full"><label for="wzPlace">Где проходит <span class="muted">(необязательно)</span></label><input id="wzPlace" list="venueList" placeholder="Легкоатлетический манеж" value="${esc(wz.place)}"></div></div><div class="wz-err" id="wzErr"></div>`;
-  if (n === 3) { const t = wzType();
-    b.innerHTML = `<h2 id="wzTitle">Какие дистанции?</h2><p class="wz-sub">Нажмите на нужные — они попадут в форму регистрации. Своих можно дописать ниже.</p>
+  if (id === "dists") { const t = wzType(), last = flow[flow.length - 1] === "dists";
+    b.innerHTML = `<h2 id="wzTitle">${t.kind === "mass" ? "Какие дистанции?" : "Какие дисциплины в программе?"}</h2><p class="wz-sub">Нажмите на нужные — они попадут в форму регистрации. Своих можно дописать ниже.</p>
     <div class="wz-chips">${t.dists.map(d => `<button type="button" class="wz-chip${wz.dists.includes(d) ? " on" : ""}" data-d="${esc(d)}" aria-pressed="${wz.dists.includes(d)}">${esc(d)}</button>`).join("")}</div>
-    <label for="wzExtra">Свои дистанции <span class="muted">— по одной в строке</span></label><textarea id="wzExtra" style="min-height:64px" placeholder="400 м с/б">${esc(wz.extra)}</textarea>
-    <label class="check" style="margin-top:12px"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Сразу открыть приём заявок и показать на сайте fla65.ru</label>
-    <p class="small muted" style="margin:2px 0 0">Лимит мест, номера и категории настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
-  if (wz.focus) { const f = n === 1 ? (b.querySelector(".wz-card.on") || b.querySelector(".wz-card")) : n === 2 ? $("wzName") : (b.querySelector(".wz-chip.on") || b.querySelector(".wz-chip")); f && f.focus({preventScroll:true}); }
+    <label for="wzExtra">Свои <span class="muted">— по одной в строке</span></label><textarea id="wzExtra" style="min-height:64px" placeholder="400 м с/б">${esc(wz.extra)}</textarea>
+    ${last ? `<label class="check" style="margin-top:12px"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Сразу открыть приём заявок и показать на сайте fla65.ru</label>` : ""}
+    <p class="small muted" style="margin:2px 0 0">Лимит мест, номера и эстафеты настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
+  if (id === "groups") { b.innerHTML = '<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Загружаю…</p>'; await wzLoadRules(); const pairs = wzPairs();
+    b.innerHTML = `<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Группы по годам рождения для ${esc(wz.rulesYear)} года, как в положениях ВФЛА. Уберите лишние.</p>
+    <div class="wz-chips">${pairs.map((p, k) => `<button type="button" class="wz-chip${p.idx.every(i => wz.sel.includes(i)) ? " on" : ""}" data-g="${k}" aria-pressed="${p.idx.every(i => wz.sel.includes(i))}">${esc(p.label)}</button>`).join("")}</div>
+    <label for="wzRules">Свои категории <span class="muted">— название; пол; год рождения с; по</span></label><textarea id="wzRules" style="min-height:64px" placeholder="Ветераны;М;;1976">${esc(wz.customRules)}</textarea>
+    <p class="small muted" style="margin:2px 0 0">Участник попадёт в группу по году рождения и полу автоматически. Без групп можно обойтись и добавить их позже на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
+  if (id === "reg") b.innerHTML = `<h2 id="wzTitle">Онлайн-заявки</h2><p class="wz-sub">Участники и тренеры запишутся сами по ссылке. Открыть и закрыть приём можно в любой момент.</p>
+    <label class="check"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Открыть приём заявок сейчас</label>
+    <div class="wz-form" style="margin-top:8px"><div><label for="wzDeadline">Принимать до <span class="muted">(необязательно)</span></label><input id="wzDeadline" type="datetime-local" value="${esc(wz.deadline)}"></div></div>
+    <label class="check" style="margin-top:8px"><input type="checkbox" id="wzSite"${wz.site ? " checked" : ""}> Показать соревнование в календаре на fla65.ru</label>
+    <div class="wz-err" id="wzErr"></div>`;
+  if (wz.focus) { const f = id === "type" ? (b.querySelector(".wz-card.on") || b.querySelector(".wz-card")) : id === "base" ? $("wzName") : id === "reg" ? $("wzOpen") : (b.querySelector(".wz-chip.on") || b.querySelector(".wz-chip")); f && f.focus({preventScroll:true}); }
   wz.focus = true;
 }
 function wzRead(){
-  if (wz.step === 2) { wz.name = $("wzName").value.trim(); wz.date = $("wzDate").value; wz.city = $("wzCity").value.trim(); wz.place = $("wzPlace").value.trim(); }
-  if (wz.step === 3) { wz.extra = $("wzExtra").value; wz.open = $("wzOpen").checked; }
+  const id = wzFlow()[wz.i];
+  if (id === "base") { wz.name = $("wzName").value.trim(); wz.date = $("wzDate").value; wz.city = $("wzCity").value.trim(); wz.place = $("wzPlace").value.trim(); }
+  if (id === "dists") { wz.extra = $("wzExtra").value; if ($("wzOpen")) wz.open = $("wzOpen").checked; }
+  if (id === "groups" && $("wzRules")) wz.customRules = $("wzRules").value;
+  if (id === "reg") { wz.open = $("wzOpen").checked; wz.deadline = $("wzDeadline").value; wz.site = $("wzSite").checked; }
 }
 $("wzBody").addEventListener("click", (e) => {
-  const c = e.target.closest("[data-t]"); if (c) { wz.type = c.dataset.t; wz.dists = []; wz.focus = false; wzDraw(); $("wzBody").querySelector(`[data-t="${wz.type}"]`).focus(); return; }
-  const d = e.target.closest("[data-d]"); if (d) { const v = d.dataset.d; wz.dists = wz.dists.includes(v) ? wz.dists.filter(x => x !== v) : [...wz.dists, v]; wz.extra = $("wzExtra").value; wz.focus = false; wzDraw(); [...$("wzBody").querySelectorAll("[data-d]")].find(x => x.dataset.d === v).focus(); }
+  const c = e.target.closest("[data-t]"); if (c) { wz.type = c.dataset.t; wz.dists = []; wz.focus = false; wzDraw(); const el = $("wzBody").querySelector(`[data-t="${wz.type}"]`); el && el.focus(); return; }
+  const d = e.target.closest("[data-d]"); if (d) { const v = d.dataset.d; wz.dists = wz.dists.includes(v) ? wz.dists.filter(x => x !== v) : [...wz.dists, v]; wz.extra = $("wzExtra").value; if ($("wzOpen")) wz.open = $("wzOpen").checked; wz.focus = false; wzDraw(); [...$("wzBody").querySelectorAll("[data-d]")].find(x => x.dataset.d === v).focus(); return; }
+  const g = e.target.closest("[data-g]"); if (g) { const p = wzPairs()[+g.dataset.g], on = p.idx.every(i => wz.sel.includes(i));
+    wz.sel = on ? wz.sel.filter(i => !p.idx.includes(i)) : [...new Set([...wz.sel, ...p.idx])]; wz.customRules = $("wzRules").value; g.classList.toggle("on", !on); g.setAttribute("aria-pressed", String(!on)); }
 });
-$("wzBack").onclick = () => { wzRead(); wz.step = Math.max(1, wz.step - 1); wzDraw(); };
+$("wzBack").onclick = () => { wzRead(); wz.i = Math.max(0, wz.i - 1); wzDraw(); };
 $("wzClose").onclick = wzClose;
 $("wzFull").onclick = (e) => { e.preventDefault(); wzClose(); openForm(null, "home"); };
-$("wzBody").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); $("wzNext").click(); } });
+$("wzBody").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "checkbox") { e.preventDefault(); $("wzNext").click(); } });
 $("wizard").addEventListener("keydown", (e) => { if (e.key === "Escape") wzClose(); });
 $("wzNext").onclick = async () => {
   wzRead(); const err = (m, id) => { $("wzErr").textContent = m; if (id && $(id)) $(id).focus(); };
-  if (wz.step === 1) { if (!wz.type) return err("Выберите вариант — это нужно, чтобы правильно считать время"); wz.step = 2; return wzDraw(); }
-  if (wz.step === 2) { if (!wz.name) return err("Напишите название соревнования", "wzName"); if (!wz.date) return err("Укажите дату", "wzDate"); wz.step = 3; return wzDraw(); }
-  const dists = [...wz.dists, ...wz.extra.split("\n").map(x => x.trim()).filter(Boolean)].filter((x, i, a) => a.indexOf(x) === i);
+  const flow = wzFlow(), id = flow[wz.i];
+  if (id === "type" && !wz.type) return err("Выберите вариант — это нужно, чтобы правильно считать время");
+  if (id === "base") { if (!wz.name) return err("Напишите название соревнования", "wzName"); if (!wz.date) return err("Укажите дату", "wzDate"); }
+  const dists = [...wz.dists, ...wz.extra.split("\n").map(x => x.trim()).filter(Boolean)].filter((x, k, a) => a.indexOf(x) === k);
+  if (id === "dists" && flow[flow.length - 1] !== "dists" && !dists.length) return err("Выберите хотя бы одну дисциплину — иначе участникам нечего выбирать");
+  if (wz.i < flow.length - 1) { wz.i++; return wzDraw(); }
   if (wz.open && !dists.length) return err("Выберите хотя бы одну дистанцию — иначе участникам нечего выбирать. Или уберите галочку про приём заявок");
   const t = wzType(); $("wzNext").disabled = true;
   try{
@@ -1351,7 +1497,11 @@ $("wzNext").onclick = async () => {
       push_wiclax:t.timing === "chips", heats_sequential:t.timing === "judge", organizer:(events.find(x => x.organizer) || {}).organizer || ""};
     const ev = await api("/api/events", body);
     const upd = {reg_distances:dists.join("\n")};
-    if (wz.open) Object.assign(upd, {reg_open:true, pub_site:true, level:t.kind === "mass" ? "mass" : "region"});
+    const rules = [...(wz.rules || []).filter((_, k) => (wz.sel || []).includes(k)).map(r => r.line), ...wz.customRules.split("\n").map(x => x.trim()).filter(Boolean)];
+    if (rules.length) upd.reg_rules = rules.join("\n");
+    if (wz.open) Object.assign(upd, {reg_open:true, pub_site:wz.site, level:t.kind === "mass" ? "mass" : "region"});
+    else if (flow.includes("reg")) upd.pub_site = wz.site;
+    if (wz.deadline) upd.reg_deadline = wz.deadline;
     await api(`/api/events/${ev.id}`, upd);
     wzClose(); loadEvents._sig = null; await loadEvents(); selectEvent(ev.id);
     toast(wz.open ? "Соревнование создано, приём заявок открыт" : "Соревнование создано"); location.hash = "#reg";
@@ -2035,7 +2185,7 @@ function rdPointOpts(cur){
 let upTimer = null;
 async function loadUpdate(){
   let u; try{ u = await api("/api/system/update"); }catch(e){ return; }
-  $("upVer").textContent = "v" + u.version;
+  $("upVer").textContent = "v" + u.version + (u.build_date ? " · сборка " + u.build_date.split("-").reverse().join(".") : "");
   const st = u.status || {};
   const names = {ok:"✅ Готово", running:"⏳ Устанавливаю…", failed:"❌ Ошибка", rolledback:"↩ Откат"};
   let html = "";
@@ -2216,7 +2366,7 @@ $("wxPorts").addEventListener("click", async e => {
 const MONTHS = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 let archFiles = {};
 async function renderArchive(){
-  const arch = events.filter(e => e.archived);
+  const arch = events.filter(e => e.archived && inDir(e));
   const years = [...new Set(arch.map(e => (e.date||"").slice(0,4) || "без даты"))].sort().reverse();
   const ysel = $("aYear"), prev = ysel.value;
   ysel.innerHTML = '<option value="">все годы</option>' + years.map(y => `<option>${esc(y)}</option>`).join("");
@@ -2392,7 +2542,7 @@ async function loadMe(){
   try{ ME = await api("/api/me"); }catch(e){ ME = {login:"?", role:"admin", role_name:""}; }
   $("usrBtn").textContent = ME.login + " ▾";
   $("usrRole").textContent = [ME.name, ME.role_name].filter(Boolean).join(" · ");
-  const adm = ME.role === "admin";
+  const adm = ME.role === "admin"; document.body.dataset.adm = adm ? "1" : "0";
   document.querySelectorAll(".adm").forEach(x => x.classList.toggle("hide", !adm));
   $("hVpn").classList.toggle("hide", !adm);
   $("gear").href = adm ? "#hw" : "#log";

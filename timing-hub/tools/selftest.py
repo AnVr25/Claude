@@ -1094,6 +1094,19 @@ def main() -> int:
         code2, txt2, _ = pub("GET", "/r/api/series")
         check("2.8: страница серии и список серий",
               code == 200 and "Зачёт серии" in txt and any(x["name"] == "Кубок проверки" for x in json.loads(txt2)["series"]), txt2[:200])
+        # 3.0: версия, дата сборки, возрастные группы для мастера
+        _, txt = http("GET", "/api/status")
+        st3 = json.loads(txt)
+        check("3.0: версия 3.0.0 и дата сборки 13.10.2026", st3["version"] == "3.0.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        code, txt = http("GET", "/api/default-rules?year=2027")
+        dr = json.loads(txt)
+        check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
+              code == 200 and dr["year"] == 2027 and dr["rules"].splitlines()[0].startswith("Мальчики до 12 лет;М;2016;")
+              and len(dr["rules"].splitlines()) == 14, txt[:300])
+        code, txt = http("GET", "/")
+        check("3.0: стартовый экран — Мастер подбора соревнования с двумя направлениями",
+              code == 200 and "Мастер подбора соревнования" in txt and "Настройка оборудования IPICO" in txt
+              and "Массовый забег с хронометражем" in txt and "Соревнования на стадионе" in txt, str(code))
         # календарь: перенесённый старт обновляет прежнюю запись
         code, txt = http("POST", "/api/events", json.dumps({"name": "«Ночной забег»", "date": "2026-10-16"}).encode(), J)
         en = json.loads(txt)["id"]
