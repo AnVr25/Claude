@@ -710,6 +710,18 @@ def main() -> int:
         sl = json.loads(txt)
         check("перенос участника в другой забег", len(sl["heats"][1]["entries"]) == 4 and len(sl["heats"][0]["entries"]) == 1
               and sorted(e["lane"] for e in sl["heats"][1]["entries"]) == [1, 2, 3, 4], str(sl["heats"][1]["entries"])[:300])
+        # полный сброс сетки забегов
+        code, txt = http("POST", f"/api/events/{e4}/resetheats", b"{}", J)
+        rs = json.loads(txt)
+        _, txt = http("GET", f"/api/events/{e4}/startlist")
+        sl0 = json.loads(txt)
+        check("сброс сетки: забегов нет, все 7 участников нераспределены без дорожек",
+              code == 200 and rs["waves"] == 4 and rs["entries"] == 7 and not sl0["heats"] and len(sl0["no_heat"]) == 7
+              and all(e["wave"] is None and e["lane"] is None for e in sl0["no_heat"]), txt[:300])
+        check("сброс сетки: номера сохранены", sorted(int(e["bib"]) for e in sl0["no_heat"]) == list(range(1, 8)))
+        http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e4}/startlist")
+        sl = json.loads(txt)
         # поздняя заявка после формирования забегов — добавляется вручную
         code, out = reg("Поздняков", "Яков", "2010-09-09", "М", [{"distance": "60 м", "best": "8.0"}])
         late = out["ids"][0]
@@ -728,6 +740,8 @@ def main() -> int:
               fr and fr[0]["name"] == "Быстров Иван" and fr[0]["category"] == "Юноши" and fr[0]["result"] == "7.5", str(fr)[:300])
         code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
         check("после старта пересобрать забеги нельзя", code == 400, txt)
+        code, txt = http("POST", f"/api/events/{e4}/resetheats", b"{}", J)
+        check("после старта сбросить сетку нельзя", code == 400, txt)
         code, txt = http("GET", f"/api/events/{e4}/regs.csv")
         check("выгрузка заявок CSV", code == 200 and "Быстров" in txt and "Представитель" in txt, txt[:100])
         # командная заявка: шаблон Excel → заполненный файл → проверка → отправка
@@ -1114,7 +1128,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.2.0 и дата сборки 13.10.2026", st3["version"] == "3.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.2.1 и дата сборки 13.10.2026", st3["version"] == "3.2.1" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",

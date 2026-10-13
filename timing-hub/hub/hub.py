@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.2.0"
+VERSION = "3.2.1"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -3245,6 +3245,13 @@ class Hub:
             self.store.audit(who, eid, what.get(upd.get("status"), "Заявка изменена"),
                              f"{r['last_name']} {r['first_name']} · {r['distance']}")
             return ok({"reg": self.store.get_registration(sub_id)})
+        if action == "resetheats":
+            try:
+                out = self.reset_heats(ev, data.get("distance"))
+            except ValueError as e:
+                return err(str(e))
+            self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}")
+            return ok(out)
         if action == "heats":
             try:
                 out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8)
@@ -4009,6 +4016,25 @@ class Hub:
             for rid in r["_ids"]:
                 self.store.update_registration(rid, bib=r["bib"])
         return {"heats": heats, "entries": len(rows)}
+
+    def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
+        """Полный сброс сетки: у участников очищаются забег и дорожка, забеги удаляются.
+        Номера и чипы сохраняются; участники возвращаются в «Не распределены». distance — только эта дисциплина."""
+        eid = ev["id"]
+        waves = [w for w in self.store.waves(eid) if not distance or (w.get("distance") or "") == distance]
+        if any(w.get("start_time") for w in waves):
+            raise ValueError("уже был старт забега — сбросить сетку нельзя")
+        names = [w["name"] for w in waves]
+        n = 0
+        for r in self.store.entries_rows(eid):
+            if distance and r["wave"] not in names:
+                continue
+            if r["wave"] or r["lane"] is not None:
+                self.store.update_entry(eid, r["bib"], wave=None, lane=None)
+                n += 1
+        for name in names:
+            self.store.delete_wave(eid, name)
+        return {"waves": len(names), "entries": n}
 
     def startlist(self, ev: dict) -> dict:
         rows = self.store.entries_rows(ev["id"])

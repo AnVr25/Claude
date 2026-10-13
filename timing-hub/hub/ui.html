@@ -190,6 +190,12 @@ tr.rej td{opacity:.55}
 .qr{background:#fff;padding:8px;border-radius:var(--r);border:1px solid var(--line);display:flex;justify-content:center;min-height:120px;align-items:center}
 .qr img,.qr canvas{width:180px;height:180px}
 .url{font-size:13.5px}
+.pmode{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);margin:0 0 12px;padding:10px 14px;display:grid;gap:8px}
+.pmode legend{font:700 13px var(--body);color:var(--muted);padding:0 6px}
+.pmode label{display:flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;cursor:pointer;min-height:32px}
+.pmode input{width:auto;min-height:0;margin:0 6px 0 0;accent-color:var(--track)}
+button.bigred{background:#C8161C;border-color:#C8161C;color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
+button.bigred:hover{background:#A31217}
 .heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
 .heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:2px solid var(--line)}
@@ -800,6 +806,12 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <p class="lead small">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</p></div>
       <div class="row"><button class="primary" id="gHeats">Сформировать забеги из подтверждённых</button><a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a></div>
     </div>
+    <fieldset class="pmode" id="gPMode"><legend>Вид стартового протокола</legend>
+      <label><input type="radio" name="pmode" value="heats" checked> <b>По забегам</b><span class="small muted"> — вертикальный беговой протокол</span></label>
+      <label><input type="radio" name="pmode" value="list-portrait"> <b>Общим списком (книжный)</b><span class="small muted"> — для технических видов</span></label>
+      <label><input type="radio" name="pmode" value="list-landscape"> <b>Общим списком (альбомный / горизонтальный)</b><span class="small muted"> — широкая сетка попыток для прыжков и метаний, печать на A4 альбомно</span></label>
+    </fieldset>
+    <div class="row" style="margin:0 0 12px"><button class="bigred" id="gResetHeats">❌ Удалить все забеги / Сбросить сетку</button></div>
     <div class="heats" id="gHeatsBox"></div>
     <div id="gLoose"></div>
   </div>
@@ -1731,7 +1743,7 @@ function renderRegHead(force){
   $("gTpl").href = `/api/events/${ev.id}/template.xlsx`;
   $("lnkWiclax").href = `/api/events/${ev.id}/wiclax.csv`;
   $("lnkClax").href = `/api/events/${ev.id}/event.clax`;
-  $("gStartList").href = `/protocol?event=${ev.id}&kind=start`;
+  setStartLink(ev);
   const dists = distNames(ev, true);
   $("mDist").innerHTML = dists.map(d => `<option>${esc(d)}</option>`).join("") || "<option value=\"\">сначала задайте дистанции</option>";
 }
@@ -1857,6 +1869,20 @@ $("gImport").onclick = () => {
     }catch(err){ toast("Ошибка: " + err.message); }
   };
   i.click();
+};
+function pmodeVal(){ const r = document.querySelector('input[name="pmode"]:checked'); return r ? r.value : "heats"; }
+function setStartLink(ev){
+  ev = ev || curEvent(); if (!ev) return;
+  const v = pmodeVal(), list = v !== "heats";
+  $("gStartList").href = `/protocol?event=${ev.id}&kind=start&smode=${list ? "list" : "heats"}&orient=${v === "list-landscape" ? "landscape" : "portrait"}`;
+}
+try{ const sv = localStorage.getItem("ss.pmode"); const r = sv && document.querySelector(`input[name="pmode"][value="${sv}"]`); if (r) r.checked = true; }catch(e){}
+$("gPMode").addEventListener("change", () => { try{ localStorage.setItem("ss.pmode", pmodeVal()); }catch(e){} setStartLink(); });
+$("gResetHeats").onclick = async () => {
+  const ev = curEvent(); if (!ev) return;
+  if (!confirm("Вы уверены, что хотите полностью очистить и удалить все сформированные забеги в этой дисциплине? Это действие нельзя отменить!")) return;
+  try{ const r = await api(`/api/events/${ev.id}/resetheats`, {}); toast(`Сетка сброшена: забегов ${r.waves}, участников в нераспределённых ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
+  catch(err){ toast("Ошибка: "+err.message); }
 };
 $("gHeats").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
