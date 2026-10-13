@@ -358,7 +358,11 @@ td.res{font:600 18px var(--head)}
 .frow a{font-weight:700;text-decoration:none}.frow a:hover{color:var(--track)}
 
 /* ── система ── */
-.subnav{display:flex;gap:2px;margin:0 0 16px}
+html{scrollbar-gutter:stable}
+.subnav{display:flex;gap:2px;margin:0 0 12px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.sysnav a{white-space:nowrap;margin-bottom:-1px}
+.syshead{min-height:34px;align-items:center;margin:0 0 14px}
+.syspane>h2:first-child,.syspane>.row:first-child{margin-top:0}
 .subnav a{font:600 16px var(--head);text-decoration:none;color:var(--muted);padding:6px 12px;border-bottom:3px solid transparent}
 .subnav a.on{color:var(--ink);border-bottom-color:var(--track)}
 .hwgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
@@ -545,11 +549,11 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     </button>
     <div class="menu" id="evMenu"></div>
   </div>
-  <a class="ipico-nav" id="ipicoNav" href="#hw" title="Ридеры, порты, Wiclax, проверка чипов"><b>Оборудование IPICO</b><small id="ipicoNavSt">ридеры</small></a>
+  <a class="ipico-nav" id="ipicoNav" href="#hw-timing" title="Ридеры, порты, Wiclax, проверка чипов"><b>Оборудование IPICO</b><small id="ipicoNavSt">ридеры</small></a>
   <div class="health" id="healthBar">
-    <a class="h" id="hReaders" href="#hw" title="Ридеры на связи">Ридеры —</a>
-    <a class="h" id="hWiclax" href="#hw" title="Подключение Wiclax">Wiclax</a>
-    <a class="h" id="hVpn" href="#hw" title="Устройства в VPN">VPN —</a>
+    <a class="h" id="hReaders" href="#hw-timing" title="Ридеры на связи">Ридеры —</a>
+    <a class="h" id="hWiclax" href="#hw-timing" title="Подключение Wiclax">Wiclax</a>
+    <a class="h" id="hVpn" href="#hw-net" title="Устройства в VPN">VPN —</a>
   </div>
   <span class="clock" id="hdrClock">--:--:--</span>
   <div class="evswitch scr">
@@ -624,8 +628,8 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <div class="panel ipico-block hide" id="ipicoBlock">
     <div class="ib-head"><div><h2>Настройка оборудования IPICO</h2><p class="small muted" style="margin:2px 0 0">Всё, что нужно проверить до старта: ридеры, порты, Wiclax и связь с чипами.</p></div><span class="ib-st" id="ibSt">—</span></div>
     <div class="ib-grid">
-      <a href="#hw" class="ib-it adm"><b>Ридеры и порты</b><small id="ibReaders">подключение ридеров к серверу</small></a>
-      <a href="#hw" class="ib-it adm"><b>Wiclax</b><small id="ibWiclax">передача отметок в Wiclax</small></a>
+      <a href="#hw-timing" class="ib-it adm"><b>Ридеры и порты</b><small id="ibReaders">подключение ридеров к серверу</small></a>
+      <a href="#hw-timing" class="ib-it adm"><b>Wiclax</b><small id="ibWiclax">передача отметок в Wiclax</small></a>
       <a href="#check" class="ib-it" id="ibChips"><b>Проверка чипов</b><small>проносите чип над ковриком — экран покажет, чей он</small></a>
     </div>
   </div>
@@ -1034,18 +1038,33 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <!-- СИСТЕМА: оборудование -->
 <section id="tab-hw" class="hide">
-  <div class="pagehead">
-    <div><h1>Система</h1><p class="lead" id="hwUpd"></p></div>
-    <button id="hwRefresh">Обновить</button>
-  </div>
-  <div class="subnav"><a href="#hw" class="on">Оборудование</a><a href="#users" class="adm">Пользователи</a><a href="#log">Журнал действий</a></div>
+  <div class="pagehead"><div><h1>Система</h1></div></div>
+  <nav class="subnav sysnav" aria-label="Разделы системы"></nav>
+  <div class="row between syshead"><p class="small muted" id="hwUpd" style="margin:0"></p><button class="sm" id="hwRefresh">Обновить</button></div>
+  <!-- 1. Общие настройки и обновления -->
+  <div class="syspane" data-pane="gen">
   <div class="hwgrid">
     <div class="panel"><h3>Сервер</h3><div class="kv" id="hwServer"></div></div>
     <div class="panel"><h3>Ресурсы</h3><div id="hwRes"></div></div>
     <div class="panel"><h3>Службы</h3><div id="hwSvc"></div></div>
   </div>
 
-  <div class="row between" style="margin-top:26px">
+  <h2 style="margin-top:20px">Обновление сервера</h2>
+  <div class="panel">
+    <div class="row between">
+      <div><div class="small muted">Установлена версия</div><b id="upVer" style="font:600 24px var(--head)">—</b></div>
+      <div class="row"><button class="primary" id="ghCheck">Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">Из файла (timing-hub.zip)</button></div>
+    </div>
+    <div id="ghBox" class="small" style="margin-top:8px"></div>
+    <div id="upState" class="small" style="margin-top:8px"></div>
+    <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
+    <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
+  </div>
+
+  </div>
+  <!-- 2. Хронометраж и оборудование: ридеры IPICO, Wiclax, отметки -->
+  <div class="syspane" data-pane="timing">
+  <div class="row between">
     <h2 style="margin:0">Ридеры</h2>
     <div class="row"><button class="sm" id="rdSimBtn" title="Виртуальный ридер: прогоняет участников соревнования через сервер в Wiclax">Симулятор</button><button class="sm" id="rdScanBtn">Найти ридеры</button><button class="sm primary" id="rdAddBtn">+ Добавить ридер</button><button class="sm" id="rdBulkBtn">Загрузить список</button></div>
   </div>
@@ -1101,19 +1120,16 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     </div>
   </div></details>
 
-  <h2>Обновление сервера</h2>
-  <div class="panel">
-    <div class="row between">
-      <div><div class="small muted">Установлена версия</div><b id="upVer" style="font:600 24px var(--head)">—</b></div>
-      <div class="row"><button class="primary" id="ghCheck">Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">Из файла (timing-hub.zip)</button></div>
-    </div>
-    <div id="ghBox" class="small" style="margin-top:8px"></div>
-    <div id="upState" class="small" style="margin-top:8px"></div>
-    <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
-    <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
+  <h2>Последние отметки <span class="small muted" id="stReads"></span></h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
+    <tbody id="lastBody"></tbody>
+  </table></div>
+  <div class="datalinks"><a href="/export.csv">Все отметки (CSV)</a><a href="/export.csv?filtered=1">Только прохождения (CSV)</a><a href="/raw">Сырые строки</a><a href="/simple">Простая страница</a></div>
   </div>
-
-  <h2>VPN-доступы</h2>
+  <!-- 3. Сетевые доступы и VPN -->
+  <div class="syspane" data-pane="net">
+  <h2 style="margin-top:0">VPN-доступы</h2>
   <div class="tbl"><table><thead><tr><th>Устройство (профиль)</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда (внешний IP)</th><th>На связи с</th><th>Трафик</th></tr></thead><tbody id="hwVpn"></tbody></table></div>
   <div id="hwWgBox" class="hide"><h2>VPN-доступы (WireGuard)</h2>
   <div class="tbl"><table><thead><tr><th>Устройство</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда</th><th>Трафик</th></tr></thead><tbody id="hwWg"></tbody></table></div></div>
@@ -1121,18 +1137,14 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <h2>Кто открывал сервер за последний час</h2>
   <div class="tbl"><table><thead><tr><th>Адрес</th><th>VPN-профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
 
-  <h2>Последние отметки <span class="small muted" id="stReads"></span></h2>
-  <div class="tbl"><table>
-    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
-    <tbody id="lastBody"></tbody>
-  </table></div>
-  <div class="datalinks"><a href="/export.csv">Все отметки (CSV)</a><a href="/export.csv?filtered=1">Только прохождения (CSV)</a><a href="/raw">Сырые строки</a><a href="/simple">Простая страница</a></div>
+  </div>
 </section>
 
 <!-- СИСТЕМА: пользователи -->
 <section id="tab-users" class="hide">
-  <div class="pagehead"><div><h1>Система</h1><p class="lead">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>. VPN для этого не нужен.</p></div></div>
-  <div class="subnav"><a href="#hw">Оборудование</a><a href="#users" class="on">Пользователи</a><a href="#log">Журнал действий</a></div>
+  <div class="pagehead"><div><h1>Система</h1></div></div>
+  <nav class="subnav sysnav" aria-label="Разделы системы"></nav>
+  <p class="small muted syshead" style="margin:0">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>. VPN для этого не нужен.</p>
   <p class="small muted" style="margin:0 0 10px"><b>Секретарь</b> — всё, кроме «Системы». <b>Судья</b> — телефон судьи, табло, протокол. <b>Администратор</b> — всё, включая пользователей и обновление. Имя, роль и примечание сохраняются сразу.</p>
   <div id="uNotice"></div>
   <div class="tbl"><table class="utbl">
@@ -1154,11 +1166,9 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <!-- СИСТЕМА: журнал -->
 <section id="tab-log" class="hide">
-  <div class="pagehead">
-    <div><h1>Система</h1></div>
-    <label class="check" style="margin:0"><input type="checkbox" id="logAll"> все соревнования</label>
-  </div>
-  <div class="subnav"><a href="#hw" class="adm">Оборудование</a><a href="#users" class="adm">Пользователи</a><a href="#log" class="on">Журнал действий</a></div>
+  <div class="pagehead"><div><h1>Система</h1></div></div>
+  <nav class="subnav sysnav" aria-label="Разделы системы"></nav>
+  <div class="row syshead"><label class="check" style="margin:0"><input type="checkbox" id="logAll"> все соревнования</label></div>
   <div class="tbl"><table>
     <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Подробности</th></tr></thead>
     <tbody id="logBody"></tbody>
@@ -1232,8 +1242,17 @@ $("ibChips").onclick = (e) => { if (!curEvent()) { e.preventDefault(); toast("С
 document.querySelectorAll(".wl-card").forEach(c => c.onclick = () => { setDir(c.dataset.dir); location.hash = "#home"; });
 $("wlAll").onclick = () => { if (DIR) dirAll = true; };
 $("sbStart").onclick = () => wzOpen();
+// «Система»: вкладки общие · хронометраж · сети · пользователи · журнал
+const SYS_TABS = [["hw", "⚙️ Общие настройки и обновления", 1], ["hw-timing", "📟 Хронометраж и оборудование (IPICO, Wiclax)", 1],
+  ["hw-net", "🔒 Сетевые доступы и VPN", 1], ["users", "👥 Пользователи", 1], ["log", "Журнал действий", 0]];
+function renderSysNav(active){
+  const adm = !ME || ME.role === "admin";
+  document.querySelectorAll(".sysnav").forEach(n => { n.innerHTML = SYS_TABS.filter(t => adm || !t[2])
+    .map(([h, t]) => `<a href="#${h}" class="${h === active ? "on" : ""}"${h === active ? ' aria-current="page"' : ""}>${t}</a>`).join(""); });
+}
 function showTab(){
-  let tab = tabName();
+  let tab = tabName(), pane = "";
+  if (/^hw-(timing|net)$/.test(tab)) { pane = tab.slice(3); tab = "hw"; } else if (tab === "hw") pane = "gen";
   if (isSector()) { tab = "wizard"; document.body.dataset.view = tab;
     document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-wizard")); $("lane").classList.add("hide"); closeMenus(); wzp.open(); return; }
   if (!document.getElementById("tab-"+tab)) tab = "home";
@@ -1259,7 +1278,8 @@ function showTab(){
   if (tab === "files") renderPub();
   if (tab === "check") { loadCheck(); loadPickup(); }
   if (tab === "log") loadLog();
-  if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); loadLast(); }
+  if (tab === "hw") { document.querySelectorAll("#tab-hw .syspane").forEach(p => p.classList.toggle("hide", p.dataset.pane !== pane)); loadHw(); loadReaders(); loadUpdate(); loadLast(); }
+  if (tab === "hw" || tab === "users" || tab === "log") renderSysNav(tab === "hw" ? (pane === "gen" ? "hw" : "hw-" + pane) : tab);
   if (tab === "files") renderFilesTab();
   if (tab === "reg") { renderRegHead(true); loadRegs(); }
   if (tab === "wizard") wzp.open();
@@ -1308,7 +1328,7 @@ async function loadStatus(){
     const live = st.sources.filter(s => s.mode !== "http"), on = live.filter(s=>s.connected).length;
     setPill("hReaders", `Ридеры ${on}/${live.length}`, !live.length ? "" : on === live.length ? "ok" : on ? "warn" : "bad");
     setPill("hWiclax", "Wiclax", st.wiclax_clients.length ? "ok" : ""); updateIpico();
-    if (tabName()==="hw") loadReaders();
+    if (tabName()==="hw-timing") loadReaders();
   }catch(e){ console.warn(e); }
 }
 async function loadLast(){
@@ -2607,7 +2627,7 @@ async function loadHw(){
   setPill("hVpn", `VPN ${vpnOn}`, vpnOn ? "ok" : "");
   $("hwDot").className = "dot bad" + (svcBad ? "" : " hide");
   $("gear").title = svcBad ? `Служб с ошибкой: ${svcBad} — откройте «Система»` : "Система: оборудование, обновление, журнал";
-  if (tabName() !== "hw") return;
+  if (!tabName().startsWith("hw")) return;
   $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о VPN и службах не собираются — обновите сервер (install.sh)." :
     sv.collector_age_sec > 120 ? `Сведения о VPN и службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Оборудование, доступы и обновление сервера. Сведения обновляются каждые 10 секунд.";
   const cert = d.certs[0];
@@ -3210,7 +3230,7 @@ async function initSector(){
   showTab();
   setInterval(tick, 100);
   setInterval(loadStatus, 4000);
-  setInterval(() => { if (tabName()==="hw") loadLast(); }, 2000);
+  setInterval(() => { if (tabName()==="hw-timing") loadLast(); }, 2000);
   setInterval(() => { if (tabName()==="reg") loadRegs(); }, 10000);
   setInterval(loadHw, 10000);
   loadHw();
