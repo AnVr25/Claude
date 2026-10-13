@@ -122,6 +122,7 @@ def main() -> int:
         "web": {"listen_host": "127.0.0.1", "listen_port": p_web, "user": "admin",
                 "password": "test-pass", "api_key": "test-key"},
         "public": {"enabled": True, "listen_host": "127.0.0.1", "listen_port": p_pub, "url": "https://reg.example.ru"},
+        "mail": {"outbox_dir": os.path.join(tmp, "outbox")},
         "sources": [
             {"id": "FINISH", "name": "Финиш (push)", "mode": "listen", "listen_host": "127.0.0.1",
              "listen_port": p_push, "parser": "auto"},
@@ -540,14 +541,116 @@ def main() -> int:
         check("регистрация: ссылка на форму создана", evr["reg_url"] == f"https://reg.example.ru/r/{slug}" and len(slug) >= 6,
               evr.get("reg_url", ""))
 
-        def pub(method, path, body=None, ctype="application/json"):
-            req = urllib.request.Request(f"http://127.0.0.1:{p_pub}{path}", data=body, method=method,
-                                         headers={"Content-Type": ctype} if body is not None else {})
+        class _NoFollow(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        _nofollow = urllib.request.build_opener(_NoFollow)
+
+        def pub(method, path, body=None, ctype="application/json", cookie=None, xrw=False, port=None):
+            h = {"Content-Type": ctype} if body is not None else {}
+            if cookie:
+                h["Cookie"] = cookie
+            if xrw:
+                h["X-Requested-With"] = "timing-hub"
+            req = urllib.request.Request(f"http://127.0.0.1:{port or p_pub}{path}", data=body, method=method, headers=h)
             try:
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with _nofollow.open(req, timeout=5) as resp:
                     return resp.status, resp.read().decode("utf-8"), dict(resp.headers)
             except urllib.error.HTTPError as e:
                 return e.code, e.read().decode("utf-8"), dict(e.headers)
+
+        # 5.0: личный кабинет тренера — регистрация, код из письма, вход; протоколы закрыты для гостей
+        import email as _email
+        import email.policy as _epol
+        import re as _re
+        import sqlite3 as _sql
+        outbox = os.path.join(tmp, "outbox")
+
+        def tpost(path, obj, cookie=None, xrw=True, port=None):
+            c, t, hd = pub("POST", path, json.dumps(obj).encode(), cookie=cookie, xrw=xrw, port=port)
+            try:
+                return c, json.loads(t), hd
+            except ValueError:
+                return c, {}, hd
+
+        def last_mail():
+            fs = sorted(os.listdir(outbox)) if os.path.isdir(outbox) else []
+            if not fs:
+                return None, ""
+            m = _email.message_from_bytes(open(os.path.join(outbox, fs[-1]), "rb").read(), policy=_epol.default)
+            body_ = m.get_content()
+            cm = _re.search(r"^\s+(\d{6})\s*$", body_, _re.M)
+            return m, cm.group(1) if cm else ""
+
+        TA = "/r/api/auth/trainer/"
+        c1, d1, _ = tpost(TA + "register", {"name": "Иванова", "team": "", "email": "не почта", "password": "123"})
+        c2, d2, _ = tpost(TA + "register", {"name": "Иванова Мария", "team": "СШОР", "email": "coach@example.ru",
+                                             "password": "coach-pass-1", "consent": True}, xrw=False)
+        check("5.0: регистрация тренера проверяет ФИО, школу, почту, пароль и согласие; без X-Requested-With — отказ",
+              c1 == 400 and set(d1.get("fields", {})) == {"name", "team", "email", "password", "consent"} and c2 == 403, f"{c1} {d1} {c2}")
+        c3, d3, _ = tpost(TA + "register", {"name": "Иванова Мария Петровна", "team": "СШОР по лёгкой атлетике",
+                                             "email": "Coach@Example.ru", "password": "coach-pass-1", "consent": True})
+        msg_, code_ = last_mail()
+        dbc = _sql.connect(cfg["db_path"])
+        trow = dbc.execute("SELECT is_verified, verification_token, password_hash FROM trainers WHERE email = 'coach@example.ru'").fetchone()
+        dbc.close()
+        check("5.0: тренер записан неподтверждённым, письмо с 6-значным кодом ушло; в базе хеш кода и пароля, не сами значения",
+              c3 == 200 and d3.get("sent") is True and msg_ is not None and msg_["To"] == "coach@example.ru" and len(code_) == 6
+              and trow and trow[0] == 0 and trow[1] and code_ not in trow[1] and "coach-pass-1" not in trow[2], f"{c3} {d3} {code_}")
+        c4, d4, _ = tpost(TA + "login", {"email": "coach@example.ru", "password": "coach-pass-1"})
+        bad = "000000" if code_ != "000000" else "111111"
+        c5, d5, _ = tpost(TA + "verify", {"email": "coach@example.ru", "code": bad})
+        c6, d6, h6 = tpost(TA + "verify", {"email": "coach@example.ru", "code": code_})
+        TCK = (h6.get("Set-Cookie") or "").split(";")[0]
+        c7, d7, _ = pub("GET", TA + "me", cookie=TCK)
+        check("5.0: до подтверждения вход закрыт; неверный код — отказ; верный код подтверждает почту и сразу открывает кабинет",
+              c4 == 403 and d4.get("verify") and c5 == 400 and "Неверный код" in d5.get("error", "") and c6 == 200
+              and TCK.startswith("ss_session=") and "HttpOnly" in h6.get("Set-Cookie", "") and c7 == 200
+              and json.loads(d7)["team"] == "СШОР по лёгкой атлетике", f"{c4} {c5} {c6} {c7} {d6}")
+        c8, d8, h8 = tpost(TA + "login", {"email": "coach@example.ru", "password": "wrong-pass"})
+        c9, d9, h9 = tpost(TA + "login", {"email": "COACH@example.ru", "password": "coach-pass-1"})
+        c10, d10, _ = tpost(TA + "register", {"name": "Иванова Мария", "team": "СШОР", "email": "coach@example.ru",
+                                               "password": "other-pass-1", "consent": True})
+        check("5.0: вход тренера по почте и паролю; неверный пароль — отказ; повторная регистрация той же почты — «войдите»",
+              c8 == 401 and c9 == 200 and (h9.get("Set-Cookie") or "").startswith("ss_session=") and c10 == 409 and d10.get("login"),
+              f"{c8} {c9} {c10}")
+        # перебор кода: после 5 неверных попыток — только новый код
+        tpost(TA + "register", {"name": "Петров Сергей", "team": "ДЮСШ Холмск", "email": "petrov@example.ru",
+                                "password": "petrov-pass-1", "consent": True})
+        _, code2 = last_mail()
+        wrong = [tpost(TA + "verify", {"email": "petrov@example.ru", "code": f"{(int(code2) + i) % 10 ** 6:06d}"})[0] for i in range(1, 6)]
+        c11, d11, _ = tpost(TA + "verify", {"email": "petrov@example.ru", "code": code2})
+        c12, d12, _ = tpost(TA + "resend", {"email": "petrov@example.ru"})
+        check("5.0: подбор кода невозможен — после 5 ошибок даже верный код не принимается, нужен новый (не чаще раза в минуту)",
+              wrong == [400] * 5 and c11 == 429 and d11.get("expired") and c12 == 429, f"{wrong} {c11} {c12} {d12}")
+        # тренер в панели: только протокол (переадресация в закрытую часть), остальное закрыто
+        pc1, _, ph1 = pub("GET", "/", cookie=TCK, port=p_web)
+        pc2, _, _ = pub("GET", "/api/events", cookie=TCK, port=p_web)
+        pc3, _, _ = pub("GET", "/api/trainers", cookie=TCK, port=p_web)
+        pc4, _, _ = tpost("/api/me/password", {"old": "coach-pass-1", "new": "x" * 9}, cookie=TCK, port=p_web)
+        pc5, _, ph5 = pub("GET", "/protocol?event=1", port=p_web)
+        pc6, _, _ = pub("GET", "/judge", cookie=TCK, port=p_web)
+        check("5.0: тренеру в панели закрыто всё, кроме протоколов: админка, API соревнований, тренеры, смена пароля судьи, экран судьи",
+              pc1 == 302 and ph1.get("Location") == "/r/trainer" and pc2 == 403 and pc3 == 403 and pc4 == 403 and pc6 == 302,
+              f"{pc1} {ph1.get('Location')} {pc2} {pc3} {pc4} {pc6}")
+        check("5.0: гость на /protocol панели уходит на вход тренера", pc5 == 302 and ph5.get("Location", "").startswith("/r/trainer?next="),
+              f"{pc5} {ph5.get('Location')}")
+        # администратор: список, блокировка, ручное подтверждение
+        _, txt = http("GET", "/api/trainers")
+        tl = {t["email"]: t for t in json.loads(txt)["trainers"]}
+        code, _ = http("POST", f"/api/trainers/{tl['coach@example.ru']['id']}/block", b"{}", J)
+        cb, _, _ = pub("GET", TA + "me", cookie=TCK)
+        cb2, db2, _ = tpost(TA + "login", {"email": "coach@example.ru", "password": "coach-pass-1"})
+        http("POST", f"/api/trainers/{tl['coach@example.ru']['id']}/unblock", b"{}", J)
+        code_v, _ = http("POST", f"/api/trainers/{tl['petrov@example.ru']['id']}/verify", b"{}", J)
+        cv, _, _ = tpost(TA + "login", {"email": "petrov@example.ru", "password": "petrov-pass-1"})
+        _, ltxt = http("GET", "/api/log")
+        check("5.0: администратор видит тренеров; блокировка сразу закрывает сеанс и вход; ручное подтверждение открывает вход; всё в журнале",
+              tl["coach@example.ru"]["is_verified"] == 1 and tl["petrov@example.ru"]["is_verified"] == 0 and "password_hash" not in tl["coach@example.ru"]
+              and code == 200 and cb == 401 and cb2 == 403 and code_v == 200 and cv == 200
+              and "Тренер: заблокирован" in ltxt and "Тренер: почта подтверждена вручную" in ltxt, f"{code} {cb} {cb2} {code_v} {cv}")
+        c13, d13, h13 = tpost(TA + "login", {"email": "coach@example.ru", "password": "coach-pass-1"})
+        TCK = (h13.get("Set-Cookie") or "").split(";")[0]
 
         code, txt, hd = pub("GET", f"/r/{slug}")
         check("форма открывается без пароля, с защитными заголовками",
@@ -614,13 +717,33 @@ def main() -> int:
         check("календарь для fla65.ru: событие видно, CORS открыт, страница есть",
               card and card["page"] and hd.get("Access-Control-Allow-Origin") == "*" and card["results"] is None, txt[:300])
         sslug = es["reg_slug"]
-        code, _, _ = pub("GET", f"/r/{sslug}/results.json")
+        code, _, _ = pub("GET", f"/r/{sslug}/results.json", cookie=TCK)
         check("результаты не опубликованы — на сайте не видны", code == 404, str(code))
         http("POST", f"/api/events/{es['id']}", json.dumps({"pub_results": True, "live_url": "https://vk.com/video1",
              "links": "Итоги | https://fla65.ru/news/1\nПлохая | javascript:alert(1)"}).encode(), J)
-        code, txt, _ = pub("GET", f"/r/{sslug}/results.json")
-        check("результаты опубликованы — на сайте без чипов, с результатом", code == 200 and '"chip"' not in txt and "Петров" in txt
+        code, txt, _ = pub("GET", f"/r/{sslug}/results.json", cookie=TCK)
+        check("результаты опубликованы — тренеру без чипов, с результатом", code == 200 and '"chip"' not in txt and "Петров" in txt
               and any(x.get("result") == "7.94" for x in json.loads(txt)["finished"]), txt[:300])
+        g1, gt1, _ = pub("GET", f"/r/{sslug}/results.json")
+        g2, _, _ = pub("GET", f"/r/{sslug}/startlist.json")
+        g3, _, gh3 = pub("GET", f"/r/{sslug}/protocol?kind=start")
+        _, ad5, adh5 = tpost("/api/login", {"login": "admin", "password": "test-pass"}, port=p_web)
+        ack5 = (adh5.get("Set-Cookie") or "").split(";")[0]
+        g4, _, _ = pub("GET", f"/r/{sslug}/results.json", cookie=ack5)
+        g5, gt5, _ = pub("GET", f"/r/{sslug}/protocol", cookie=TCK)
+        check("5.0: гостю протоколы закрыты — JSON 401, страница протокола уводит на вход тренера и обратно; судье и тренеру открыты",
+              g1 == 401 and "Петров" not in gt1 and g2 == 401 and g3 == 302
+              and gh3.get("Location") == "/r/trainer?next=" + urllib.parse.quote(f"/r/{sslug}/protocol?kind=start", safe="")
+              and g4 == 200 and g5 == 200 and "protocol" in gt5.lower(), f"{g1} {g2} {g3} {gh3.get('Location')} {g4} {g5}")
+        _, tev, _ = pub("GET", "/r/api/trainer/events", cookie=TCK)
+        tevs = json.loads(tev).get("events", [])
+        g6, _, _ = pub("GET", "/r/api/trainer/events")
+        pc7, _, ph7 = pub("GET", f"/protocol?event={es['id']}", cookie=TCK, port=p_web)
+        check("5.0: в кабинете — выложенные протоколы со ссылкой на закрытую страницу; гостю список закрыт; /protocol панели ведёт тренера туда же",
+              any(e["protocol"] == f"/r/{sslug}/protocol" and e["results"] for e in tevs) and g6 == 401
+              and pc7 == 302 and ph7.get("Location") == f"/r/{sslug}/protocol", f"{tevs} {g6} {pc7} {ph7.get('Location')}")
+        pg, pgt, _ = pub("GET", "/r/trainer")
+        check("5.0: страница «Вход для тренеров» открывается без входа", pg == 200 and "trainerPage" in pgt and "Личный кабинет" in pgt, str(pg))
         code, txt, _ = pub("GET", f"/r/{sslug}/info")
         cd = json.loads(txt).get("card", {})
         check("страница события: ссылки только http(s), трансляция, протокол",
@@ -1120,7 +1243,7 @@ def main() -> int:
         code, txt = http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "777"}).encode(), J)
         check("2.8: выдача: нет такого номера", code == 404, txt)
         http("POST", f"/api/events/{e8}", json.dumps({"pub_start": True}).encode(), J)
-        code, txt, _ = pub("GET", f"/r/{s8}/startlist.json")
+        code, txt, _ = pub("GET", f"/r/{s8}/startlist.json", cookie=TCK)
         check("2.8: в публичном стартовом протоколе нет отметок выдачи, состав эстафеты есть",
               code == 200 and "picked_at" not in txt and "БегунА" in txt, txt[:200])
         http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "500", "undo": True}).encode(), J)
@@ -1160,7 +1283,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.5.2 и дата сборки 13.10.2026", st3["version"] == "4.5.2" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 5.0.0 и дата сборки 13.10.2026", st3["version"] == "5.0.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1540,8 +1663,8 @@ def main() -> int:
         # публикация в общую сеть
         code, txt = http("POST", f"/api/events/{e9}/publish", json.dumps({"start": True, "results": True}).encode(), J)
         pb = json.loads(txt)
-        cs, _, _ = pub("GET", f"/r/{s9}/startlist.json")
-        cr, _, _ = pub("GET", f"/r/{s9}/results.json")
+        cs, _, _ = pub("GET", f"/r/{s9}/startlist.json", cookie=TCK)
+        cr, _, _ = pub("GET", f"/r/{s9}/results.json", cookie=TCK)
         check("3.5: «Выгрузить в общую сеть» открывает стартовый и итоговый протоколы на публичной странице",
               code == 200 and pb["pub_start"] and pb["pub_results"] and cs == 200 and cr == 200 and "/protocol" in pb["start_url"], txt[:300])
         code, txt = http("POST", f"/api/events/{e9}/publish", json.dumps({}).encode(), J)

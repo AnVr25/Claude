@@ -245,13 +245,43 @@ select.sel{display:block;font:inherit;font-size:16px;color:var(--ink);background
 .sig b{font-family:var(--head);font-weight:600;letter-spacing:.4px}
 .hide{display:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+/* 5.0: личный кабинет тренера — шаги, вкладки входа, список закрытых протоколов */
+.tsteps{display:flex;gap:6px;margin-top:16px;padding:0;list-style:none;counter-reset:ts}
+.tsteps li{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.25;color:var(--muted);counter-increment:ts}
+.tsteps li::before{content:counter(ts);display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--field-line);font:600 14px var(--head);color:var(--muted);background:var(--panel)}
+.tsteps li.on{color:var(--ink);font-weight:700}.tsteps li.on::before{background:var(--track);border-color:var(--track);color:#fff}
+.tsteps li.done::before{content:"✓";background:var(--ok);border-color:var(--ok);color:#fff}
+.tlock{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.tlock>div{flex:1 1 260px;min-width:0}
+.tlock b{display:block;font:600 19px/1.25 var(--head)}
+.tlock a.btn,.tev a.btn{width:auto}
+a.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;border-radius:var(--r);padding:11px 16px;min-height:46px;background:var(--track);color:#fff;text-decoration:none;font-size:16px}
+a.btn:hover{background:#C8161C}a.btn:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+a.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--field-line)}
+.tswitch{margin-top:14px;text-align:center;font-size:15px}
+.tswitch a,.tswitch button.lnk{color:var(--ink);text-underline-offset:3px}
+button.lnk{display:inline;width:auto;min-height:0;margin:0;padding:0;background:none;color:inherit;font:inherit;text-decoration:underline;border:0}
+button.lnk:hover{background:none;color:var(--bad)}
+.tcode{font:600 28px/1 var(--head)!important;letter-spacing:.35em;text-align:center;font-variant-numeric:tabular-nums}
+.who{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:10px;font-size:15px;color:var(--night-muted)}
+.who b{color:#fff}
+.who button{width:auto;margin:0 0 0 auto;min-height:38px;padding:6px 14px;font-size:14px;background:transparent;border:1px solid var(--night-line);color:#fff}
+.who button:hover{background:rgba(255,255,255,.08)}
+.tev{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:10px;box-shadow:var(--shadow)}
+.tev>div{flex:1 1 260px;min-width:0}
+.tev b{display:block;font:600 20px/1.2 var(--head);overflow-wrap:anywhere}
+.tev .muted{font-size:14px}
+.tev .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tev .chips span{font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
+.tev .chips .run{color:var(--bad);border-color:var(--track)}
+.notice.calm{border-left-color:var(--line)}
 .vn{color:inherit;text-decoration:underline;text-decoration-color:#E71E25;text-underline-offset:3px}
 .vn:hover{color:#fff;text-decoration-thickness:2px}
 </style>
 </head>
 <body>
 <div id="root"><header class="band"><div class="in"><div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div></div></header><div class="card muted">Загрузка…</div></div>
-<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО<div class="staff"><a href="/login">Вход для организаторов</a></div></footer>
+<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО<div class="staff"><a href="/r/trainer">Вход для тренеров</a> · <a href="/login">Вход для организаторов</a></div></footer>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -278,7 +308,140 @@ const fsize=n=>!n?"":n<1024*1024?Math.max(1,Math.round(n/1024))+" КБ":(n/10485
 const LOGOS=`<div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div>`;
 const band=inner=>`<header class="band"><div class="in">${LOGOS}${inner||""}</div></header>`;
 
+/* ---------- 5.0: личный кабинет тренера: регистрация → код из письма → закрытые протоколы ---------- */
+const TAPI="/r/api/auth/trainer/";
+async function tpost(path,obj){
+  const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"timing-hub"},body:JSON.stringify(obj||{})});
+  let d={}; try{ d=await r.json(); }catch(e){}
+  return {ok:r.ok,status:r.status,d};
+}
+const TNEXT=(()=>{const n=new URLSearchParams(location.search).get("next")||"";return /^\/r\/[A-Za-z0-9]{4,20}\/protocol(\?kind=\w+)?$/.test(n)?n:"";})();
+const TS={email:"",sent:true};
+function tsteps(n){
+  const s=["Регистрация","Подтверждение почты","Личный кабинет"];
+  return `<ol class="tsteps" aria-label="Шаги">${s.map((t,i)=>`<li class="${i+1===n?"on":i+1<n?"done":""}"${i+1===n?' aria-current="step"':""}>${t}</li>`).join("")}</ol>`;
+}
+function tshell(title,lead,body,step){
+  document.title=title+" — SakhStart";
+  $("root").innerHTML=band(`<h1>${esc(title)}</h1>${lead?`<div class="lead">${lead}</div>`:""}`)+(step?tsteps(step):"")+body;
+}
+function tErr(errs){ document.querySelectorAll("#root .err").forEach(e=>e.textContent=""); Object.entries(errs||{}).forEach(([k,v])=>{const e=$("e_t_"+k); if(e) e.textContent=v;}); }
+async function trainerPage(){
+  try{ const r=await fetch(TAPI+"me"); if(r.ok){ const me=await r.json(); if(TNEXT){ location.replace(TNEXT); return; } return tCabinet(me); } }catch(e){}
+  tLogin();
+}
+function tLogin(msg){
+  tshell("Вход для тренеров",`Стартовые и итоговые протоколы открыты тренерам, судьям и организаторам${TNEXT?" — войдите, чтобы открыть протокол":""}.`,`
+  <form class="card" id="tl" novalidate><h2>Вход в личный кабинет</h2>
+    ${msg?`<div class="notice" style="margin-bottom:14px">${msg}</div>`:""}
+    <div class="grid">
+      <div class="full">${field("t_email","Электронная почта",1,'type="email" autocomplete="email" inputmode="email" maxlength="254"')}</div>
+      <div class="full">${field("t_password","Пароль",1,'type="password" autocomplete="current-password" maxlength="200"')}</div>
+    </div>
+    <button type="submit" id="tlGo">Войти</button><div class="formerr" id="tlErr" role="alert"></div>
+    <div class="tswitch">Нет учётной записи? <button type="button" class="lnk" id="toReg">Зарегистрироваться</button></div>
+    <div class="tswitch muted" style="font-size:14px">Забыли пароль — напишите организатору соревнований.</div>
+  </form>
+  <div class="foot">Судьи и организаторы входят <a href="/login${TNEXT?"?next="+encodeURIComponent(TNEXT):""}">через панель SakhStart</a>.</div>`);
+  if(TS.email) $("t_email").value=TS.email;
+  $("toReg").onclick=()=>tRegister();
+  $("tl").onsubmit=async e=>{ e.preventDefault(); tErr(); $("tlErr").textContent="";
+    const email=$("t_email").value.trim(), password=$("t_password").value;
+    if(!email||!password){ $("tlErr").textContent="Введите почту и пароль"; return; }
+    $("tlGo").disabled=true;
+    const {ok,d}=await tpost(TAPI+"login",{email,password,next:TNEXT}).catch(()=>({ok:false,d:{error:"Нет связи с сервером — попробуйте ещё раз"}}));
+    $("tlGo").disabled=false;
+    if(ok){ if(TNEXT) location.href=TNEXT; else trainerPage(); return; }
+    if(d.verify){ TS.email=email; TS.sent=true; return tVerify("Почта ещё не подтверждена. Введите код из письма или запросите новый."); }
+    $("tlErr").textContent=d.error||"Не удалось войти";
+  };
+}
+function tRegister(){
+  tshell("Регистрация тренера","Доступ к закрытым протоколам соревнований ФЛАСО для тренеров спортивных школ и клубов.",`
+  <form class="card" id="tr" novalidate><h2>Данные тренера</h2>
+    <div class="grid">
+      <div class="full">${field("t_name","ФИО",1,'autocomplete="name" maxlength="80" placeholder="Иванова Мария Петровна"')}</div>
+      <div class="full">${field("t_team","Спортивная школа / клуб",1,'maxlength="120" placeholder="СШОР по лёгкой атлетике"')}</div>
+      <div class="full">${field("t_email","Электронная почта",1,'type="email" autocomplete="email" inputmode="email" maxlength="254"',"— на неё придёт код")}</div>
+      <div class="full">${field("t_password","Пароль",1,'type="password" autocomplete="new-password" minlength="8" maxlength="200"',"— не короче 8 символов")}</div>
+    </div>
+    <label class="consent" id="w_t_consent" style="margin-top:16px"><input type="checkbox" id="t_consent"><span>Даю согласие ФЛАСО на обработку моих персональных данных (ФИО, место работы, электронная почта) для доступа к протоколам соревнований <i class="req">*</i></span></label>
+    <div class="err" id="e_t_consent"></div>
+    <div class="hp" aria-hidden="true"><input id="t_website" tabindex="-1" autocomplete="off"></div>
+    <button type="submit" id="trGo">Зарегистрироваться и получить код</button><div class="formerr" id="trErr" role="alert"></div>
+    <div class="tswitch">Уже зарегистрированы? <button type="button" class="lnk" id="toLogin">Войти</button></div>
+  </form>`,1);
+  $("toLogin").onclick=()=>tLogin();
+  $("tr").onsubmit=async e=>{ e.preventDefault(); $("trErr").textContent="";
+    const body={name:$("t_name").value.trim(),team:$("t_team").value.trim(),email:$("t_email").value.trim(),password:$("t_password").value,consent:$("t_consent").checked,website:$("t_website").value};
+    const errs={};
+    if(body.name.split(/\s+/).length<2) errs.name="Укажите фамилию и имя";
+    if(body.team.length<2) errs.team="Укажите спортивную школу или клуб";
+    if(!/^\S+@\S+\.\S{2,}$/.test(body.email)) errs.email="Проверьте адрес почты: например, coach@mail.ru";
+    if(body.password.length<8) errs.password="Пароль — не короче 8 символов";
+    if(!body.consent) errs.consent="Нужно согласие на обработку персональных данных";
+    tErr(errs); if(Object.keys(errs).length){ $("trErr").textContent="Проверьте отмеченные поля"; return; }
+    $("trGo").disabled=true;
+    const {ok,d}=await tpost(TAPI+"register",body).catch(()=>({ok:false,d:{error:"Нет связи с сервером — попробуйте ещё раз"}}));
+    $("trGo").disabled=false;
+    if(ok){ TS.email=d.email||body.email; TS.sent=d.sent!==false; return tVerify(); }
+    if(d.fields) tErr(d.fields);
+    if(d.login){ TS.email=body.email; return tLogin("Эта почта уже зарегистрирована — войдите с паролем."); }
+    if(d.verify){ TS.email=body.email; return tVerify(d.error); }
+    $("trErr").textContent=d.error||"Не удалось зарегистрироваться";
+  };
+}
+function tVerify(msg){
+  tshell("Подтверждение почты","",`
+  <form class="card" id="tv" novalidate><h2>Код из письма</h2>
+    ${TS.sent?`<p style="margin:0 0 14px">Мы отправили 6-значный код на <b>${esc(TS.email)}</b>. Письмо может прийти через минуту; проверьте папку «Спам».</p>`
+      :`<div class="notice" style="margin-bottom:14px">Почта сервера пока не настроена, письмо не отправлено. Учётную запись <b>${esc(TS.email)}</b> подтвердит организатор — после этого просто войдите с паролем.</div>`}
+    ${msg?`<div class="notice calm" style="margin-bottom:14px">${esc(msg)}</div>`:""}
+    ${field("t_code","Код подтверждения",1,'class="tcode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••"')}
+    <button type="submit" id="tvGo">Подтвердить</button><div class="formerr" id="tvErr" role="alert"></div>
+    <button type="button" class="ghost" id="tvAgain">Отправить код ещё раз</button>
+    <div class="tswitch"><button type="button" class="lnk" id="toLogin">Вернуться ко входу</button></div>
+  </form>`,2);
+  $("t_code").focus();
+  $("t_code").oninput=e=>{ e.target.value=e.target.value.replace(/\D/g,"").slice(0,6); };
+  $("toLogin").onclick=()=>tLogin();
+  $("tvAgain").onclick=async()=>{ $("tvErr").textContent=""; $("tvAgain").disabled=true;
+    const {ok,d}=await tpost(TAPI+"resend",{email:TS.email}).catch(()=>({ok:false,d:{error:"Нет связи с сервером"}}));
+    $("tvAgain").disabled=false;
+    if(ok){ TS.sent=d.sent!==false; tVerify(TS.sent?"Новый код отправлен — прежний больше не действует.":""); } else $("tvErr").textContent=d.error||"Не удалось отправить код"; };
+  $("tv").onsubmit=async e=>{ e.preventDefault(); $("tvErr").textContent="";
+    const code=$("t_code").value; if(code.length!==6){ $("tvErr").textContent="Введите 6 цифр из письма"; return; }
+    $("tvGo").disabled=true;
+    const {ok,d}=await tpost(TAPI+"verify",{email:TS.email,code}).catch(()=>({ok:false,d:{error:"Нет связи с сервером — попробуйте ещё раз"}}));
+    $("tvGo").disabled=false;
+    if(ok){ if(TNEXT) location.href=TNEXT; else trainerPage(); return; }
+    $("tvErr").textContent=d.error||"Не удалось подтвердить";
+  };
+}
+async function tCabinet(me){
+  let evs=[]; try{ evs=(await (await fetch("/r/api/trainer/events")).json()).events||[]; }catch(e){}
+  const st={running:'<span class="run">идёт · онлайн</span>',finished:"<span>завершено</span>",planned:"<span>предстоит</span>"};
+  document.title="Личный кабинет тренера — SakhStart";
+  $("root").innerHTML=band(`<h1>Личный кабинет тренера</h1>
+    <div class="who"><span><b>${esc(me.name)}</b>${me.team?" · "+esc(me.team):""}</span>${me.email?`<span>${esc(me.email)}</span>`:""}<button type="button" id="tOut">Выйти</button></div>`)
+    +tsteps(3)
+    +`<h2 class="sect">Закрытые протоколы</h2>`
+    +(evs.length?evs.map(e=>`<div class="tev"><div><b>${esc(e.name)}</b><div class="muted">${esc([dRange(e.date,e.date_end),e.city||e.place].filter(Boolean).join(" · "))}</div>
+      <div class="chips">${st[e.status]||""}${e.start?"<span>стартовый</span>":""}${e.results?"<span>результаты</span>":""}</div></div>
+      <a class="btn" href="${esc(e.protocol)}">👁️ Посмотреть закрытый протокол</a></div>`).join("")
+      :`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg></span><div><b>Протоколов пока нет</b><div class="muted">Стартовые и итоговые протоколы появятся здесь, как только организатор их выложит.</div></div></div>`)
+    +`<div class="foot">Протоколы содержат персональные данные спортсменов — не пересылайте их и не публикуйте в открытом доступе.</div>`;
+  $("tOut").onclick=async()=>{ await tpost(TAPI+"logout").catch(()=>{}); TS.email=me.email||""; tLogin("Вы вышли из личного кабинета."); };
+}
+// на странице события: протоколы закрыты — подсказка «Вход для тренеров», если ещё не вошли
+async function lockHint(){
+  const box=$("tlock"); if(!box) return;
+  try{ const r=await fetch(TAPI+"me"); if(r.ok){ box.remove(); return; } }catch(e){}
+  box.classList.remove("hide");
+}
+
 async function main(){
+  if(slug==="trainer") return trainerPage();
   if(!slug) return listOpen();
   try{
     const r=await fetch(`/r/${slug}/info`); const d=await r.json();
@@ -295,7 +458,8 @@ async function listOpen(){
     fetch(`/r/api/calendar?year=${year}`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   $("root").innerHTML=band(`<h1>Регистрация на соревнования</h1>`)+`
     <div class="list">${ev.map(e=>`<a href="/r/${esc(e.slug)}"><b>${esc(e.name)}</b><span class="muted">${esc([dRu(e.date),e.place].filter(Boolean).join(" · "))}</span>${e.deadline?`<div class="dl">приём заявок ${esc(dtRu(e.deadline))}</div>`:""}</a>`).join("")||'<div class="card muted">Сейчас нет открытых регистраций.</div>'}</div>`
-    +calendarList(cal,new Set(ev.map(e=>e.slug)));
+    +calendarList(cal,new Set(ev.map(e=>e.slug)))
+    +`<div class="card tlock" style="margin-top:20px"><div><b>Тренерам</b><div class="muted">Стартовые протоколы и результаты — в личном кабинете тренера.</div></div><a class="btn ghost" href="/r/trainer">Вход для тренеров</a></div>`;
 }
 // «Ближайшие и недавние»: идут → предстоящие по дате → 5 последних завершённых с результатами
 function calendarList(cal,skip){
@@ -354,7 +518,8 @@ function eventBlock(head){
     const ext=String(f.ext||(/\.(\w{1,5})$/.exec(f.title||"")||[])[1]||"файл").slice(0,4), h=href(f.url);
     return `<a href="${esc(h)}"${isExt(h)?' target="_blank" rel="noopener"':""}><span class="fx" aria-hidden="true">${esc(ext)}</span><span class="t">${esc(f.title||"Документ")}<small>${esc([ext.toUpperCase(),fsize(f.size)].filter(Boolean).join(" · "))}</small></span></a>`;}).join("")}</div>`:"";
   if(!tiles&&!docs) return "";
-  return (head&&tiles?'<h2 class="sect">Материалы соревнования</h2>':"")+(tiles?`<div class="tiles">${tiles}</div>`:"")+docs;
+  const lock=c.start_list||c.results||c.teams?`<div class="card tlock hide" id="tlock"><div><b>🔒 Протоколы — для тренеров</b><div class="muted">Стартовый протокол и результаты видят тренеры, судьи и организаторы. Зарегистрируйтесь один раз — дальше вход по почте и паролю.</div></div><a class="btn" href="/r/trainer">Вход для тренеров</a></div>`:"";
+  return (head&&tiles?'<h2 class="sect">Материалы соревнования</h2>':"")+(tiles?`<div class="tiles">${tiles}</div>`:"")+lock+docs;
 }
 function layout(){
   const d=INFO,c=CARD;
@@ -369,6 +534,7 @@ function layout(){
   const cov=href(c.cover);
   $("root").innerHTML=headerCard()+(cov?`<div class="cover"><img src="${esc(cov)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>`:"")
     +(regFirst?reg+ev:ev+reg)+about+empty;
+  lockHint();
   if(d.open) render();
 }
 // программа дня и контакты организатора

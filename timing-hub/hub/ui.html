@@ -1200,6 +1200,12 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="row" style="margin-top:12px"><button class="primary" id="uSave">Добавить</button></div>
     <p class="small muted" style="margin-bottom:0">Пароль придумается сам и будет показан один раз — передайте его человеку лично. Сменить свой пароль можно в меню с вашим логином вверху справа.</p>
   </div>
+  <h2 style="margin-top:24px">🧑‍🏫 Тренеры <span class="small muted" id="trCount"></span></h2>
+  <p class="small muted" style="margin:0 0 10px">Тренеры регистрируются сами на странице <b id="trUrl">/r/trainer</b> и подтверждают почту кодом из письма. После этого им открыты стартовые и итоговые протоколы, которые вы выложили, — без чипов и без заявок. <span id="trMail"></span></p>
+  <div class="tbl"><table class="utbl">
+    <thead><tr><th>Тренер</th><th>Школа / клуб</th><th>Почта</th><th>Статус</th><th>Последний вход</th><th></th></tr></thead>
+    <tbody id="trBody"></tbody>
+  </table></div>
 </section>
 
 <!-- СИСТЕМА: журнал -->
@@ -1317,7 +1323,7 @@ function showTab(){
   if (tab === "results" || tab === "timing") loadResults();
   if (tab === "timing") { loadManual(); applyTimingMode(); }
   if (tab !== "timing") document.body.dataset.mode = "";
-  if (tab === "users") loadUsers();
+  if (tab === "users") { loadUsers(); loadTrainers(); }
   if (tab === "prep") renderSite();
   if (tab === "files") renderPub();
   if (tab === "check") { loadCheck(); loadPickup(); }
@@ -3229,6 +3235,28 @@ async function loadUsers(notice){
       <td class="uact">${me?'<span class="small muted">свой пароль — в меню с логином</span>':
         `<button class="sm" data-act="upwd">Новый пароль</button> <button class="sm" data-act="uact">${u.active?"Заблокировать":"Разблокировать"}</button> <button class="sm danger" data-act="udel">Удалить</button>`}</td></tr>`; }).join("");
 }
+// 5.0: тренеры — самостоятельная регистрация на /r/trainer; здесь — ручное подтверждение, блокировка, удаление
+async function loadTrainers(){
+  let d; try{ d = await api("/api/trainers"); }catch(e){ return; }
+  $("trUrl").textContent = location.origin + "/r/trainer";
+  $("trMail").innerHTML = d.mail ? "" : '<b style="color:var(--start)">Почта сервера не настроена</b> — письма с кодом не уходят, подтверждайте тренеров кнопкой «Подтвердить», сверив человека.';
+  const wait = d.trainers.filter(t => !t.is_verified).length;
+  $("trCount").textContent = d.trainers.length ? `всего ${d.trainers.length}` + (wait ? ` · ждут подтверждения: ${wait}` : "") : "";
+  $("trBody").innerHTML = d.trainers.map(t => `<tr data-tid="${t.id}" class="${t.active ? "" : "off"}">
+    <td><b>${esc(t.name)}</b></td><td>${esc(t.team)}</td><td class="small">${esc(t.email)}</td>
+    <td class="small">${!t.active ? '<span class="muted">заблокирован</span>' : t.is_verified ? `<span style="color:var(--ok)">✓ подтверждён</span><div class="muted">${esc(t.verified_by || "")}</div>` : '<span style="color:var(--start)">ждёт кода</span>'}</td>
+    <td class="small muted">${esc((t.last_login || "не входил").slice(0,16))}</td>
+    <td class="uact">${t.is_verified ? "" : '<button class="sm" data-tact="verify">Подтвердить</button> '}<button class="sm" data-tact="${t.active ? "block" : "unblock"}">${t.active ? "Заблокировать" : "Разблокировать"}</button> <button class="sm danger" data-tact="delete">Удалить</button></td></tr>`).join("")
+    || '<tr><td colspan="6" class="empty">Тренеров пока нет — отправьте им ссылку на страницу входа.</td></tr>';
+}
+$("trBody").addEventListener("click", async (e) => {
+  const act = e.target.dataset.tact, tr = e.target.closest("tr"); if (!act || !tr) return;
+  const name = tr.querySelector("b").textContent;
+  const ask = {verify: `Подтвердить ${name} без кода из письма? Убедитесь, что это действительно тренер.`, block: `Заблокировать ${name}? Доступ к протоколам закроется сразу.`, delete: `Удалить учётную запись ${name}? Тренеру придётся зарегистрироваться заново.`}[act];
+  if (ask && !confirm(ask)) return;
+  try{ await api(`/api/trainers/${tr.dataset.tid}/${act}`, {}); toast({verify:"Подтверждён", block:"Заблокирован", unblock:"Разблокирован", delete:"Удалён"}[act]); loadTrainers(); }
+  catch(err){ toast("Ошибка: "+err.message); }
+});
 const genPwd = () => { const a = "abcdefghjkmnpqrstuvwxyz23456789"; const r = crypto.getRandomValues(new Uint32Array(12)); return Array.from(r, x => a[x % a.length]).join(""); };
 const pwdNotice = (what, login, pw) => `<div class="unote">${what} <b>${esc(login)}</b>, пароль: <span class="secret">${esc(pw)}</span> — передайте его лично, повторно он показан не будет.</div>`;
 $("uBody").addEventListener("change", async (e) => {

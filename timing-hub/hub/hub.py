@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "4.5.2"
+VERSION = "5.0.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -864,6 +864,20 @@ class Store:
         add("registrations", (("relay", "TEXT"), ("leg", "INTEGER"), ("rank", "TEXT")))
         # 4.4: состояние стадионного табло (пульт управления) — по соревнованию
         self.con.execute("CREATE TABLE IF NOT EXISTS scoreboard(event_id INTEGER PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        # 5.0: личный кабинет тренера — учётки с подтверждённой почтой, вход к закрытым протоколам.
+        # verification_token — sha256 от кода из письма (сам код в базе не хранится)
+        self.con.execute("""CREATE TABLE IF NOT EXISTS trainers(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            team TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            is_verified INTEGER NOT NULL DEFAULT 0,
+            verification_token TEXT,
+            created_at TEXT NOT NULL)""")
+        add("trainers", (("token_expires", "TEXT"), ("token_attempts", "INTEGER NOT NULL DEFAULT 0"),
+                         ("token_sent_at", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1"), ("last_login", "TEXT"),
+                         ("verified_at", "TEXT"), ("verified_by", "TEXT")))
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
 
@@ -929,6 +943,37 @@ class Store:
 
     def delete_session(self, token_hash: str) -> None:
         self.con.execute("DELETE FROM sessions WHERE token = ?", (token_hash,))
+
+    # ---- тренеры (личный кабинет): вход в сеанс — login «trainer:<id>», чтобы не путать с логинами судей
+    def trainers(self) -> list:
+        return self._rows(self.con.execute(
+            "SELECT id, name, team, email, is_verified, active, created_at, last_login, verified_at, verified_by "
+            "FROM trainers ORDER BY is_verified, created_at DESC"))
+
+    def trainer_by_email(self, email: str) -> Optional[dict]:
+        rows = self._rows(self.con.execute("SELECT * FROM trainers WHERE email = ?", (email,)))
+        return rows[0] if rows else None
+
+    def trainer_by_id(self, tid: int) -> Optional[dict]:
+        rows = self._rows(self.con.execute("SELECT * FROM trainers WHERE id = ?", (tid,)))
+        return rows[0] if rows else None
+
+    def add_trainer(self, name: str, team: str, email: str, pwd_hash: str) -> int:
+        cur = self.con.execute("INSERT INTO trainers(name, team, email, password_hash, created_at) VALUES (?,?,?,?,?)",
+                               (name, team, email, pwd_hash, fmt_db(now_local())))
+        return int(cur.lastrowid)
+
+    def update_trainer(self, tid: int, **f) -> None:
+        for k in ("name", "team", "password_hash", "is_verified", "verification_token", "token_expires", "token_attempts",
+                  "token_sent_at", "active", "last_login", "verified_at", "verified_by"):
+            if k in f:
+                self.con.execute(f"UPDATE trainers SET {k} = ? WHERE id = ?", (f[k], tid))
+        if "password_hash" in f or f.get("active") == 0 or f.get("is_verified") == 0:
+            self.con.execute("DELETE FROM sessions WHERE login = ?", (f"trainer:{tid}",))
+
+    def delete_trainer(self, tid: int) -> None:
+        self.con.execute("DELETE FROM trainers WHERE id = ?", (tid,))
+        self.con.execute("DELETE FROM sessions WHERE login = ?", (f"trainer:{tid}",))
 
     # ---- ридеры, заведённые через браузер
     def readers(self) -> list:
@@ -5807,6 +5852,11 @@ class Hub:
         return None
 
     def _user_by_login(self, login: str) -> Optional[dict]:
+        if login.startswith("trainer:"):
+            t = self.store.trainer_by_id(int(login[8:])) if login[8:].isdigit() else None
+            if not t or not t.get("active", 1) or not t.get("is_verified"):
+                return None     # заблокирован или почта не подтверждена — сеанса нет
+            return {"login": t["email"], "name": t["name"], "role": "trainer", "team": t["team"], "trainer_id": t["id"]}
         u = self.store.get_user(login)
         if u:
             if not u.get("active", 1):
@@ -5846,7 +5896,7 @@ class Hub:
         return None
 
     # только администратор: сервер и обновления, оборудование IPICO/Wiclax, VPN, учётные записи, сырые отметки
-    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
+    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users|trainers)(/.*)?|/raw|/simple")
     JUDGE_OPEN = ("/api/system/scoreboard/control",)                 # пульт табло — судейский, хоть и под /api/system
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 
@@ -5854,7 +5904,12 @@ class Hub:
         role = self.LEGACY_ROLES.get(role, role)
         return role if role in self.ROLES else "judge"
 
+    # тренер в панели: только кто я / выход и /protocol (его сервер переадресует на закрытый протокол в /r/)
+    TRAINER_PANEL = ("/api/me", "/api/logout", "/protocol")
+
     def role_allows(self, role: str, method: str, path: str) -> bool:
+        if role == "trainer":
+            return path in self.TRAINER_PANEL
         role = self._role(role)
         if role == "admin":
             return True
@@ -5906,6 +5961,245 @@ class Hub:
         nxt = self._safe_next(d.get("next"))
         return 200, {"ok": True, "user": u, "next": nxt}, {"Set-Cookie": cookie}
 
+    # ---- 5.0: личный кабинет тренера — регистрация, подтверждение почты кодом, вход, закрытые протоколы
+    EMAIL_RE = re.compile(r"[^@\s<>\"',;]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}")
+    CODE_TTL_MIN = 30          # код из письма действует 30 минут
+    CODE_TRIES = 5             # после 5 неверных вводов — только новый код
+
+    def mail_mode(self) -> str:
+        """smtp — настоящая почта; outbox — письма складываются файлами (проверка, сервер без почты); '' — не настроено."""
+        m = self.cfg.get("mail") or {}
+        return "smtp" if m.get("host") else "outbox" if m.get("outbox_dir") else ""
+
+    def send_mail(self, to: str, subject: str, text: str) -> bool:
+        """Письмо отправляется в отдельном потоке — приём отметок и страницы не ждут почтовый сервер."""
+        from email.message import EmailMessage
+        import secrets
+        import threading
+        m = self.cfg.get("mail") or {}
+        mode = self.mail_mode()
+        if not mode:
+            return False
+        msg = EmailMessage()
+        msg["From"] = m.get("from") or m.get("user") or "SakhStart <noreply@localhost>"
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.set_content(text)
+        if mode == "outbox":
+            os.makedirs(m["outbox_dir"], exist_ok=True)
+            fn = os.path.join(m["outbox_dir"], f"{now_local():%Y%m%d-%H%M%S}-{secrets.token_hex(4)}.eml")
+            with open(fn, "wb") as fh:
+                fh.write(bytes(msg))
+            return True
+
+        def run():
+            import smtplib
+            import ssl
+            try:
+                port = int(m.get("port") or 587)
+                sec = str(m.get("security") or ("ssl" if port == 465 else "starttls"))
+                ctx = ssl.create_default_context()
+                srv = (smtplib.SMTP_SSL(m["host"], port, timeout=20, context=ctx) if sec == "ssl"
+                       else smtplib.SMTP(m["host"], port, timeout=20))
+                with srv as s:
+                    if sec == "starttls":
+                        s.starttls(context=ctx)
+                    if m.get("user"):
+                        s.login(m["user"], m.get("password") or "")
+                    s.send_message(msg)
+            except Exception as e:  # сеть, авторизация, отказ сервера
+                log.warning("Почта: письмо не отправлено: %s", e)
+        threading.Thread(target=run, daemon=True).start()
+        return True
+
+    @staticmethod
+    def _code_hash(email: str, code: str) -> str:
+        return hashlib.sha256(f"{email}|{code}".encode()).hexdigest()
+
+    def _issue_code(self, t: dict) -> bool:
+        import secrets
+        code = f"{secrets.randbelow(10 ** 6):06d}"
+        now = now_local()
+        self.store.update_trainer(t["id"], verification_token=self._code_hash(t["email"], code), token_attempts=0,
+                                  token_expires=fmt_db(now + dt.timedelta(minutes=self.CODE_TTL_MIN)),
+                                  token_sent_at=fmt_db(now))
+        base = self.public_base()
+        return self.send_mail(
+            t["email"], f"Код подтверждения: {code} — SakhStart",
+            f"Здравствуйте, {t['name']}!\n\n"
+            f"Код подтверждения почты для личного кабинета тренера SakhStart:\n\n    {code}\n\n"
+            f"Код действует {self.CODE_TTL_MIN} минут. Введите его на странице входа"
+            + (f": {base}/r/trainer" if base else "") + ".\n\n"
+            "Если вы не регистрировались — просто удалите это письмо, без кода учётная запись не откроется.\n\n"
+            "Федерация лёгкой атлетики Сахалинской области · SakhStart")
+
+    def protocol_viewer(self, headers: dict) -> Optional[dict]:
+        """Кто может смотреть протоколы: администратор, судья или тренер с подтверждённой почтой."""
+        u = self.session_user(headers)
+        if not u:
+            return None
+        return u if u["role"] == "trainer" or self._role(u["role"]) in ("admin", "judge") else None
+
+    def _trainer_cookie(self, tok: str, headers: dict) -> str:
+        sec = headers.get("x-forwarded-proto") == "https"
+        return (f"{self.SESSION_COOKIE}={tok}; Path=/; Max-Age={self.SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax"
+                + ("; Secure" if sec else ""))
+
+    def _trainer_session(self, t: dict, headers: dict, ip: str) -> dict:
+        import secrets
+        tok = secrets.token_urlsafe(32)
+        self.store.add_session(hashlib.sha256(tok.encode()).hexdigest(), f"trainer:{t['id']}", self.SESSION_DAYS, ip)
+        self.store.update_trainer(t["id"], last_login=fmt_db(now_local()))
+        return {"Set-Cookie": self._trainer_cookie(tok, headers)}
+
+    def trainer_events(self) -> list:
+        """Закрытый список для кабинета: наши соревнования, у которых выложен стартовый или итоговый протокол."""
+        out = []
+        for e in self.store.list_events():
+            v = self._event_view(e)
+            if not (e.get("reg_slug") and v["ours"] and (v["pub_start"] or v["pub_results"])):
+                continue
+            out.append({"name": e["name"], "date": e.get("date"), "date_end": e.get("date_end"),
+                        "place": e.get("place") or "", "city": e.get("city") or "", "status": v.get("status") or "planned",
+                        "start": bool(v["pub_start"]), "results": bool(v["pub_results"]),
+                        "protocol": f"/r/{e['reg_slug']}/protocol"})
+        run =[x for x in out if x["status"] == "running"]
+        rest = sorted([x for x in out if x["status"] != "running"], key=lambda x: x["date"] or "0000", reverse=True)
+        return run + rest
+
+    def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
+        """(код, ответ, доп. заголовки). sub: register | verify | resend | login | logout | me | events."""
+        if sub in ("me", "events") and method == "GET":
+            u = self.protocol_viewer(headers)
+            if not u:
+                return 401, {"error": "нужно войти", "login": "/r/trainer"}, None
+            if sub == "me":
+                return 200, {"name": u.get("name") or u["login"], "team": u.get("team") or "", "email": u["login"]
+                             if u["role"] == "trainer" else "", "role": u["role"]}, None
+            return 200, {"events": self.trainer_events()}, None
+        if method != "POST":
+            return 405, {"error": "метод не поддерживается"}, None
+        if headers.get("x-requested-with") != "timing-hub":
+            return 403, {"error": "нужен заголовок X-Requested-With"}, None
+        if sub == "logout":
+            tok = self._cookie(headers, self.SESSION_COOKIE)
+            if tok:
+                self.store.delete_session(hashlib.sha256(tok.encode()).hexdigest())
+            return 200, {"ok": True}, {"Set-Cookie": f"{self.SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"}
+        try:
+            d = json.loads(body.decode("utf-8") or "{}")
+            if not isinstance(d, dict):
+                raise ValueError
+        except (ValueError, UnicodeDecodeError):
+            return 400, {"error": "неверные данные"}, None
+        email = str(d.get("email") or "").strip().lower()[:254]
+        if sub == "register":
+            if str(d.get("website") or "").strip():                     # ловушка для ботов
+                return 200, {"ok": True, "email": email, "sent": True}, None
+            if not (self._rate_ok("treg-ip:" + ip, 10, 3600) and self._rate_ok("treg-all", 100, 3600)):
+                return 429, {"error": "Слишком много регистраций подряд. Попробуйте через час."}, None
+            name = re.sub(r"\s+", " ", str(d.get("name") or "")).strip()[:80]
+            team = re.sub(r"\s+", " ", str(d.get("team") or "")).strip()[:120]
+            pwd = str(d.get("password") or "")[:200]
+            errs = {}
+            if len(name.split(" ")) < 2:
+                errs["name"] = "Укажите фамилию и имя"
+            if len(team) < 2:
+                errs["team"] = "Укажите спортивную школу или клуб"
+            if not self.EMAIL_RE.fullmatch(email):
+                errs["email"] = "Проверьте адрес почты: например, coach@mail.ru"
+            if len(pwd) < 8:
+                errs["password"] = "Пароль — не короче 8 символов"
+            if not d.get("consent"):
+                errs["consent"] = "Нужно согласие на обработку персональных данных"
+            if errs:
+                return 400, {"error": "Проверьте поля формы", "fields": errs}, None
+            t = self.store.trainer_by_email(email)
+            if t and t["is_verified"]:
+                return 409, {"error": "Эта почта уже зарегистрирована — войдите с паролем", "login": True}, None
+            if t:     # не подтвердил в прошлый раз — обновляем данные и шлём новый код
+                if t.get("token_sent_at") and (now_local() - parse_db(t["token_sent_at"])).total_seconds() < 60:
+                    return 429, {"error": "Код уже отправлен — новый можно запросить через минуту", "verify": True}, None
+                self.store.update_trainer(t["id"], name=name, team=team, password_hash=self.hash_password(pwd))
+            else:
+                self.store.add_trainer(name, team, email, self.hash_password(pwd))
+            t = self.store.trainer_by_email(email)
+            sent = self._issue_code(t)
+            self.store.audit(f"тренер {email}@{ip}", None, "Тренер: регистрация",
+                             f"{name} · {team}" + ("" if sent else " · почта не настроена, нужно подтверждение администратора"))
+            return 200, {"ok": True, "email": email, "sent": sent}, None
+        if sub == "resend":
+            if not (self._rate_ok("tres-ip:" + ip, 10, 3600) and self._rate_ok("tres-e:" + email, 5, 3600)):
+                return 429, {"error": "Слишком много запросов кода. Попробуйте через час."}, None
+            t = self.store.trainer_by_email(email)
+            if not t or t["is_verified"]:
+                return 400, {"error": "Для этой почты код не нужен: зарегистрируйтесь или войдите"}, None
+            if t.get("token_sent_at") and (now_local() - parse_db(t["token_sent_at"])).total_seconds() < 60:
+                return 429, {"error": "Код уже отправлен — новый можно запросить через минуту"}, None
+            return 200, {"ok": True, "sent": self._issue_code(t)}, None
+        if sub == "verify":
+            if not (self._rate_ok("tver-ip:" + ip, 30, 600) and self._rate_ok("tver-all", 300, 600)):
+                return 429, {"error": "Слишком много попыток. Подождите 10 минут."}, None
+            code = re.sub(r"\D", "", str(d.get("code") or ""))[:6]
+            t = self.store.trainer_by_email(email)
+            if not t:
+                return 400, {"error": "Неверная почта или код"}, None
+            if not t.get("active", 1):
+                return 403, {"error": "Учётная запись заблокирована — обратитесь к организатору"}, None
+            if not t["is_verified"]:
+                if not t.get("verification_token") or not t.get("token_expires") or now_local() > parse_db(t["token_expires"]):
+                    return 400, {"error": "Код устарел — нажмите «Отправить код ещё раз»", "expired": True}, None
+                if int(t.get("token_attempts") or 0) >= self.CODE_TRIES:
+                    return 429, {"error": "Слишком много неверных попыток — запросите новый код", "expired": True}, None
+                if len(code) != 6 or not hmac.compare_digest(self._code_hash(email, code), t["verification_token"]):
+                    left = self.CODE_TRIES - int(t.get("token_attempts") or 0) - 1
+                    self.store.update_trainer(t["id"], token_attempts=int(t.get("token_attempts") or 0) + 1)
+                    return 400, {"error": "Неверный код" + (f" — осталось попыток: {left}" if left > 0 else " — запросите новый")}, None
+                self.store.update_trainer(t["id"], is_verified=1, verification_token=None, token_expires=None,
+                                          verified_at=fmt_db(now_local()), verified_by="код из письма")
+                self.store.audit(f"тренер {email}@{ip}", None, "Тренер: почта подтверждена", f"{t['name']} · {t['team']}")
+            t = self.store.trainer_by_email(email)
+            return 200, {"ok": True, "name": t["name"]}, self._trainer_session(t, headers, ip)
+        if sub == "login":
+            pwd = str(d.get("password") or "")[:200]
+            if not (self._rate_ok("tlog-ip:" + ip, 10, 600) and self._rate_ok("tlog-e:" + email, 10, 600)
+                    and self._rate_ok("login-all", 200, 600)):
+                return 429, {"error": "Слишком много попыток. Подождите 10 минут."}, None
+            t = self.store.trainer_by_email(email) if email and pwd else None
+            if not t or not self.verify_password(pwd, t["password_hash"]):
+                self.store.audit(f"тренер {email or '?'}@{ip}", None, "Тренер: неудачный вход")
+                return 401, {"error": "Неверная почта или пароль"}, None
+            if not t.get("active", 1):
+                return 403, {"error": "Учётная запись заблокирована — обратитесь к организатору"}, None
+            if not t["is_verified"]:
+                return 403, {"error": "Почта ещё не подтверждена — введите код из письма", "verify": True}, None
+            self.store.audit(f"тренер {email}@{ip}", None, "Тренер: вход")
+            return 200, {"ok": True, "name": t["name"], "next": self._safe_next(d.get("next"))}, \
+                self._trainer_session(t, headers, ip)
+        return 404, {"error": "нет такого адреса"}, None
+
+    def trainers_admin(self, method: str, path: str, actor: str) -> tuple:
+        """Администратор: список тренеров, ручное подтверждение (когда почта сервера не настроена), блокировка, удаление."""
+        if path == "/api/trainers" and method == "GET":
+            return 200, {"trainers": self.store.trainers(), "mail": self.mail_mode()}
+        m = re.fullmatch(r"/api/trainers/(\d+)/(verify|block|unblock|delete)", path)
+        if not m or method != "POST":
+            return 404, {"error": "нет такого адреса"}
+        t = self.store.trainer_by_id(int(m.group(1)))
+        if not t:
+            return 404, {"error": "тренер не найден"}
+        act = m.group(2)
+        if act == "verify":
+            self.store.update_trainer(t["id"], is_verified=1, verification_token=None, token_expires=None,
+                                      verified_at=fmt_db(now_local()), verified_by=actor.split("@")[0])
+        elif act in ("block", "unblock"):
+            self.store.update_trainer(t["id"], active=0 if act == "block" else 1)
+        else:
+            self.store.delete_trainer(t["id"])
+        names = {"verify": "почта подтверждена вручную", "block": "заблокирован", "unblock": "разблокирован", "delete": "удалён"}
+        self.store.audit(actor, None, "Тренер: " + names[act], f"{t['name']} · {t['email']}")
+        return 200, {"ok": True}
+
     LOGIN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,31}")
 
     def users_api(self, method: str, path: str, body: bytes, me: dict, actor: str) -> tuple:
@@ -5916,7 +6210,7 @@ class Hub:
         except (ValueError, UnicodeDecodeError):
             return 400, {"error": "неверные данные"}
         if path == "/api/me":
-            return 200, {**me, "role_name": self.ROLES.get(me["role"], me["role"])}
+            return 200, {**me, "role_name": "Тренер" if me["role"] == "trainer" else self.ROLES.get(me["role"], me["role"])}
         if path == "/api/me/password" and method == "POST":
             old, new = str(data.get("old") or ""), str(data.get("new") or "")
             if not self.check_login(me["login"], old):
@@ -6048,6 +6342,11 @@ class Hub:
                 await self._send(writer, 200, J, '{"ok":true}',
                                  extra={"Set-Cookie": f"{self.SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
                 return
+            mt = re.fullmatch(r"/api/auth/trainer/(register|verify|resend|login|logout|me)", path)
+            if mt:
+                code, res, extra = self.trainer_api(method, mt.group(1), headers, body, client_ip)
+                await self._send(writer, code, J, json.dumps(res, ensure_ascii=False), extra=extra)
+                return
             if path.startswith("/assets/") and method == "GET":
                 a = self._asset(path[8:])
                 if a is None:
@@ -6065,15 +6364,27 @@ class Hub:
                     await self._send(writer, 401, J, json.dumps({"error": "нужно войти", "login": "/login"}, ensure_ascii=False))
                 elif path == "/" and proxied:
                     await self._send(writer, 302, "text/plain", "", extra={"Location": "/r/"})
+                elif path == "/protocol":
+                    # 5.0: гость на протоколе — на вход тренера (там же ссылка «Вход для судей и организаторов»)
+                    from urllib.parse import quote
+                    await self._send(writer, 302, "text/plain", "", extra={"Location": "/r/trainer?next=" + quote(target, safe="")})
                 else:
                     from urllib.parse import quote
                     nxt = "" if path == "/" else "?next=" + quote(target, safe="")
                     await self._send(writer, 302, "text/plain", "", extra={"Location": "/login" + nxt})
                 return
+            if user["role"] == "trainer" and path == "/protocol" and method == "GET":
+                # тренер видит протокол только в закрытой части /r/: без чипов, и только выложенный организатором
+                ev_ = self.store.get_event(int(qs["event"])) if str(qs.get("event", "")).isdigit() else None
+                v_ = self._event_view(ev_) if ev_ else None
+                ok_ = v_ and ev_.get("reg_slug") and v_["ours"] and (v_["pub_start"] or v_["pub_results"])
+                await self._send(writer, 302, "text/plain", "",
+                                 extra={"Location": f"/r/{ev_['reg_slug']}/protocol" if ok_ else "/r/trainer"})
+                return
             if not self.role_allows(user["role"], method, path):
                 if method == "GET" and not path.startswith("/api/"):
                     await self._send(writer, 302, "text/plain", "",
-                                     extra={"Location": "/"})
+                                     extra={"Location": "/r/trainer" if user["role"] == "trainer" else "/"})
                 else:
                     await self._send(writer, 403, J, json.dumps({"error": "недостаточно прав"}, ensure_ascii=False))
                 return
@@ -6085,6 +6396,10 @@ class Hub:
                 actor = f"{user['login']}@{client_ip}"
                 if path == "/api/me" or path.startswith("/api/users") or path == "/api/me/password":
                     code, res = self.users_api(method, path, body, user, actor)
+                    await self._send(writer, code, J, json.dumps(res, ensure_ascii=False))
+                    return
+                if path == "/api/trainers" or path.startswith("/api/trainers/"):
+                    code, res = self.trainers_admin(method, path, actor)
                     await self._send(writer, code, J, json.dumps(res, ensure_ascii=False))
                     return
                 # Обновление с GitHub: сеть — в отдельном потоке, чтобы не задерживать приём отметок
@@ -6217,9 +6532,14 @@ class Hub:
         def js(obj, code=200):
             return code, J, json.dumps(obj, ensure_ascii=False), None
 
-        if method == "GET" and path in ("/r", "/r/"):
+        if method == "GET" and path in ("/r", "/r/", "/r/trainer", "/r/trainer/"):
             page = self._ui_file("reg.html")
             return 200, "text/html; charset=utf-8", page or "нет reg.html", None
+        # 5.0: личный кабинет тренера (тот же обработчик доступен в панели как /api/auth/trainer/…)
+        mt = re.fullmatch(r"/r/api/(?:auth/trainer/(register|verify|resend|login|logout|me)|trainer/(events))", path)
+        if mt:
+            code, out, extra = self.trainer_api(method, mt.group(1) or mt.group(2), headers, body, client)
+            return code, J, json.dumps(out, ensure_ascii=False), extra
         if method == "GET" and path.startswith("/r/assets/"):
             a = self._asset(path[10:])
             if a is None:
@@ -6265,6 +6585,13 @@ class Hub:
             info["card"] = self.event_card(ev)
             return js(info)
         if method == "GET" and sub in ("/results.json", "/startlist.json", "/protocol"):
+            # 5.0: протоколы закрыты — только администратор, судья и тренер с подтверждённой почтой
+            if not self.protocol_viewer(headers):
+                if sub == "/protocol":
+                    from urllib.parse import quote
+                    nxt = f"/r/{m.group(1)}/protocol" + (f"?kind={quote(str((qs or {}).get('kind', '')))}" if (qs or {}).get("kind") else "")
+                    return 302, "text/plain; charset=utf-8", "", {"Location": "/r/trainer?next=" + quote(nxt, safe="")}
+                return js({"error": "Протоколы доступны тренерам, судьям и организаторам — войдите", "login": "/r/trainer"}, 401)
             v = self._event_view(ev)
             if sub == "/protocol":
                 page = self._ui_file("protocol.html")
