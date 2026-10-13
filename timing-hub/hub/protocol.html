@@ -102,6 +102,8 @@ thead{display:table-header-group}
 .sheet.land{width:297mm;min-height:210mm}
 .hide{display:none!important}
 .cartmode .bar select,.cartmode .bar label,.cartmode #csv{display:none}
+.embed .bar{display:none}.embed .sheet{margin:0 auto;box-shadow:none}
+.att.tf td.cellv{min-width:12mm;height:8mm;font-size:12px;border-left:1px solid var(--pr-line-2)}.att.tf td.bestv{font-weight:700;background:rgba(0,0,0,.05)}
 .cp{margin:0}.cp+.cp{margin-top:18mm;border-top:2px dashed var(--pr-line-2);padding-top:10mm}
 @media print{.cp+.cp{margin-top:0;border-top:0;padding-top:0}}
 .att th,.att td,.swt th.swh{padding:3px 2px}
@@ -169,13 +171,17 @@ const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.par
 let R=null, SL=null;
 const kind=new URLSearchParams(location.search).get("kind");
 if(kind==="cart") document.body.classList.add("cartmode");
+if(new URLSearchParams(location.search).get("embed")) document.body.classList.add("embed");
+let DIST=new URLSearchParams(location.search).get("dist")||"";      // дисциплина целиком (мастер протоколов)
+const QGRP=new URLSearchParams(location.search).get("grp")||"", HASGRP=new URLSearchParams(location.search).has("grp");
+const QIDS=(new URLSearchParams(location.search).get("ids")||"").split(",").filter(Boolean);
 const QTEAM=new URLSearchParams(location.search).get("team")||"";
 ["mode","smode","orient","sexf","grp","team","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
   const el=$(id), saved=LS.get("protocol."+id,null);
   if(saved!==null){ if(el.type==="checkbox") el.checked=saved; else if(id!=="grp"&&id!=="team") el.value=saved; }
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
 });
-{const q=new URLSearchParams(location.search); ["smode","orient","sexf"].forEach(k=>{const v=q.get(k); if(v&&[...$(k).options].some(o=>o.value===v)) $(k).value=v;});}
+{const q=new URLSearchParams(location.search); ["smode","orient","sexf","mode"].forEach(k=>{const v=q.get(k); if(v!==null&&[...$(k).options].some(o=>o.value===v)) $(k).value=v;});}
 const dateRu=d=>{ if(!d) return ""; const [y,m,dd]=d.split("-"); return `${dd}.${m}.${y}`; };
 const PUB=window.PUB, SLUG=PUB?PUB[1]:"", A=window.ASSETS||"/assets/";
 $("barLogo").src=A+"sakhstart-dark.svg";
@@ -213,6 +219,7 @@ async function load(){
   const prev=LS.get("protocol.grp","");
   $("grp").innerHTML='<option value="">все дистанции и категории</option>'+keys.map(k=>{const [d,c]=k.split("|");return `<option value="${esc(k)}">${esc(gtitle(d,c))}</option>`;}).join("");
   if(keys.includes(prev)) $("grp").value=prev;
+  if(HASGRP) $("grp").value=keys.includes(QGRP)?QGRP:"";
   if(kind==="start") $("mode").value="start";
   else if(kind==="results"&&$("mode").value==="start") $("mode").value="overall";
   fillTeams(); if(kind==="teams"&&R.teams&&R.teams.length) $("mode").value="teams";
@@ -309,7 +316,7 @@ function startSheet(o){
   const heatsAll=SL.heats.map(h=>Object.assign({},h,{entries:fe(h.entries)}));
   const looseAll=fe(SL.no_heat||[]);
   const parts=[].concat(...heatsAll.map(partsOf));
-  const gm=p=>!gf||gkey(p)===gf||gkey(p.src)===gf;
+  const gm=p=>(!DIST||p.distance===DIST||(p.src&&p.src.distance===DIST))&&(!gf||gkey(p)===gf||gkey(p.src)===gf);
   const lparts=list&&looseAll.length?partsOf({name:"",category:"",distance:"",entries:looseAll,rtype:"time",slots:0}):[];
   const shown=parts.concat(lparts).filter(p=>gm(p)&&p.entries.length);
   const tech=shown.some(p=>p.tech);
@@ -366,8 +373,20 @@ function renderStart(){
 // «Корзина печати»: набор бланков из админки (ss.cart.<событие>) — один документ, каждый бланк с новой страницы
 function renderCart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
-  const items=LS.get("ss.cart."+eid,[]), coach=$("showCoach").checked;
-  const secs=(Array.isArray(items)?items:[]).map(it=>startSheet({gf:it.gk||"",sf:it.sf||"",list:it.mode==="list",coach,landscape:it.orient==="landscape"})).filter(r=>!r.empty);
+  let items=LS.get("ss.cart."+eid,[]); items=Array.isArray(items)?items:[];
+  if(QIDS.length) items=items.filter(it=>QIDS.includes(String(it.id)));
+  const coach=$("showCoach").checked, keep={m:$("mode").value,g:$("grp").value,s:$("sexf").value};
+  const secs=items.map(it=>{
+    DIST=it.dist||"";
+    if(it.type==="final"){
+      if(!R) return {empty:true};
+      $("mode").value=it.mode==="heats"?"heats":"overall"; $("grp").value=it.gk||""; $("sexf").value=it.sf||"";
+      if($("grp").value!==(it.gk||"")) return {empty:true};
+      const f=buildFinal(); return {html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)};
+    }
+    return startSheet({gf:it.gk||"",sf:it.sf||"",list:it.mode==="list",coach,landscape:it.orient==="landscape"});
+  }).filter(r=>!r.empty);
+  $("mode").value=keep.m; $("grp").value=keep.g; $("sexf").value=keep.s; DIST="";
   if(!secs.length){ $("sheet").innerHTML='<div class="empty"><b>Корзина печати пуста</b>Вернитесь в «Регистрацию», отметьте бланки галочками и нажмите «Добавить выделенные в корзину печати».</div>'; return; }
   let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
   const first=secs[0].land;
@@ -379,17 +398,25 @@ function renderCart(){
 }
 function syncStartCtl(){
   const isStart=!R&&PUB&&SL||$("mode").value==="start"; const list=$("smode").value==="list";
-  $("smode").classList.toggle("hide",!isStart); $("sexf").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
+  $("smode").classList.toggle("hide",!isStart); $("sexf").classList.toggle("hide",$("mode").value==="teams"&&!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
 }
 
 function render(){
   if(kind==="cart") return renderCart();
   syncStartCtl();
   if(!R){ if(PUB&&SL) renderStart(); return; }
-  const ev=R.event, mode=$("mode").value, gf=$("grp").value, tf=$("team").hidden?"":$("team").value;
-  if(mode==="start") return renderStart();
-  setPage(false);
-  const byTeam=x=>!tf||x.team===tf;
+  if($("mode").value==="start") return renderStart();
+  const r=buildFinal();
+  setPage(r.land); $("sheet").innerHTML=r.html;
+}
+// итоговый протокол по текущим настройкам панели → {html, land}; техника (попытки) — горизонтальный лист с 6 попытками
+function buildFinal(){
+  const ev=R.event, mode=$("mode").value, gf=$("grp").value, tf=$("team").hidden?"":$("team").value, sf=$("sexf").value;
+  const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&(!DIST||x.distance===DIST);
+  const techX=x=>isTech(x.rt||x.rtype,0,!!(x.attempts&&x.attempts.length));
+  const anyDone=R.finished.some(x=>x.done_rank);
+  let anyTechShown=false;
+  const renum=list=>{ let prev=null,p=0; list.forEach((x,i)=>{ if(!prev||prev.result!==x.result) p=i+1; x._pl=p; prev=x; }); };
   const anyPts=R.finished.some(x=>x.points!=null);
   const fmtPts=v=>v==null?"":String(v).replace(".",",");
   const coachOn=$("showCoach").checked&&R.finished.concat(R.not_seen).some(x=>x.coach);
@@ -408,12 +435,16 @@ function render(){
   const head=(placeLbl,withHeat)=>`<thead><tr><th style="width:42px">${placeLbl}</th><th style="width:52px">Нагр. №</th>
     ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyRank?'<th style="width:46px">Разряд</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
     ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
-    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyDone?'<th style="width:56px">Вып. разряд</th>':''}${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+  // техника: на каждое место — все шесть попыток, чтобы был виден ход борьбы
+  const techHead=withHeat=>`<thead><tr><th rowspan="2" style="width:42px">Место</th><th rowspan="2" style="width:52px">Нагр. №</th><th rowspan="2">Фамилия, имя</th><th rowspan="2" style="width:46px">Год рожд.</th>${anyRank?'<th rowspan="2" style="width:46px">Разряд</th>':''}${anyTeam?'<th rowspan="2">Команда</th>':''}${coachOn?'<th rowspan="2">Тренер</th>':''}<th colspan="6" class="sub" style="text-align:center">Попытки</th><th rowspan="2" style="width:84px">Лучший результат</th>${anyDone?'<th rowspan="2" style="width:56px">Вып. разряд</th>':''}</tr><tr>${[1,2,3,4,5,6].map(i=>`<th class="sub">Попытка ${i}</th>`).join("")}</tr></thead>`;
+  const techTr=(x,place,res)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td><td>${esc(x.name)}</td><td class="c">${esc(x.birth_year)}</td>${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}${[0,1,2,3,4,5].map(i=>{const v=(x.attempts||[])[i]||""; return `<td class="c cellv${v&&res&&String(v).replace(",",".")===String(res).replace(",",".")?" bestv":""}">${esc(v)}</td>`;}).join("")}<td class="c"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}</tr>`;
+  const techOutRows=(list)=>list.map(x=>`<tr><td class="c">—</td><td class="c">${esc(x.bib)}</td><td>${esc(x.name)}</td><td class="c">${esc(x.birth_year)}</td>${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td></td>`:''}<td class="c" colspan="6">${esc((x.attempts||[]).map(v=>v||"–").join(" · "))}</td><td class="c"><b>${esc(x.status||((x.attempts||[]).some(Boolean)?"NM":"DNS"))}</b></td>${anyDone?'<td></td>':''}</tr>`).join("");
   const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
     ${anyName?`<td>${esc(x.name)}${mem(x)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
     ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
-    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
+    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
   const handNote=x=>man(x)&&!allManual?"р":"";
   // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
   const outCode=x=>x.status||(x.last_point?"DNF":"DNS");
@@ -435,10 +466,15 @@ function render(){
     if(dnf) R.on_course.concat(R.not_seen).filter(byTeam).forEach(x=>(groups[gkey(x)]=groups[gkey(x)]||{f:[],d:[]}).d.push(x));
     Object.keys(groups).sort().filter(k=>!gf||k===gf).forEach(k=>{
       const [d,c]=k.split("|"), g=groups[k]; g.f.sort((a,b)=>a.place_overall-b.place_overall);
-      body+=`<h2>${esc(gtitle(d,c))} <small>— финишировали ${g.f.length}${g.d.length?`, без результата ${g.d.length}`:""}</small></h2>
-        <table>${head("Место",hasHeats)}<tbody>${g.f.map(x=>tr(x,x.place_overall,hasHeats,x.result,handNote(x))).join("")}${dnfRows(g.d,hasHeats)}</tbody></table>`;
+      if(sf) renum(g.f);
+      const pl=x=>sf?x._pl:x.place_overall;
+      const th=g.f.concat(g.d).some(techX);
+      if(th) anyTechShown=true;
+      body+=`<h2>${esc(gtitle(d,c))} <small>— ${th?"техническая дисциплина, ":""}финишировали ${g.f.length}${g.d.length?`, без результата ${g.d.length}`:""}</small></h2>`
+        +(th?`<table class="att tf">${techHead()}<tbody>${g.f.map(x=>techTr(x,pl(x),x.result)).join("")}${techOutRows(g.d)}</tbody></table>`
+            :`<table>${head("Место",hasHeats)}<tbody>${g.f.map(x=>tr(x,pl(x),hasHeats,x.result,handNote(x))).join("")}${dnfRows(g.d,hasHeats)}</tbody></table>`);
     });
-    if(!gf&&!tf) body+=teamsHtml();
+    if(!gf&&!tf&&!DIST) body+=teamsHtml();
   } else {
     const heats=hasHeats?ev.waves:[{name:"",category:"",distance:""}];
     heats.forEach(w=>{
@@ -446,8 +482,12 @@ function render(){
       const d=dnf?R.on_course.concat(R.not_seen).filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)&&byTeam(x)):[];
       if(!f.length&&!d.length) return;
       const st=w.start_time?` · старт ${w.start_time.slice(11,19)}`:"";
-      body+=`<h2>${esc(w.name||"Общий старт")} <small>— ${esc(gtitle(w.distance,w.category))}${st}</small></h2>
-        <table>${head("Место",false)}<tbody>${f.map(x=>tr(x,x.place,false,x.result,handNote(x))).join("")}${dnfRows(d,false)}</tbody></table>`;
+      const tf_=f.filter(techX), rf=f.filter(x=>!techX(x)), td_=d.filter(techX), rd_=d.filter(x=>!techX(x));
+      if(sf){ renum(tf_); renum(rf); }
+      const pl=x=>sf?x._pl:x.place;
+      const ttl=`<h2>${esc(w.name||"Общий старт")} <small>— ${esc(gtitle(w.distance,w.category))}${st}</small></h2>`;
+      if(rf.length||rd_.length) body+=ttl+`<table>${head("Место",false)}<tbody>${rf.map(x=>tr(x,pl(x),false,x.result,handNote(x))).join("")}${dnfRows(rd_,false)}</tbody></table>`;
+      if(tf_.length||td_.length){ anyTechShown=true; body+=(rf.length||rd_.length?"":ttl)+`<table class="att tf">${techHead()}<tbody>${tf_.map(x=>techTr(x,pl(x),x.result)).join("")}${techOutRows(td_)}</tbody></table>`; }
     });
   }
   if(!body) body='<div class="empty">Результатов пока нет</div>';
@@ -462,7 +502,9 @@ function render(){
     notes.push(`DNS — не стартовал, DNF — не финишировал${more}.`);
   }
 
-  $("sheet").innerHTML=`
+  if(anyTechShown) notes.push("Лучший результат определён по шести попыткам: X — неудачная попытка, «–» — пропуск.");
+  if(sf&&mode!=="teams") notes.push(sf==="М"?"Показаны только мальчики, юноши, мужчины. Места пересчитаны среди показанных.":"Показаны только девочки, девушки, женщины. Места пересчитаны среди показанных.");
+  return {land:anyTechShown, html:`
     ${BRAND}${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}
     <h1>${mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ"}</h1>${tf&&mode!=="teams"?`<div class="ev" style="margin-top:-4px">Команда: ${esc(tf)}</div>`:""}
     <div class="ev">${esc(ev.name)}</div>
@@ -473,7 +515,7 @@ function render(){
       <span>Главный судья</span><span class="u"></span><span class="nm">${esc(ev.chief_judge||"/____________________/")}</span>
       <span>Главный секретарь</span><span class="u"></span><span class="nm">${esc(ev.chief_secretary||"/____________________/")}</span>
     </div>
-    <div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`;
+    <div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`};
 }
 load();
 </script>

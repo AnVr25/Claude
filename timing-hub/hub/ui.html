@@ -203,6 +203,26 @@ button.bigred:hover{background:#A31217}
 .cartbox .ci{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
 button.bigprint{background:var(--track);border-color:var(--track);color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
 button.bigprint:hover{filter:brightness(1.08)}
+.cartbox .ci label{flex:1;min-width:0}
+.wzp-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}
+.wzp-disc{display:grid;gap:4px}.wzp-disc select{min-width:240px}
+.wzp-kind{font:700 14px var(--body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.wzp-kind.run{border-color:#1E7B3A;color:#1E7B3A}.wzp-kind.tech{border-color:var(--track);color:var(--track)}
+.wzp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.wzp-steps button{display:flex;gap:8px;align-items:center;min-height:44px;padding:6px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);text-align:left;cursor:pointer}
+.wzp-steps button b{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--line);font:700 13px var(--body)}
+.wzp-steps button.on{border-color:var(--track);box-shadow:inset 0 -3px 0 var(--track)}.wzp-steps button.on b{background:var(--track);color:#fff}
+.wzp-steps button.done b{background:#1E7B3A;color:#fff}
+.wzp-body{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:16px;display:grid;gap:12px}
+.wzp-body h2{margin:0;font-size:20px}
+.wzp-opts{display:flex;gap:6px 18px;flex-wrap:wrap}.wzp-opts label{display:flex;gap:6px;align-items:center;min-height:32px;cursor:pointer}
+.wzp-opts input{width:auto;min-height:0;margin:0;accent-color:var(--track)}
+.wzp-lock{padding:10px 14px;border-radius:var(--r);background:#FFF4E0;border:1px solid #E5B25D;color:#5B3A00}
+.wzp-frame{width:100%;height:68vh;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+.wzp-nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.wzp-grid input{width:100%;min-width:54px;padding:5px 6px;font:14px var(--mono)}.wzp-grid td{padding:3px 4px}
+.wzp-grid td.out{font:700 14px var(--mono);white-space:nowrap}.wzp-grid tr.dirty{background:#FFF9E5}
+.wzp-grid input.err{border-color:var(--track)}
 .bibin{width:64px;min-height:0;padding:4px 6px;font-weight:700;text-align:center}
 .heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
 .heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -539,6 +559,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 <nav class="lane" id="lane" aria-label="Этапы соревнования">
   <a href="#prep" data-step="prep" class="st" id="stPrep"><span class="pin">1</span><b>Подготовка</b><small></small></a>
   <a href="#reg" data-step="reg" class="st" id="stReg"><span class="pin">2</span><b>Регистрация</b><small></small></a>
+  <a href="#wizard" data-step="wizard" class="st hide" id="stWiz"><span class="pin">3</span><b>Протоколы</b><small>мастер</small></a>
   <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">3</span><b>Чипы</b><small></small></a>
   <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">4</span><b>Старт и финиш</b><small></small></a>
   <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">5</span><b>Результаты</b><small></small></a>
@@ -826,11 +847,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <div id="gCartList"></div>
       <div class="row"><button class="primary" id="gCartAdd">🛒 Добавить выделенные в корзину печати</button><button id="gCartAll">Выделить все</button></div>
     </div>
-    <div class="cartbox" id="gCartBox">
-      <h3>Корзина печати <span class="small muted" id="gCartCnt"></span></h3>
-      <div id="gCartItems"></div>
-      <div class="row"><button class="bigprint" id="gCartPrint">🖨️ Сформировать единый файл для печати</button><button id="gCartClear">Очистить корзину</button></div>
-    </div>
+    <div class="cartbox cartmount"></div>
     <div class="heats" id="gHeatsBox"></div>
     <div id="gLoose"></div>
   </div>
@@ -942,6 +959,20 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     </table></div>
   </div>
  </div>
+</section>
+
+<!-- МАСТЕР ПРОТОКОЛОВ -->
+<section id="tab-wizard" class="hide">
+  <div class="pagehead">
+    <div><h1>Мастер протоколов</h1><p class="lead">Выберите дисциплину — мастер сам поймёт, бег это или техника, и проведёт по пяти шагам: фильтр, сетка, стартовый протокол, ввод результатов, итоговый протокол.</p></div>
+  </div>
+  <div class="wzp-top">
+    <label class="wzp-disc"><span class="small muted">Дисциплина</span><select id="wzpDisc" aria-label="Дисциплина"></select></label>
+    <span class="wzp-kind" id="wzpKind"></span>
+  </div>
+  <div class="wzp-steps" id="wzpSteps" role="tablist"></div>
+  <div class="wzp-body" id="wzpBody"></div>
+  <div class="cartbox cartmount"></div>
 </section>
 
 <!-- 5. РЕЗУЛЬТАТЫ -->
@@ -1161,7 +1192,7 @@ function beep(freq=880, dur=0.12){
 const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">${a.level==="bad"?"⛔ ":a.level==="warn"?"⚠️ ":"ℹ️ "}${esc(a.text)}</div>`).join("");
 
 /* ---------- навигация: главная, этапы соревнования, система ---------- */
-const STEPS = ["prep","reg","check","timing","results","files"];
+const STEPS = ["prep","reg","wizard","check","timing","results","files"];
 const ALIAS = {overview:"home", events:"home", archive:"home", "":"welcome"};
 function tabName(){ const t = (location.hash||"#welcome").slice(1); return ALIAS[t] ?? t; }
 /* Направление работы (3.0): «ipico» — массовый забег с чипами, «stadium» — стадион. Запоминается в браузере. */
@@ -1216,6 +1247,7 @@ function showTab(){
   if (tab === "hw") { loadHw(); loadReaders(); loadUpdate(); loadLast(); }
   if (tab === "files") renderFilesTab();
   if (tab === "reg") { renderRegHead(true); loadRegs(); }
+  if (tab === "wizard") wzp.open();
 }
 window.addEventListener("hashchange", () => { showTab(); window.scrollTo(0, 0); });
 function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? "timing" : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
@@ -1337,6 +1369,7 @@ function renderLane(){
   $("stCheck").querySelector("b").textContent = stadium ? "Выдача номеров" : "Номера и чипы";
   $("chipSect").classList.toggle("hide", stadium);
   $("stTiming").querySelector("b").textContent = entry ? "Ввод результатов" : stadium ? "Забеги" : "Старт и финиш";
+  $("stWiz").classList.toggle("hide", !stadium);
   let n = 0; document.querySelectorAll(".lane .st").forEach(a => { if (!a.classList.contains("hide")) a.querySelector(".pin").textContent = ++n; });
   const w = ev.waves.length, rp = ev.regs_pending || 0, rc = ev.regs_count || 0;
   setStep("stPrep", ev.finish_device && (ev.entries_count || rc) ? "done" : "",
@@ -1930,12 +1963,52 @@ function renderHeats(sl){
     </tbody></table></div>` : "";
   renderCartForms(sl);
 }
-/* ---------- корзина печати: бланки по группам и полу → один документ ---------- */
+/* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
 const sexOfE = (e) => { const x = String(e.sex||"").toUpperCase(); if (x==="М"||x==="Ж") return x; const c = String(e.category||"").toLowerCase();
   if (/юнош|мальч|мужч|^муж/.test(c)) return "М"; if (/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return ""; };
 const cartKey = () => "ss.cart." + curId;
 function cartGet(){ try{ const v = JSON.parse(localStorage.getItem(cartKey()) || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
 function cartSet(a){ try{ localStorage.setItem(cartKey(), JSON.stringify(a)); }catch(e){ toast("Браузер не сохраняет корзину — проверьте настройки приватности"); } renderCart(); }
+const cartUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function cartAdd(items){
+  const a = cartGet(); let n = 0;
+  items.forEach(it => { if (a.some(x => ["type","dist","gk","sf","mode","orient"].every(k => (x[k]||"") === (it[k]||"")))) return; a.push(Object.assign({id: cartUid(), on: true}, it)); n++; });
+  cartSet(a); return n;
+}
+function renderCart(){
+  const a = cartGet(), on = a.filter(x => x.on).length;
+  const html = `<h3>🛒 Корзина печати <span class="small muted">${a.length ? "— листов: " + a.length + ", к печати: " + on : ""}</span></h3>
+    ${a.map(it => `<div class="ci"><label><input type="checkbox" data-cs="${esc(it.id)}" ${it.on ? "checked" : ""}> <span>${esc(it.label)}</span></label><button data-rm="${esc(it.id)}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("")
+      || '<p class="small muted" style="margin:0">Корзина пуста. В мастере на шагах «Стартовый протокол» и «Итоговый протокол» есть кнопка «🛒 Добавить в корзину».</p>'}
+    <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🌐 Выгрузить в общую сеть</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
+  document.querySelectorAll(".cartmount").forEach(m => { m.innerHTML = html; });
+}
+document.addEventListener("click", async (e) => {
+  const rm = e.target.closest("[data-rm]"); if (rm) { cartSet(cartGet().filter(x => x.id !== rm.dataset.rm)); return; }
+  const b = e.target.closest("[data-cart]"); if (!b) return;
+  if (b.dataset.cart === "clear") { if (confirm("Очистить корзину печати?")) cartSet([]); return; }
+  if (curId == null) return;
+  const sel = cartGet().filter(x => x.on);
+  if (b.dataset.cart === "print") {
+    if (!sel.length) return toast("Отметьте галочками листы для печати");
+    window.open(`/protocol?event=${curId}&kind=cart&ids=${sel.map(x => x.id).join(",")}`, "_blank"); return;
+  }
+  if (b.dataset.cart === "publish") {
+    if (!sel.length) return toast("Отметьте галочками листы для выгрузки");
+    const start = sel.some(x => x.type === "start"), res = sel.some(x => x.type === "final");
+    const what = [start && "стартовый протокол", res && "итоговый протокол"].filter(Boolean).join(" и ");
+    if (!confirm(`Выгрузить в общую сеть: ${what}?\n\nНа публичной странице SakhStart станет виден протокол соревнования целиком. Убрать его оттуда можно в любой момент.`)) return;
+    try{
+      const r = await api(`/api/events/${curId}/publish`, Object.assign({}, start ? {start: true} : {}, res ? {results: true} : {}));
+      toast("Выгружено в общую сеть"); alert("Протоколы доступны зрителям и участникам:\n" + (res ? r.results_url : r.start_url));
+      loadEvents._sig = null; loadEvents();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  }
+});
+document.addEventListener("change", (e) => {
+  const c = e.target.closest("[data-cs]"); if (!c) return;
+  const a = cartGet(); const it = a.find(x => x.id === c.dataset.cs); if (it) { it.on = c.checked; cartSet(a); }
+});
 let cartForms = [];
 function renderCartForms(sl){
   const groups = {};
@@ -1947,33 +2020,202 @@ function renderCartForms(sl){
   Object.values(groups).sort((a,b) => a.gk.localeCompare(b.gk, "ru", {numeric:true})).forEach(g => {
     const word = (sf) => { const base = [g.c, g.d].filter(Boolean).join(" "); if (!sf) return base || "Все участники";
       const sw = sf==="М" ? "Мальчики" : "Девочки"; return (new RegExp(sf==="М"?"юнош|мальч|мужч":"девуш|девоч|женщ","i").test(g.c) ? "" : sw + " ") + (base || "все"); };
-    if (g.M && g.F) { cartForms.push({gk:g.gk, sf:"", n:g.M+g.F+g.O}); cartForms.push({gk:g.gk, sf:"М", n:g.M}); cartForms.push({gk:g.gk, sf:"Ж", n:g.F}); }
-    else cartForms.push({gk:g.gk, sf:"", n:g.M+g.F+g.O});
+    if (g.M && g.F) { cartForms.push({gk:g.gk, d:g.d, sf:"", n:g.M+g.F+g.O}); cartForms.push({gk:g.gk, d:g.d, sf:"М", n:g.M}); cartForms.push({gk:g.gk, d:g.d, sf:"Ж", n:g.F}); }
+    else cartForms.push({gk:g.gk, d:g.d, sf:"", n:g.M+g.F+g.O});
     cartForms.filter(f => f.gk === g.gk).forEach(f => { f.label = "Старт: " + word(f.sf); });
   });
   $("gCartList").innerHTML = cartForms.map((f,i) => `<label><input type="checkbox" data-i="${i}"> <b>${esc(f.label)}</b> <span class="small muted">${f.n} уч.</span></label>`).join("") || '<p class="small muted" style="margin:0">Бланков пока нет — сформируйте забеги или общий список.</p>';
   renderCart();
-}
-function renderCart(){
-  const a = cartGet();
-  $("gCartCnt").textContent = a.length ? "— бланков: " + a.length : "";
-  $("gCartItems").innerHTML = a.map((it,i) => `<div class="ci"><span>${i+1}. ${esc(it.label)}</span><button data-rm="${i}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("") || '<p class="small muted" style="margin:0">Корзина пуста. Отметьте бланки выше и нажмите «Добавить выделенные в корзину печати».</p>';
-  $("gCartPrint").disabled = !a.length; $("gCartClear").disabled = !a.length;
 }
 $("gCartAll").onclick = () => { const cb = [...$("gCartList").querySelectorAll("input")]; const on = cb.some(c => !c.checked); cb.forEach(c => c.checked = on); };
 $("gCartAdd").onclick = () => {
   const sel = [...$("gCartList").querySelectorAll("input:checked")].map(c => cartForms[+c.dataset.i]).filter(Boolean);
   if (!sel.length) return toast("Отметьте галочками нужные бланки");
   const v = pmodeVal(), mode = v === "heats" ? "heats" : "list", orient = v === "list-landscape" ? "landscape" : "portrait";
-  const a = cartGet(); let added = 0;
-  sel.forEach(f => { if (a.some(x => x.gk === f.gk && x.sf === f.sf && x.mode === mode && x.orient === orient)) return;
-    a.push({gk:f.gk, sf:f.sf, mode, orient, label:f.label + (mode === "list" ? " · общим списком" : "")}); added++; });
-  cartSet(a); $("gCartList").querySelectorAll("input:checked").forEach(c => c.checked = false);
-  toast(added ? `В корзину добавлено бланков: ${added}` : "Эти бланки уже в корзине");
+  const n = cartAdd(sel.map(f => ({type:"start", dist:f.d, gk:f.gk, sf:f.sf, mode, orient, label:f.label + (mode === "list" ? " · общим списком" : "")})));
+  $("gCartList").querySelectorAll("input:checked").forEach(c => c.checked = false);
+  toast(n ? `В корзину добавлено бланков: ${n}` : "Эти бланки уже в корзине");
 };
-$("gCartItems").addEventListener("click", (e) => { const b = e.target.closest("[data-rm]"); if (!b) return; const a = cartGet(); a.splice(+b.dataset.rm, 1); cartSet(a); });
-$("gCartClear").onclick = () => { if (confirm("Очистить корзину печати?")) cartSet([]); };
-$("gCartPrint").onclick = () => { if (curId == null) return; if (!cartGet().length) return toast("Корзина пуста"); window.open(`/protocol?event=${curId}&kind=cart`, "_blank"); };
+
+/* ---------- Мастер протоколов: бег и техника — две ветки по пять шагов ---------- */
+const wzp = (() => {
+  const W = {disc: "", step: 1, ages: [], sex: "", lanes: 8, regs: [], sl: null, ev: null};
+  const AGE_LIM = {u12:[0,12], u14:[0,14], u16:[0,16], u18:[0,18], u20:[0,20], u23:[0,23], sen:[19,200]};
+  const STEP_T = {
+    run:   ["Фильтр", "Забеги и дорожки", "Стартовый протокол", "Ввод на финише", "Итоговый протокол"],
+    tech:  ["Фильтр", "Общий список", "Стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
+  // автоопределение: попытки или расстояние/высота — техника; время — бег; прочее (очки) ведём по беговой ветке
+  const kindOf = (name) => { const d = discBy(name); if (!d) return "run"; if (d.attempts || d.result === "distance" || d.result === "height") return "tech"; return "run"; };
+  const isPoints = (name) => { const d = discBy(name); return !!d && d.result === "points"; };
+  const ev = () => curEvent();
+  const kind = () => kindOf(W.disc);
+  const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
+  const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
+    return W.ages.some(a => AGE_LIM[a] && age >= AGE_LIM[a][0] && age <= AGE_LIM[a][1]); };
+  const regsIn = () => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!W.sex || String(r.sex||"").toUpperCase() === W.sex) && ageOk(r));
+  const entriesIn = () => {            // участники дисциплины из стартового списка с учётом фильтров
+    const out = []; if (!W.sl) return out;
+    W.sl.heats.concat([{name: "", distance: "", entries: W.sl.no_heat || []}]).forEach(h => h.entries.forEach(e => {
+      if ((e.distance || h.distance) !== W.disc) return;
+      if (W.sex && sexOfE(e) !== W.sex) return;
+      if (!ageOk({birth_year: e.birth_year})) return;
+      out.push(Object.assign({}, e, {_heat: h.name})); }));
+    return out;
+  };
+  const myHeats = () => W.sl ? W.sl.heats.filter(h => h.distance === W.disc || h.entries.some(e => e.distance === W.disc)) : [];
+  async function load(){
+    const e0 = ev(); if (!e0) return;
+    try{ const [r, sl] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`)]); W.regs = r.regs; W.sl = sl; }catch(err){ console.warn(err); }
+  }
+  async function open(){
+    const e0 = ev(); if (!e0) return;
+    await loadDisc();
+    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1}); }catch(x){} }
+    await load();
+    const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
+    $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
+    if (!names.includes(W.disc)) W.disc = names[0] || "";
+    $("wzpDisc").value = W.disc; render();
+  }
+  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step})); }catch(x){} }
+  function go(n){ W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+  function render(){
+    const k = kind(), t = STEP_T[k];
+    $("wzpKind").className = "wzp-kind " + k;
+    $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника · попытки · общий список" : "Бег · забеги и дорожки" + (isPoints(W.disc) ? " (очки)" : "");
+    $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
+    const body = $("wzpBody");
+    if (!W.disc) { body.innerHTML = '<p class="muted">В этом соревновании пока нет дисциплин. Добавьте их на этапе «Подготовка» и примите заявки.</p>'; return; }
+    ({1: step1, 2: step2, 3: step3, 4: step4, 5: step5})[W.step](body, k);
+  }
+  const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
+  function step1(body, k){
+    const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
+    const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
+    const ages = (DISC.ages || []);
+    body.innerHTML = `<h2>Шаг 1. Кого включаем</h2>
+      <p class="small muted" style="margin:0">Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
+      <fieldset class="pmode"><legend>Возрастная группа</legend><div class="wzp-opts">${ages.map(a => `<label><input type="checkbox" data-age="${esc(a.id)}" ${W.ages.includes(a.id) ? "checked" : ""}> ${esc(a.name)}</label>`).join("")}</div><span class="small muted">Ничего не отмечено — все возрасты.</span></fieldset>
+      <fieldset class="pmode"><legend>Пол</legend><div class="wzp-opts">${[["", "Все"], ["М", "Мальчики / юноши / мужчины"], ["Ж", "Девочки / девушки / женщины"]].map(([v, t]) => `<label><input type="radio" name="wzpSex" value="${v}" ${W.sex === v ? "checked" : ""}> ${t}</label>`).join("")}</div></fieldset>
+      <p><b>Подходит участников: ${cnt("")}</b> <span class="small muted">· мальчиков ${cnt("М")} · девочек ${cnt("Ж")}${pend ? ` · ещё ${pend} заявок ждут проверки во вкладке «Регистрация»` : ""}</span></p>
+      ${nav(false, "К сетке")}`;
+  }
+  function heatsTable(){
+    const hs = myHeats();
+    if (!hs.length) return '<p class="muted">Сетки по этой дисциплине пока нет.</p>';
+    return `<div class="tbl"><table><thead><tr><th>Забег</th><th>Категория</th><th>Участников</th><th>Мальчиков</th><th>Девочек</th></tr></thead><tbody>${hs.map(h => {
+      const es = h.entries.filter(e => (e.distance || h.distance) === W.disc);
+      return `<tr><td><b>${esc(h.name)}</b></td><td>${esc(h.category || "")}</td><td>${es.length}</td><td>${es.filter(e => sexOfE(e) === "М").length}</td><td>${es.filter(e => sexOfE(e) === "Ж").length}</td></tr>`; }).join("")}</tbody></table></div>`;
+  }
+  function step2(body, k){
+    const tech = k === "tech", n = regsIn().length;
+    body.innerHTML = `<h2>Шаг 2. ${tech ? "Единый общий список" : "Забеги и дорожки"}</h2>
+      <p class="small muted" style="margin:0">В расчёт идут: ${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))} · участников: <b>${n}</b>.</p>
+      ${tech ? '<div class="wzp-lock">🔒 Для техники дорожки заблокированы: участники идут одним сквозным списком «Общий список» в порядке выполнения попыток.</div>'
+        : `<label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
+      <div class="row"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "Сформировать общий список" : "Сформировать забеги"}</button>
+        <button class="bigred" type="button" id="wzpReset">${tech ? "❌ Сбросить список" : "❌ Удалить все забеги"}</button></div>
+      <h3 style="margin:6px 0 0">Сейчас по дисциплине «${esc(W.disc)}»</h3>${heatsTable()}${nav(true, "К стартовому протоколу")}`;
+  }
+  async function gen(){
+    const e0 = ev(), tech = kind() === "tech";
+    if (tech === false) W.lanes = +($("wzpLanes") || {}).value || W.lanes;
+    if (myHeats().length && !confirm("По этой дисциплине сетка уже есть. Пересобрать для выбранных участников? Номера сохранятся, остальные участники не затрагиваются.")) return;
+    try{
+      const r = await api(`/api/events/${e0.id}/heats`, {distance: W.disc, ages: W.ages, sex: W.sex, lanes: W.lanes});
+      toast(tech ? `Общий список сформирован, участников: ${r.entries}` : `Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`);
+      loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  }
+  async function reset(){
+    const e0 = ev();
+    if (!confirm(`Вы уверены, что хотите полностью очистить и удалить все сформированные забеги в этой дисциплине (${W.disc})? Это действие нельзя отменить!`)) return;
+    try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves}, участников ${r.entries}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
+    catch(err){ toast("Ошибка: " + err.message); }
+  }
+  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
+  function step3(body, k){
+    const tech = k === "tech", q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
+    body.innerHTML = `<h2>Шаг 3. Стартовый протокол</h2>
+      <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: шесть пустых граф «Попытка 1…6» и «Лучший результат» — судьи пишут от руки на секторе." : "Вертикальный лист: три пустые графы «Сек. 1 | Сек. 2 | Сек. 3» для показаний секундомеров."}</p>
+      <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>
+      <div class="row"><button class="primary" type="button" id="wzpCartS">🛒 Добавить в корзину</button><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "К вводу результатов")}`;
+  }
+  const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
+  function step5(body, k){
+    const tech = k === "tech", q = `kind=results&mode=overall`;
+    body.innerHTML = `<h2>Шаг 5. Итоговый протокол</h2>
+      <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
+      <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
+      <div class="row"><button class="primary" type="button" id="wzpCartF">🛒 Добавить в корзину</button><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
+  }
+  /* шаг 4: экранная сетка ввода */
+  function step4(body, k){
+    const tech = k === "tech", es = entriesIn(), pts = isPoints(W.disc);
+    const head = tech ? ["№", "Участник", "Разряд", ...[1,2,3,4,5,6].map(i => "Попытка " + i), "Лучший", "Вып. разряд", "Отметка"]
+      : pts ? ["№", "Участник", "Разряд", "Очки", "Вып. разряд", "Отметка"]
+      : ["Дор.", "№", "Участник", "Разряд", "Сек. 1", "Сек. 2", "Сек. 3", "Официальный", "Вып. разряд", "Отметка"];
+    const row = (r) => { const d = r.detail || {};
+      const inp = (c, i, v, ph) => `<td><input class="${c}" data-i="${i}" value="${esc(v || "")}" placeholder="${ph || "—"}" inputmode="decimal" aria-label="${esc(c === "sw" ? "Секундомер " + (i + 1) : "Попытка " + (i + 1))}, ${esc(r.bib)}"></td>`;
+      const main = tech ? [0,1,2,3,4,5].map(i => inp("att", i, (d.a || [])[i])).join("") : pts ? `<td><input class="one" value="${esc(r.result || "")}" inputmode="numeric" aria-label="Очки ${esc(r.bib)}"></td>` : [0,1,2].map(i => inp("sw", i, (d.t || [])[i])).join("");
+      return `<tr data-bib="${esc(r.bib)}">${tech || pts ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td><td><b>${esc(r.name || "")}</b><div class="small muted">${esc(r.birth_year || "")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank || "")}</td>${main}
+        ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td><input class="dr" value="${esc(r.done_rank || "")}" list="wzpRanks" placeholder="—" aria-label="Выполненный разряд ${esc(r.bib)}" style="min-width:64px"></td>
+        <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([c, t]) => `<option value="${c}" ${r.status === c ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>`; };
+    const sorted = es.slice().sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
+    body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
+      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}</p>
+      <datalist id="wzpRanks">${RANKS.map(r => `<option value="${esc(r)}">`).join("")}</datalist>
+      <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${sorted.map(row).join("") || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
+      <div class="row"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button><span class="small muted">Enter — к следующему полю. Изменённые строки подсвечены.</span></div>${nav(true, "К итоговому протоколу")}`;
+  }
+  async function saveRows(){
+    const rows = [...document.querySelectorAll("#wzpRows tr.dirty")].map(tr => {
+      const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("input.dr").value.trim()};
+      const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
+      if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
+      return row; });
+    if (!rows.length) return toast("Нет изменений");
+    try{
+      const r = await api(`/api/events/${curId}/results`, {rows});
+      if (r.errors.length) alert("Не сохранены:\n" + r.errors.join("\n"));
+      toast(`Сохранено: ${r.saved}`);
+      const bad = new Set(r.errors.map(x => x.split(":")[0]));
+      document.querySelectorAll("#wzpRows tr.dirty").forEach(tr => { if (!bad.has(tr.dataset.bib)) tr.classList.remove("dirty"); else tr.querySelectorAll("input").forEach(i => i.classList.add("err")); });
+      if (!bad.size) { await load(); render(); }
+      loadResults(); loadEvents._sig = null; loadEvents();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  }
+  const root = $("tab-wizard");
+  root.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-s]"); if (s) return go(+s.dataset.s);
+    const g = e.target.closest("[data-g]"); if (g) return go(W.step + +g.dataset.g);
+    if (e.target.id === "wzpGen") return gen();
+    if (e.target.id === "wzpReset") return reset();
+    if (e.target.id === "wzpSave") return saveRows();
+    const tech = kind() === "tech";
+    if (e.target.id === "wzpCartS") { const n = cartAdd([{type: "start", dist: W.disc, gk: "", sf: W.sex, mode: tech ? "list" : "heats", orient: tech ? "landscape" : "portrait", label: label("Старт") + (tech ? " · горизонтальный, 6 попыток" : " · 3 секундомера")}]); toast(n ? "Добавлено в корзину" : "Этот лист уже в корзине"); }
+    if (e.target.id === "wzpCartF") { const n = cartAdd([{type: "final", dist: W.disc, gk: "", sf: W.sex, mode: "overall", orient: tech ? "landscape" : "portrait", label: label("Итоги") + (tech ? " · горизонтальный, 6 попыток" : " · места и разряды")}]); toast(n ? "Добавлено в корзину" : "Этот лист уже в корзине"); }
+  });
+  root.addEventListener("change", (e) => {
+    if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); return render(); }
+    if (e.target.name === "wzpSex") { W.sex = e.target.value; return render(); }
+    if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
+    const tr = e.target.closest("#wzpRows tr"); if (tr) tr.classList.add("dirty");
+  });
+  root.addEventListener("input", (e) => {
+    const tr = e.target.closest("#wzpRows tr"); if (!tr) return; tr.classList.add("dirty"); e.target.classList.remove("err");
+    const out = tr.querySelector("[data-out]"); if (!out) return;
+    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")];
+    out.textContent = sw.length ? swMain(sw.map(i => i.value)) : at.length ? attBest(at.map(i => i.value)) : out.textContent;
+  });
+  root.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !e.target.matches("#wzpRows input")) return; e.preventDefault();
+    const all = [...document.querySelectorAll("#wzpRows input")], i = all.indexOf(e.target);
+    if (all[i + 1]) { all[i + 1].focus(); all[i + 1].select(); } else $("wzpSave").click();
+  });
+  $("wzpDisc").onchange = (e) => { W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
+  return {open};
+})();
 async function moveEntry(tr, body){
   try{
     if (tr.dataset.reg) await api(`/api/events/${curId}/entry`, Object.assign({reg_id:+tr.dataset.reg}, body));

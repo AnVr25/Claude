@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.4.0 и дата сборки 13.10.2026", st3["version"] == "3.4.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.5.0 и дата сборки 13.10.2026", st3["version"] == "3.5.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1260,6 +1260,93 @@ def main() -> int:
         check("2.8: календарь — «Ночной забег» перенесён на 23 октября, проводит ЦСП",
               json.loads(txt).get("updated") == 1 and n8["date"] == "2026-10-23" and n8["name"] == "«Ночной забег К-70»"
               and n8["ours"] is False and "myrace.info/events/2124" in (n8["links"] or ""), txt + str(n8)[:300])
+
+        # 3.5: мастер протоколов — бег и техника, выборочная сетка, выгрузка в сеть
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Мастер протоколов", "date": "2026-10-20", "kind": "stadium",
+                         "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+        e9 = json.loads(txt)["id"]
+        code, txt = http("POST", f"/api/events/{e9}", json.dumps({"reg_open": True, "reg_rules": "Юноши;М;2008;2014\nДевушки;Ж;2008;2014",
+                         "reg_distances": "60 м\nПрыжок в длину"}).encode(), J)
+        s9 = json.loads(txt)["reg_path"].rsplit("/", 1)[-1]
+
+        def reg9(last, sex, dists, year="2011"):
+            body = {"last_name": last, "first_name": "Тест", "birth_date": f"{year}-03-03", "sex": sex, "team": "СШОР", "consent": True,
+                    "representative": "Родитель", "distances": dists, "rank": "1р"}
+            c, t, _ = pub("POST", f"/r/{s9}", json.dumps(body).encode())
+            return c
+        codes = [reg9("Аргунов", "М", [{"distance": "60 м"}, {"distance": "Прыжок в длину"}]),
+                 reg9("Бегунов", "М", [{"distance": "60 м"}, {"distance": "Прыжок в длину"}], "2010"),
+                 reg9("Васильева", "Ж", [{"distance": "60 м"}, {"distance": "Прыжок в длину"}]),
+                 reg9("Громова", "Ж", [{"distance": "Прыжок в длину"}])]
+        http("POST", f"/api/events/{e9}/regs", json.dumps({"approve_all": True}).encode(), J)
+        code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "Прыжок в длину", "sex": "Ж", "lanes": 8}).encode(), J)
+        g1 = json.loads(txt)
+        check("3.5: техника — только «Общий список», дорожки заблокированы, участницы не потеряны",
+              code == 200 and g1["kind"] == "tech" and g1["mode"] == "list" and len(g1["heats"]) == 1
+              and g1["heats"][0]["name"].startswith("Общий список") and g1["entries"] == 2, txt[:300])
+        code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "Прыжок в длину", "sex": "М"}).encode(), J)
+        g2 = json.loads(txt)
+        _, txt = http("GET", f"/api/events/{e9}/startlist")
+        sl9 = json.loads(txt)
+        jump = [e for h in sl9["heats"] for e in h["entries"] if e["distance"] == "Прыжок в длину"]
+        check("3.5: после списка мальчиков девочки на месте: 2 списка, 4 прыгуна, у всех slots=6, дорожек нет",
+              code == 200 and len(sl9["heats"]) == 2 and len(jump) == 4 and all(e["slots"] == 6 and e["lane"] is None for e in jump)
+              and {sexo for sexo in (e["sex"] for e in jump)} == {"М", "Ж"}, txt[:400])
+        code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "lanes": 2}).encode(), J)
+        g3 = json.loads(txt)
+        _, txt = http("GET", f"/api/events/{e9}/startlist")
+        sl9 = json.loads(txt)
+        run = [h for h in sl9["heats"] if h["distance"] == "60 м"]
+        check("3.5: бег — забеги с дорожками, выборочная сетка не тронула технику",
+              code == 200 and g3["kind"] == "run" and g3["mode"] == "heats" and len(run) == 2
+              and all(e["lane"] for h in run for e in h["entries"]) and len([h for h in sl9["heats"] if h["distance"] == "Прыжок в длину"]) == 2, txt[:300])
+        code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "ages": ["u12"]}).encode(), J)
+        check("3.5: фильтр по возрасту без подходящих участников — понятная ошибка", code == 400 and "нет подтверждённых" in txt, txt[:200])
+        j_bib = next(e["bib"] for e in jump if e["name"].startswith("Аргунов"))
+        r_bib = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Аргунов"))
+        code, txt = http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [
+            {"bib": j_bib, "a": ["7.10", "X", "7.85", "-", "7,60", "6.00"], "auto": True, "done_rank": "2р"},
+            {"bib": r_bib, "t": ["8.31", "8.40", "8.33"], "auto": True, "done_rank": "3 юн."}]}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e9}/results")
+        rs9 = json.loads(txt)
+        fj = next(x for x in rs9["finished"] if x["bib"] == j_bib); fr = next(x for x in rs9["finished"] if x["bib"] == r_bib)
+        check("3.5: техника — лучшая попытка 7.85 найдена сервером, шесть попыток и выполненный разряд в итогах",
+              fj["result"] == "7.85" and fj["rt"] == "distance" and fj["attempts"] == ["7.10", "X", "7.85", "-", "7.60", "6.00"]
+              and fj["done_rank"] == "2 р.", str(fj)[:300])
+        check("3.5: бег — официальный результат по трём секундомерам (среднее 8.33 → 8.4 вверх), разряд сохранён",
+              fr["result"] == "8.4" and fr["sw"] == ["8.31", "8.40", "8.33"] and fr["done_rank"] == "3 юн." and fr["rt"] == "time", str(fr)[:300])
+        # смешанный общий список без единой дистанции: техника не должна читаться как время
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Смешанный список", "kind": "stadium", "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
+        e10 = json.loads(txt)["id"]
+        http("POST", f"/api/events/{e10}", json.dumps({"reg_open": True, "reg_distances": "60 м\nПрыжок в длину"}).encode(), J)
+        sl10 = json.loads(http("GET", f"/api/events/{e10}")[1])["reg_path"].rsplit("/", 1)[-1]
+        for ln, dd in (("Смешанов", "60 м"), ("Прыгунов", "Прыжок в длину")):
+            pub("POST", f"/r/{sl10}", json.dumps({"last_name": ln, "first_name": "Тест", "birth_date": "2010-01-01", "sex": "М", "team": "К", "consent": True,
+                 "representative": "Р", "distances": [{"distance": dd}], "rank": "Б/р"}).encode())
+        http("POST", f"/api/events/{e10}/regs", json.dumps({"approve_all": True}).encode(), J)
+        http("POST", f"/api/events/{e10}/heats", json.dumps({"mode": "list"}).encode(), J)
+        sl = json.loads(http("GET", f"/api/events/{e10}/startlist")[1])
+        jb = next(e["bib"] for e in sl["heats"][0]["entries"] if e["name"].startswith("Прыгунов"))
+        http("POST", f"/api/events/{e10}/results", json.dumps({"rows": [{"bib": jb, "a": ["5.20", "5.45", "X"], "auto": True}]}).encode(), J)
+        rs10 = json.loads(http("GET", f"/api/events/{e10}/results")[1])
+        f10 = [x for x in rs10["finished"] if x["bib"] == jb]
+        check("3.5: в смешанном общем списке прыжок читается как расстояние (5.45), а не как время",
+              sl["heats"][0]["distance"] == "" and f10 and f10[0]["result"] == "5.45" and f10[0]["distance"] == "Прыжок в длину" and f10[0]["rt"] == "distance",
+              str(f10)[:300])
+        # публикация в общую сеть
+        code, txt = http("POST", f"/api/events/{e9}/publish", json.dumps({"start": True, "results": True}).encode(), J)
+        pb = json.loads(txt)
+        cs, _, _ = pub("GET", f"/r/{s9}/startlist.json")
+        cr, _, _ = pub("GET", f"/r/{s9}/results.json")
+        check("3.5: «Выгрузить в общую сеть» открывает стартовый и итоговый протоколы на публичной странице",
+              code == 200 and pb["pub_start"] and pb["pub_results"] and cs == 200 and cr == 200 and "/protocol" in pb["start_url"], txt[:300])
+        code, txt = http("POST", f"/api/events/{e9}/publish", json.dumps({}).encode(), J)
+        check("3.5: выгрузка без указания, что выгружать, отклоняется", code == 400, txt[:200])
+        code, txt = http("POST", f"/api/events/{e9}/resetheats", json.dumps({"distance": "Прыжок в длину"}).encode(), J)
+        sl9 = json.loads(http("GET", f"/api/events/{e9}/startlist")[1])
+        check("3.5: сброс одной дисциплины убирает только её списки, забеги бега остаются",
+              code == 200 and json.loads(txt)["waves"] == 2 and len([h for h in sl9["heats"] if h["distance"] == "60 м"]) == 2
+              and not [h for h in sl9["heats"] if h["distance"] == "Прыжок в длину"], txt[:200])
 
         wic.close()
         # 10. второй Wiclax подключается и получает новые отметки

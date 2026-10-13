@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.4.0"
+VERSION = "3.5.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -727,6 +727,7 @@ class Store:
         add("events", (("cover", "TEXT"), ("program", "TEXT"), ("contacts", "TEXT"), ("series", "TEXT")))
         add("entries", (("picked_at", "TEXT"), ("members", "TEXT")))
         add("entries", (("rank", "TEXT"), ("detail", "TEXT")))       # 3.2: разряд; показания секундомеров и попытки (JSON)
+        add("entries", (("done_rank", "TEXT"),))                      # 3.5: выполненный разряд (вносит секретарь)
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
         self.con.executescript(
@@ -1053,11 +1054,11 @@ class Store:
         self.con.execute("DELETE FROM events WHERE id = ?", (eid,))
 
     # участники: номер, чип, забег, ФИО, год, команда, категория
-    _KEEP = ("picked_at", "members", "detail", "rank")      # поля, которые не теряются, если в новых строках их нет
+    _KEEP = ("picked_at", "members", "detail", "rank", "done_rank")      # поля, которые не теряются, если в новых строках их нет
 
     def set_entries(self, eid: int, rows: list) -> None:
         keep = {r[0]: dict(zip(self._KEEP, r[1:])) for r in self.con.execute(
-            "SELECT bib, picked_at, members, detail, rank FROM entries WHERE event_id = ?", (eid,))}
+            "SELECT bib, picked_at, members, detail, rank, done_rank FROM entries WHERE event_id = ?", (eid,))}
         self.con.execute("BEGIN")
         try:
             self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
@@ -1067,13 +1068,39 @@ class Store:
                 return json.dumps(v, ensure_ascii=False) if k == "detail" and isinstance(v, dict) else v
             self.con.executemany(
                 "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members, detail, rank)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members, detail, rank, done_rank)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
                   r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
                   r.get("result"), r.get("status"), r.get("points"),
-                  val(r, "picked_at"), val(r, "members"), val(r, "detail"), val(r, "rank"))
+                  val(r, "picked_at"), val(r, "members"), val(r, "detail"), val(r, "rank"), val(r, "done_rank"))
                  for r in rows])
+            for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
+                self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
+            self.con.execute("COMMIT")
+        except Exception:
+            self.con.execute("ROLLBACK")
+            raise
+
+    def upsert_entries(self, eid: int, rows: list) -> None:
+        """Выборочное формирование: участники других дисциплин и уже введённые результаты не трогаются."""
+        self.con.execute("BEGIN")
+        try:
+            for r in rows:
+                have = self.con.execute("SELECT 1 FROM entries WHERE event_id = ? AND bib = ?", (eid, r["bib"])).fetchone()
+                if have:
+                    self.con.execute(
+                        "UPDATE entries SET wave = ?, lane = ?, name = ?, birth_year = ?, team = ?, category = ?, coach = ?,"
+                        " seed = ?, reg_id = ?, sex = ?, rank = ?, members = COALESCE(?, members) WHERE event_id = ? AND bib = ?",
+                        (r.get("wave"), r.get("lane"), r.get("name"), r.get("birth_year"), r.get("team"), r.get("category"),
+                         r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"), r.get("rank"), r.get("members"), eid, r["bib"]))
+                else:
+                    self.con.execute(
+                        "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
+                        " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+                         r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
+                         r.get("members"), r.get("rank")))
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
                 self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
             self.con.execute("COMMIT")
@@ -1089,7 +1116,7 @@ class Store:
     def entries_rows(self, eid: int) -> list:
         rows = self._rows(self.con.execute(
             "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
-            " picked_at, members, rank, detail FROM entries"
+            " picked_at, members, rank, detail, done_rank FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
         for r in rows:
             try:
@@ -1120,7 +1147,7 @@ class Store:
     def update_entry(self, eid: int, bib: str, **kw) -> int:
         sets, args = [], []
         for k, v in kw.items():
-            if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed", "rank"):
+            if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed", "rank", "done_rank"):
                 raise ValueError(k)
             sets.append(f"{k} = ?")
             args.append(v)
@@ -2236,6 +2263,23 @@ class Hub:
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 
     @classmethod
+    def discipline_kind(cls, name) -> str:
+        """run — бег (время), tech — техника (попытки: прыжки, метания), other — очки и прочее."""
+        d = cls.discipline(name)
+        if not d:
+            return "run"
+        if d.get("attempts") or d.get("result") in ("distance", "height"):
+            return "tech"
+        return "run" if d.get("result") == "time" else "other"
+
+    def entry_dists(self, eid: int, erows: Optional[list] = None) -> dict:
+        """chip → дисциплина участника: дистанция забега, а у смешанного «общего списка» — из заявки."""
+        erows = erows if erows is not None else self.store.entries_rows(eid)
+        wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
+        rd = {r["id"]: r.get("distance") for r in self.store.registrations(eid)}
+        return {e["chip"]: (wd.get(e["wave"] or "") or rd.get(e.get("reg_id")) or None) for e in erows}
+
+    @classmethod
     def result_type(cls, name) -> str:
         """time · distance · height · points. Неизвестная дисциплина — время, как раньше."""
         d = cls.discipline(name)
@@ -2316,12 +2360,12 @@ class Hub:
         eid = ev["id"]
         erows = self.store.entries_rows(eid)
         entered, status_of, rtype_of = {}, {}, {}
-        wdist = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
+        edist = self.entry_dists(eid, erows)          # дисциплина участника: у забега или, если забег смешанный, из заявки
         for r in erows:
             if r.get("status") in self.STATUSES:
                 status_of[r["chip"]] = r["status"]
             elif r.get("result"):
-                dn = wdist.get(r["wave"] or "")
+                dn = edist.get(r["chip"])
                 rt = self.result_type(dn)
                 pr = self.parse_typed(rt, r["result"], dn)
                 if pr:
@@ -2419,7 +2463,9 @@ class Hub:
             inf = info.get(chip, {})
             return {"bib": self._bib_of(chip, entries), "chip": "" if chip.startswith("#") else chip,
                     "wave": w, "category": inf.get("category") or meta.get("category") or "",
-                    "distance": meta.get("distance") or "",
+                    "distance": edist.get(chip) or meta.get("distance") or "",
+                    "rt": self.result_type(edist.get(chip) or meta.get("distance")), "sex": inf.get("sex") or "",
+                    "done_rank": inf.get("done_rank") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
                     "points": inf.get("points"), "members": inf.get("members") or "", "rank": inf.get("rank") or "",
@@ -2437,6 +2483,8 @@ class Hub:
         for chip in finished:
             sec = fin_sec(chip)
             w = chip_wave.get(chip, "")
+            if wmeta.get(w, {}).get("distance") is None or wmeta.get(w, {}).get("distance") == "":
+                w = w + "\x00" + (edist.get(chip) or "")        # смешанный «общий список»: места отдельно по дисциплинам
             place_by_wave[w] = place_by_wave.get(w, 0) + 1
             r = row(chip)
             if chip in entered:
@@ -2486,7 +2534,9 @@ class Hub:
                             "team": r["team"] or "", "coach": r.get("coach") or "", "members": r.get("members") or "",
                             "rank": r.get("rank") or "", "sw": (r.get("detail") or {}).get("t"), "attempts": (r.get("detail") or {}).get("a"),
                             "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
-                            "distance": wmeta.get(r["wave"] or "", {}).get("distance") or "",
+                            "distance": edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance") or "",
+                            "rt": self.result_type(edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance")),
+                            "sex": r.get("sex") or "", "done_rank": r.get("done_rank") or "",
                             **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
                            for r in erows if (r["chip"] not in first or r["chip"] in status_of) and r["chip"] not in entered]
 
@@ -3002,9 +3052,9 @@ class Hub:
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "results" and isinstance(data.get("rows"), list):
             bad, n = [], 0
-            wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
             old = {e["bib"]: e for e in self.store.entries_rows(eid)}
-            dn_of = {b_: wd.get(e["wave"] or "") for b_, e in old.items()}
+            ed_ = self.entry_dists(eid, list(old.values()))
+            dn_of = {b_: ed_.get(e["chip"]) for b_, e in old.items()}
             for rw in data["rows"][:2000]:
                 if not isinstance(rw, dict):
                     continue
@@ -3065,6 +3115,9 @@ class Hub:
                     if not pr:
                         bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
+                if "done_rank" in rw:
+                    self.store.update_entry(eid, bib, done_rank=self.norm_rank(rw.get("done_rank")) or None)
+                    n += 0 if set_detail or txt or st else 1
                 if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None, detail or None, set_detail):
                     n += 1
             if n:
@@ -3252,6 +3305,27 @@ class Hub:
             self.store.audit(who, eid, what.get(upd.get("status"), "Заявка изменена"),
                              f"{r['last_name']} {r['first_name']} · {r['distance']}")
             return ok({"reg": self.store.get_registration(sub_id)})
+        if action == "publish":
+            # «Выгрузить в общую сеть»: стартовый и/или итоговый протокол становится виден на публичной странице события
+            upd = {}
+            if "start" in data:
+                upd["pub_start"] = bool(data["start"])
+            if "results" in data:
+                upd["pub_results"] = bool(data["results"])
+            if not upd:
+                return err("не указано, что выгружать")
+            if upd.get("pub_start") and not any(w for w in self.store.waves(eid)):
+                return err("стартовый протокол пуст: сначала сформируйте сетку")
+            if not self.public_base():
+                return err("публичный сайт не настроен на этом сервере (Система → Настройки сайта)")
+            slug = self.ensure_slug(eid)
+            self.store.update_event(eid, {**upd, "ours": True})
+            self.store.audit(who, eid, "Протоколы выгружены в общую сеть" if any(upd.values()) else "Протоколы убраны из общей сети",
+                             ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
+            v = self._event_view(self.store.get_event(eid))
+            return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "url": v["page_url"],
+                       "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
+                       "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
         if action == "resetheats":
             try:
                 out = self.reset_heats(ev, data.get("distance"))
@@ -3261,12 +3335,16 @@ class Hub:
             return ok(out)
         if action == "heats":
             try:
-                out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8, "list" if data.get("mode") == "list" else "heats")
+                if str(data.get("distance") or "").strip():       # мастер протоколов: одна дисциплина
+                    out = self.generate_scoped(ev, data.get("lanes") or ev.get("reg_lanes") or 8, data)
+                else:
+                    out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8, "list" if data.get("mode") == "list" else "heats")
             except ValueError as e:
                 return err(str(e))
             if data.get("lanes"):
                 self.store.update_event(eid, {"reg_lanes": data["lanes"]})
-            self.store.audit(who, eid, "Сформирован общий список" if data.get("mode") == "list" else "Сформированы забеги", f"{len(out['heats'])} забегов, {out['entries']} участников")
+            self.store.audit(who, eid, "Сформирован общий список" if data.get("mode") == "list" or out.get("mode") == "list" else "Сформированы забеги",
+                             f"{data.get('distance') + ': ' if data.get('distance') else ''}{len(out['heats'])} забегов, {out['entries']} участников")
             try:
                 self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
                                self._startlist_csv(self.store.get_event(eid)).encode("utf-8"), "startlist", who, "Для судей")
@@ -3979,6 +4057,114 @@ class Hub:
                 if 1 <= c <= n and c not in order:
                     order.append(c)
         return order[:n]
+
+    # возрастные группы мастера: допустимый возраст на год соревнований (возраст = год старта − год рождения)
+    AGE_LIMITS = {"u12": (0, 12), "u14": (0, 14), "u16": (0, 16), "u18": (0, 18), "u20": (0, 20), "u23": (0, 23), "sen": (19, 200)}
+
+    def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
+        """Мастер протоколов: сетка одной дисциплины с фильтром по возрасту и полу.
+        Бег — забеги и дорожки. Техника (попытки) — ТОЛЬКО единый «Общий список», дорожки заблокированы.
+        Остальные дисциплины, их участники и введённые результаты не затрагиваются; участники другого пола
+        в уже сформированном списке этой же дисциплины остаются на месте."""
+        eid = ev["id"]
+        dist = str(scope.get("distance") or "").strip()
+        kind = self.discipline_kind(dist)
+        sex = str(scope.get("sex") or "").strip().upper()[:1]
+        sex = sex if sex in ("М", "Ж") else ""
+        ages = [a for a in (scope.get("ages") or []) if a in self.AGE_LIMITS]
+        lanes = max(1, min(int(lanes or 8), 50))
+        waves = self.store.waves(eid)
+        if any(w.get("start_time") for w in waves if (w.get("distance") or "") == dist):
+            raise ValueError("по этой дисциплине уже был старт забега — пересобрать нельзя")
+        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+
+        def in_scope(r):
+            if r["distance"] != dist or r["status"] != "approved":
+                return False
+            if sex and str(r.get("sex") or "").upper() != sex:
+                return False
+            if ages:
+                try:
+                    age = year - int(str(r["birth_date"])[:4])
+                except ValueError:
+                    return False
+                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
+            return True
+        allregs = self.store.registrations(eid)
+        regs = self.collapse_relays(ev, [r for r in allregs if in_scope(r)])
+        if not regs:
+            raise ValueError("нет подтверждённых заявок по выбранным условиям: проверьте дисциплину, возраст и пол")
+        mine = {r["id"] for r in regs}
+        entries = self.store.entries_rows(eid)
+        old = {e["reg_id"]: e for e in entries if e.get("reg_id")}
+        used = {e["bib"] for e in entries}
+        # удаляем только свои забеги: те, где нет участников вне выбранной группы
+        by_wave: dict = {}
+        for e in entries:
+            if e["wave"]:
+                by_wave.setdefault(e["wave"], []).append(e)
+        gone = []
+        for w in waves:
+            if (w.get("distance") or "") != dist:
+                continue
+            if all(e.get("reg_id") in mine for e in by_wave.get(w["name"], [])):
+                gone.append(w["name"])
+        for name in gone:
+            self.store.delete_wave(eid, name)
+        alive = {w["name"] for w in self.store.waves(eid)}
+        cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
+        plan, tech = [], kind == "tech"
+        if tech:
+            lst = sorted(regs, key=lambda r: (cat_order.get(r.get("category") or "", 99), r["id"]))
+            base = "Общий список · " + dist + (" · " + ("Мальчики" if sex == "М" else "Девочки") if sex else "") \
+                + (" · " + "/".join(ages) if ages else "")
+            name, i = base, 1
+            while name in alive:
+                i += 1
+                name = f"{base} ({i})"
+            plan.append((name, "", lst, False))
+        else:
+            n = max([int(m.group(1)) for m in (re.fullmatch(r"Забег (\d+)", x) for x in alive) if m] or [0])
+            groups: dict = {}
+            for r in regs:
+                groups.setdefault(r.get("category") or "", []).append(r)
+            for cat in sorted(groups, key=lambda c: (cat_order.get(c, 99), c)):
+                lst = sorted(groups[cat], key=lambda r: (r["best_sec"] is None, r["best_sec"] or 0, r["id"]))
+                k = math.ceil(len(lst) / lanes)
+                b_, extra = divmod(len(lst), k)
+                sizes = [b_ + (1 if i >= k - extra else 0) for i in range(k)]
+                chunks, pos = [], 0
+                for size in reversed(sizes):
+                    chunks.append(lst[pos:pos + size])
+                    pos += size
+                chunks.reverse()
+                for chunk in chunks:
+                    n += 1
+                    plan.append((f"Забег {n}", cat, chunk, True))
+        heats, rows = [], []
+        order = self.lane_order(lanes)
+        for name, cat, chunk, use_lanes in plan:
+            heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
+            for i, r in enumerate(chunk):
+                e = old.get(r["id"])
+                if e:
+                    bib, chip = e["bib"], e["chip"]
+                else:
+                    bib = self.next_bib(ev, used, r["distance"])
+                    used.add(bib)
+                    chip = "#" + bib
+                rows.append({"bib": bib, "chip": chip, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
+                             "birth_year": r["birth_date"][:4].strip(), "team": r.get("team"), "category": r.get("category"),
+                             "lane": order[i] if use_lanes else None, "coach": r.get("coach"), "seed": r.get("best"),
+                             "reg_id": r["id"], "sex": r.get("sex"), "members": r.get("members"), "rank": r.get("rank"),
+                             "_ids": r.get("_ids") or [r["id"]]})
+        self.store.upsert_entries(eid, rows)
+        for h in heats:
+            self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=dist)
+        for r in rows:
+            for rid in r["_ids"]:
+                self.store.update_registration(rid, bib=r["bib"])
+        return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 
     def generate_heats(self, ev: dict, lanes: int, mode: str = "heats") -> dict:
         """Подтверждённые заявки → забеги по категории и дистанции, посев по лучшему результату:
@@ -5654,7 +5840,10 @@ class Hub:
                 if page is None:
                     await self._send(writer, 200, "text/html; charset=utf-8", self._page_status())
                 else:
-                    await self._send(writer, 200, "text/html; charset=utf-8", page)
+                    # протокол показывается во встроенном предпросмотре мастера — только со страниц этого же сервера
+                    await self._send(writer, 200, "text/html; charset=utf-8", page,
+                                     extra={"X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff",
+                                            "Referrer-Policy": "same-origin"} if path == "/protocol" else None)
             elif path.startswith("/assets/"):
                 a = self._asset(path[8:])
                 if a is None:
