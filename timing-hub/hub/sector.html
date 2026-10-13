@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0B1D37">
+<title>Судья на секторе — ввод результатов</title>
+<link rel="stylesheet" href="/assets/brand.css">
+<style>
+/* Судья на секторе: планшет или телефон на поле. Только ввод результатов своей дисциплины — 3 секундомера или 6 попыток.
+   Каждая строка сохраняется сама, как только судья переходит к следующему полю; табло и протокол видят её сразу. */
+:root{color-scheme:dark;--s-ink:#fff;--s-soft:var(--night-muted);--s-ok:#3FBF73;--s-warn:#F3A21D;--gap:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--night);color:var(--s-ink);font:16px/1.4 var(--body)}
+button,select,input{font:inherit}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--start);outline-offset:2px}
+
+.top{position:sticky;top:0;z-index:5;background:var(--night);border-bottom:3px solid var(--track)}
+.top-in{max-width:1280px;margin:0 auto;padding:10px var(--gap);display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap}
+.top .brand{height:26px;width:auto;flex:0 0 auto}
+.sync{flex:1 1 320px;min-width:0;display:flex;align-items:center;gap:8px;font:700 14px/1.3 var(--body);padding:8px 12px;border-radius:var(--r);background:rgba(63,191,115,.14);color:var(--s-ok)}
+.sync.busy{background:rgba(159,176,200,.14);color:var(--s-soft)}
+.sync.warn{background:rgba(243,162,29,.16);color:var(--s-warn)}
+.sync.off{background:var(--track);color:#fff}
+.who{font-size:13px;color:var(--s-soft);white-space:nowrap}
+.who button{background:none;border:0;color:var(--s-soft);text-decoration:underline;cursor:pointer;padding:4px}
+
+.wrap{max-width:1280px;margin:0 auto;padding:14px var(--gap) 40px}
+.evname{margin:0 0 10px;font:600 22px/1.15 var(--head);overflow-wrap:anywhere}
+.pick{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:8px}
+label.f{display:grid;gap:4px;font-size:13px;color:var(--s-soft)}
+select{appearance:none;-webkit-appearance:none;color:var(--s-ink);background:var(--night-2);border:1px solid var(--night-line);border-radius:var(--r);padding:10px 34px 10px 12px;min-height:48px;width:100%;
+  background-image:linear-gradient(45deg,transparent 50%,var(--s-soft) 50%),linear-gradient(135deg,var(--s-soft) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+select option{background:var(--night-2);color:var(--s-ink)}
+.kind{display:inline-block;margin:10px 0 0;font:700 13px/1 var(--body);padding:7px 12px;border-radius:99px;border:1px solid var(--night-line);color:var(--s-soft)}
+.kind.tech{border-color:var(--start);color:var(--start)}
+.hint{margin:8px 0 0;font-size:14px;color:var(--s-soft)}
+.cats{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px}
+.cats button{min-height:44px;padding:8px 14px;border-radius:var(--r);border:1px solid var(--night-line);background:var(--night-2);color:var(--s-ink);font:600 15px/1.2 var(--head);cursor:pointer}
+.cats button i{font-style:normal;margin-left:8px;color:var(--s-soft);font-size:13px}
+.cats button.on{background:#fff;color:var(--night);border-color:#fff}
+.cats button.on i{color:var(--track)}
+
+/* строки участников: на планшете — широкая таблица, на телефоне — карточки */
+.grid{margin-top:10px;border:1px solid var(--night-line);border-radius:var(--r);overflow:hidden}
+.cat{padding:8px 12px;background:var(--night-2);font:700 15px/1.2 var(--head);letter-spacing:.2px;border-top:1px solid var(--night-line)}
+.cat:first-child{border-top:0}
+.r{display:grid;grid-template-columns:52px minmax(170px,1.4fr) repeat(var(--n),minmax(64px,1fr)) 86px 128px 118px;gap:6px;align-items:center;padding:8px 10px;border-top:1px solid var(--night-line)}
+.r.head{background:transparent;color:var(--s-soft);font:500 12px/1.2 var(--head);letter-spacing:.3px;text-transform:uppercase;padding-top:10px;padding-bottom:6px}
+.r.dirty{background:rgba(243,162,29,.08)}
+.r.saved{animation:ok 1.2s ease-out}
+@keyframes ok{from{background:rgba(63,191,115,.28)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.r.saved{animation:none}}
+.bib{font:600 22px/1 var(--head);font-variant-numeric:tabular-nums;text-align:center}
+.nm b{display:block;font-weight:700;overflow-wrap:anywhere}
+.nm small{color:var(--s-soft);font-size:13px}
+.r input,.r select{min-height:50px;width:100%;min-width:0;font:600 19px/1 var(--head);font-variant-numeric:tabular-nums;text-align:center;color:var(--s-ink);
+  background:var(--night-2);border:1px solid var(--night-line);border-radius:var(--r);padding:6px 4px}
+.r select{text-align:left;font:15px/1.2 var(--body);padding:6px 26px 6px 8px;min-height:50px}
+.r select.man{border-color:var(--start)}
+.r input::placeholder{color:#4D6185;font-weight:400}
+.r input.err{border-color:var(--track);background:rgba(231,30,37,.18)}
+.r input:focus-visible,.r select:focus-visible{outline:2px solid var(--start);outline-offset:0;border-color:var(--start)}
+.best{font:600 22px/1 var(--head);font-variant-numeric:tabular-nums;text-align:center;color:var(--s-ok)}
+.lbl{display:none}
+.empty{padding:28px 16px;text-align:center;color:var(--s-soft)}
+.errline{margin:10px 0 0;padding:10px 12px;border-radius:var(--r);background:rgba(231,30,37,.18);color:#fff;font-size:14px}
+.errline:empty{display:none}
+.foot{margin-top:14px;font-size:13px;color:var(--s-soft)}
+.foot a{color:var(--s-soft)}
+
+@media (max-width:760px){
+  .top-in{padding:8px 12px;gap:6px 10px}.top .brand{height:22px}
+  .sync{order:3;flex-basis:100%;font-size:12.5px;padding:6px 10px}
+  .pick{grid-template-columns:1fr}
+  .r.head{display:none}
+  .r{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px 10px}
+  .r .bib{grid-column:1;grid-row:1;text-align:left}
+  .r .nm{grid-column:2/-1;grid-row:1}
+  .r .cell{display:grid;gap:3px}
+  .lbl{display:block;font-size:11px;color:var(--s-soft);text-align:center}
+  .r .wide{grid-column:span 3}
+  .r .half{grid-column:span 3}
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <img class="brand" src="/assets/sakhstart-dark.svg" alt="SakhStart">
+  <div class="sync busy" id="sync" role="status" aria-live="polite">Подключаюсь к серверу…</div>
+  <span class="who" id="who"></span>
+</div></header>
+
+<main class="wrap">
+  <h1 class="evname" id="evname">Судья на секторе</h1>
+  <div class="pick">
+    <label class="f">Соревнование<select id="ev" aria-label="Соревнование"></select></label>
+    <label class="f">Дисциплина<select id="disc" aria-label="Дисциплина"></select></label>
+  </div>
+  <span class="kind" id="kind"></span>
+  <p class="hint" id="hint"></p>
+  <div class="cats" id="cats" role="tablist" aria-label="Категория"></div>
+  <div class="errline" id="err" role="alert"></div>
+  <div class="grid" id="grid"><div class="empty">Загрузка…</div></div>
+  <p class="foot">Строка сохраняется сама, как только вы переходите к следующему полю (Tab, Enter или касание). Enter — к следующей клетке.
+    Табло: <a id="lnkBoard" target="_blank">открыть ↗</a></p>
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const STATUS=[["","—"],["DNS","DNS не стартовал"],["DNF","DNF сошёл"],["DQ","DQ дисквал."],["NM","NM без рез."]];
+const RANKS=["МСМК","МС","КМС","1 р.","2 р.","3 р.","1 юн.","2 юн.","3 юн."];
+const S={events:[],ev:null,sl:null,res:null,disc:LS.get("sector.disc",""),cat:LS.get("sector.cat",""),pending:{},saving:false};
+// неотправленные строки хранятся на планшете отдельно для каждого соревнования — переживают обрыв связи и перезагрузку
+const pKey=()=>"sector.pending."+(S.ev?S.ev.id:0);
+const savePending=()=>LS.set(pKey(),S.pending);
+async function api(path,body){
+  const o={headers:{"X-Requested-With":"timing-hub"}};
+  if(body!==undefined){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body);}
+  const r=await fetch(path,o);
+  if(r.status===401){location.href="/login?next="+encodeURIComponent(location.pathname+location.search);throw new Error("нужно войти");}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error(d.error||("HTTP "+r.status));e.http=r.status;throw e;}
+  return d;
+}
+// ---- статус синхронизации вверху экрана
+function sync(state,text){const s=$("sync");s.className="sync "+state;s.textContent=text;}
+const OK_TXT=()=>`🟢 Синхронизировано с сервером — результаты транслируются на Табло и Экраны в реальном времени · ${new Date().toLocaleTimeString("ru-RU")}`;
+// ---- тип дисциплины: техника (попытки) или бег (секундомеры) — по данным сервера
+const isTechE=e=>e.rtype==="distance"||e.rtype==="height"||(e.slots||0)>0;
+const discEntries=()=>{const out=[];if(!S.sl)return out;
+  S.sl.heats.concat([{name:"",distance:"",entries:S.sl.no_heat||[]}]).forEach(h=>h.entries.forEach(e=>{const d=e.distance||h.distance||"";if(d===S.disc)out.push(Object.assign({},e,{_heat:h.name,_lane:e.lane}));}));
+  return out;};
+const kindOf=()=>{const es=discEntries();if(!es.length)return "run";const e=es[0];return isTechE(e)?"tech":e.rtype==="points"?"pts":"run";};
+// ---- расчёт для подсказки на экране (официальный результат всё равно считает сервер)
+const T_RE=/^(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?$/;
+function parseT(t){t=String(t||"").replace(/\s+/g,"");const m=T_RE.exec(t);if(!m||!t)return null;const[,a,b,c,f]=m,h=b!=null?+a:0,mi=b!=null?+b:(a!=null?+a:0),sec=+c;
+  if((a!=null||b!=null)&&sec>=60)return null;const tot=h*3600+mi*60+sec+(f?+f/Math.pow(10,f.length):0);return tot>0?tot:null;}
+function fmtT(sec){const tn=Math.round(sec*10),h=Math.floor(tn/36000),m=Math.floor(tn%36000/600),s=Math.floor(tn%600/10),t=tn%10;
+  return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${t}`:m?`${m}:${String(s).padStart(2,"0")}.${t}`:`${s}.${t}`;}
+function swMain(v){v=v.map(parseT).filter(x=>x!=null).sort((a,b)=>a-b);if(!v.length)return "";const m=v.length>=3?v[1]:v[v.length-1];return fmtT(Math.ceil(+(m*10).toFixed(6))/10);}
+function attBest(v){let b=null;v.forEach(x=>{const m=/^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(String(x||"").replace(/\s+/g,""));if(m){const n=+(m[1]+"."+(m[2]||"0"));if(n>0&&(b==null||n>b))b=n;}});return b==null?"":b.toFixed(2);}
+
+// ---- загрузка: соревнования → стартовый список и результаты с сервера
+async function loadEvents(){
+  const r=await api("/api/events");S.events=r.events.filter(e=>!e.archived);
+  const q=+new URLSearchParams(location.search).get("event")||+LS.get("sector.event",0);
+  S.ev=S.events.find(e=>e.id===q)||S.events.find(e=>e.kind==="stadium"&&e.status!=="finished")||S.events[0]||null;
+  S.pending=LS.get(pKey(),{});
+  $("ev").innerHTML=S.events.map(e=>`<option value="${e.id}" ${S.ev&&e.id===S.ev.id?"selected":""}>${esc(e.name)}${e.date?" · "+e.date.split("-").reverse().join("."):""}</option>`).join("")||'<option value="">нет соревнований</option>';
+}
+async function loadData(){
+  if(!S.ev)return;
+  const [sl,res]=await Promise.all([api(`/api/events/${S.ev.id}/startlist`),api(`/api/events/${S.ev.id}/results`).catch(()=>null)]);
+  S.sl=sl;S.res=res;
+}
+function fillDisc(){
+  const names=[];S.sl&&S.sl.heats.concat([{distance:"",entries:S.sl.no_heat||[]}]).forEach(h=>h.entries.forEach(e=>{const d=e.distance||h.distance;if(d&&!names.includes(d))names.push(d);}));
+  // технические виды — первыми: экран прежде всего для секторов
+  names.sort((a,b)=>{const ta=S.sl.heats.some(h=>h.entries.some(e=>(e.distance||h.distance)===a&&isTechE(e)))?0:1,tb=S.sl.heats.some(h=>h.entries.some(e=>(e.distance||h.distance)===b&&isTechE(e)))?0:1;return ta-tb;});
+  if(!names.includes(S.disc))S.disc=names[0]||"";
+  $("disc").innerHTML=names.map(n=>`<option ${n===S.disc?"selected":""}>${esc(n)}</option>`).join("")||'<option value="">в стартовом протоколе пока нет участников</option>';
+}
+// ---- отрисовка
+const autoOf=bib=>{const x=S.res&&S.res.finished.find(f=>f.bib===bib);return x?(x.done_rank_auto||""):"";};
+function render(){
+  const ev=S.ev; $("evname").textContent=ev?ev.name:"Нет соревнований";
+  $("lnkBoard").href=ev?"/board?event="+ev.id:"/board";
+  const k=kindOf(), es=discEntries();
+  $("kind").className="kind"+(k==="tech"?" tech":""); $("kind").textContent=!S.disc?"":k==="tech"?"Техника · 6 попыток":k==="pts"?"Многоборье · очки":"Бег · 3 секундомера";
+  $("hint").textContent=k==="tech"?"Расстояние в метрах: 7.85 или 7,85. X — заступ (неудачная), «-» — пропуск. Лучшую попытку найдёт сервер."
+    :k==="pts"?"Сумма очков — целое число.":"Время с трёх секундомеров: 12.84 или 1:05.3. Официальный результат по правилам посчитает сервер.";
+  const cats=[...new Set(es.map(e=>e.category||"без категории"))];
+  if(S.cat&&!cats.includes(S.cat))S.cat="";
+  $("cats").innerHTML=cats.length>1?[["","Все",es.length],...cats.map(c=>[c,c,es.filter(e=>(e.category||"без категории")===c).length])]
+    .map(([v,t,n])=>`<button type="button" role="tab" aria-selected="${v===S.cat}" class="${v===S.cat?"on":""}" data-cat="${esc(v)}">${esc(t)}<i>${n}</i></button>`).join(""):"";
+  const shown=es.filter(e=>!S.cat||(e.category||"без категории")===S.cat)
+    .sort((a,b)=>String(a.category||"").localeCompare(String(b.category||""),"ru")||String(a._heat).localeCompare(String(b._heat),"ru",{numeric:true})||(a._lane??99)-(b._lane??99)||(parseInt(a.bib)||0)-(parseInt(b.bib)||0));
+  const n=k==="tech"?6:k==="pts"?1:3, gridEl=$("grid"); gridEl.style.setProperty("--n",n);
+  if(!shown.length){gridEl.innerHTML=`<div class="empty">${S.disc?"В этой дисциплине пока нет участников — секретарь формирует стартовый протокол.":"Выберите соревнование."}</div>`;return;}
+  const head=`<div class="r head"><span>№</span><span>Участник</span>${Array.from({length:n},(_,i)=>`<span style="text-align:center">${k==="tech"?"Попытка "+(i+1):k==="pts"?"Очки":"Сек. "+(i+1)}</span>`).join("")}<span style="text-align:center">${k==="tech"?"Лучший":k==="pts"?"":"Офиц."}</span><span>Вып. разряд</span><span>Отметка</span></div>`;
+  let last=null, html=head;
+  shown.forEach(e=>{const c=e.category||"без категории"; if(c!==last){html+=`<div class="cat">${esc(c)}</div>`;last=c;}
+    const p=S.pending[e.bib], d=e.detail||{}, vals=p?(k==="tech"?p.a:k==="pts"?[p.result]:p.t)||[]:(k==="tech"?d.a:k==="pts"?[e.result]:d.t)||[];
+    const cls=k==="tech"?"att":k==="pts"?"one":"sw";
+    const cells=Array.from({length:n},(_,i)=>`<label class="cell${k==="pts"?" wide":""}"><span class="lbl">${k==="tech"?"Попытка "+(i+1):k==="pts"?"Очки":"Сек. "+(i+1)}</span><input class="${cls}" data-i="${i}" value="${esc(vals[i]||"")}" inputmode="${k==="tech"?"text":"decimal"}" autocomplete="off" placeholder="—" aria-label="${esc((k==="tech"?"Попытка ":k==="pts"?"Очки ":"Секундомер ")+(k==="pts"?"":i+1))}, номер ${esc(e.bib)}"></label>`).join("");
+    const dr=p?p.done_rank:(e.done_rank||""), au=autoOf(e.bib), st=p?p.status:(e.status||"");
+    html+=`<div class="r${p?" dirty":""}" data-bib="${esc(e.bib)}"><span class="bib">${esc(e.bib)}</span><span class="nm"><b>${esc(e.name||"")}</b><small>${esc([e.birth_year,e.team,e.rank].filter(Boolean).join(" · "))}${e._lane?" · дор. "+e._lane:""}</small></span>${cells}
+      <span class="cell"><span class="lbl">${k==="tech"?"Лучший":"Офиц."}</span><span class="best" data-out>${esc(p?"":(e.result||""))}</span></span>
+      <label class="cell half"><span class="lbl">Вып. разряд</span><select class="dr${dr?" man":""}" aria-label="Выполненный разряд, номер ${esc(e.bib)}"><option value="">${au?"Авто: "+esc(au):"Авто: нет"}</option><option value="—" ${dr==="—"?"selected":""}>Не выполнен</option>${RANKS.map(x=>`<option ${x===dr?"selected":""}>${x}</option>`).join("")}</select></label>
+      <label class="cell half"><span class="lbl">Отметка</span><select class="st" aria-label="Отметка, номер ${esc(e.bib)}">${STATUS.map(([v,t])=>`<option value="${v}" ${v===st?"selected":""}>${t}</option>`).join("")}</select></label></div>`;});
+  gridEl.innerHTML=html;
+  gridEl.querySelectorAll(".r.dirty").forEach(recalc);
+}
+function recalc(r){const out=r.querySelector("[data-out]");if(!out)return;const sw=[...r.querySelectorAll("input.sw")],at=[...r.querySelectorAll("input.att")];
+  if(sw.length)out.textContent=swMain(sw.map(i=>i.value));else if(at.length)out.textContent=attBest(at.map(i=>i.value));}
+function rowData(r){const row={bib:r.dataset.bib,status:r.querySelector("select.st").value,done_rank:r.querySelector("select.dr").value,auto:true};
+  const sw=[...r.querySelectorAll("input.sw")],at=[...r.querySelectorAll("input.att")],one=r.querySelector("input.one");
+  if(sw.length)row.t=sw.map(i=>i.value.trim());if(at.length)row.a=at.map(i=>i.value.trim());if(one)row.result=one.value.trim();return row;}
+// ---- мгновенная отправка: строка уходит на сервер при переходе к следующему полю; без связи — копится и уходит сама
+let saveT=null;
+function queue(ms){clearTimeout(saveT);saveT=setTimeout(flush,ms??400);}
+async function flush(){
+  if(S.saving){queue(700);return;}
+  const bibs=Object.keys(S.pending);if(!bibs.length||!S.ev)return;
+  const rows=bibs.map(b=>S.pending[b]);S.saving=true;sync("busy","Сохраняю…");
+  try{
+    const r=await api(`/api/events/${S.ev.id}/results`,{rows});
+    const bad=new Map(r.errors.map(x=>[x.split(":")[0],x]));
+    rows.forEach(row=>{const el=document.querySelector(`.r[data-bib="${CSS.escape(row.bib)}"]`);
+      if(bad.has(row.bib)){el&&el.querySelectorAll("input").forEach(i=>i.classList.add("err"));return;}
+      if(JSON.stringify(S.pending[row.bib])===JSON.stringify(row)){delete S.pending[row.bib];if(el){el.classList.remove("dirty");el.classList.add("saved");setTimeout(()=>el.classList.remove("saved"),1300);}}});
+    savePending();
+    $("err").textContent=r.errors.length?"Не сохранено: "+r.errors.join("; "):"";
+    if(r.errors.length)sync("warn","⚠️ Есть ошибки ввода — исправьте выделенные клетки");else sync("ok",OK_TXT());
+    await refresh(true);
+  }catch(e){
+    if(e.http===403){sync("off","Нет прав на ввод результатов — войдите под учётной записью судьи на секторе");}
+    else{sync("off","🔴 Нет связи с сервером — введённое сохранено на планшете и уйдёт само");queue(5000);}
+  }finally{S.saving=false;}
+}
+// фоновое обновление: результаты коллег и расчёт сервера; строки, которые сейчас вводят, не трогаем
+async function refresh(quiet){
+  try{await loadData();}catch(e){if(!quiet)sync("off","🔴 Нет связи с сервером — повторю");return;}
+  const by={};discEntries().forEach(e=>{by[e.bib]=e;});
+  const rows=[...document.querySelectorAll(".r[data-bib]")];
+  if(rows.length!==discEntries().filter(e=>!S.cat||(e.category||"без категории")===S.cat).length&&!document.querySelector(".r.dirty")&&!document.activeElement.closest(".r")){render();return;}
+  rows.forEach(r=>{const e=by[r.dataset.bib];if(!e||r.classList.contains("dirty")||r.contains(document.activeElement))return;
+    const k=kindOf(),d=e.detail||{},vals=(k==="tech"?d.a:k==="pts"?[e.result]:d.t)||[];
+    r.querySelectorAll("input").forEach((i,ix)=>{i.value=vals[ix]||"";});
+    r.querySelector("[data-out]").textContent=e.result||"";
+    const dr=r.querySelector("select.dr");dr.value=e.done_rank||"";dr.classList.toggle("man",!!e.done_rank);const au=autoOf(e.bib);dr.options[0].textContent=au?"Авто: "+au:"Авто: нет";
+    r.querySelector("select.st").value=e.status||"";});
+  if(!Object.keys(S.pending).length&&!S.saving&&!$("sync").classList.contains("warn"))sync("ok",OK_TXT());
+}
+// ---- события
+$("grid").addEventListener("input",e=>{const r=e.target.closest(".r[data-bib]");if(!r)return;r.classList.add("dirty");e.target.classList.remove("err");recalc(r);});
+$("grid").addEventListener("change",e=>{const r=e.target.closest(".r[data-bib]");if(!r)return;r.classList.add("dirty");
+  if(e.target.matches("select.dr"))e.target.classList.toggle("man",!!e.target.value);
+  S.pending[r.dataset.bib]=rowData(r);savePending();queue();});
+$("grid").addEventListener("keydown",e=>{if(e.key!=="Enter"||!e.target.matches("input"))return;e.preventDefault();
+  const all=[...document.querySelectorAll("#grid input")],i=all.indexOf(e.target);e.target.blur();if(all[i+1]){all[i+1].focus();all[i+1].select();}});
+$("cats").addEventListener("click",e=>{const b=e.target.closest("[data-cat]");if(!b)return;S.cat=b.dataset.cat;LS.set("sector.cat",S.cat);render();});
+$("disc").onchange=e=>{S.disc=e.target.value;S.cat="";LS.set("sector.disc",S.disc);render();};
+$("ev").onchange=async e=>{S.ev=S.events.find(x=>x.id===+e.target.value);LS.set("sector.event",S.ev?S.ev.id:0);S.pending=LS.get(pKey(),{});
+  history.replaceState(null,"","/sector?event="+(S.ev?S.ev.id:""));S.disc="";await loadData();fillDisc();render();};
+
+(async function init(){
+  try{const me=await api("/api/me");$("who").innerHTML=`${esc(me.name||me.login)} · <button type="button" id="out">выйти</button>`;
+    $("out").onclick=async()=>{try{await fetch("/api/logout",{method:"POST",headers:{"X-Requested-With":"timing-hub"}});}catch(e){}location.href="/login";};}catch(e){}
+  try{await loadEvents();await loadData();sync("ok",OK_TXT());}catch(e){sync("off","🔴 Нет связи с сервером — проверьте Wi-Fi");}
+  fillDisc();render();
+  if(Object.keys(S.pending).length)queue(500);          // несохранённое с прошлого раза уходит само
+  setInterval(()=>{if(!document.hidden)refresh(true);},8000);
+  window.addEventListener("online",()=>queue(200));
+})();
+</script>
+</body>
+</html>

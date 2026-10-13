@@ -359,6 +359,9 @@ td.res{font:600 18px var(--head)}
 
 /* ── система ── */
 html{scrollbar-gutter:stable}
+.mi-row{display:flex;align-items:stretch;gap:4px}.mi-row a{flex:1;min-width:0}
+.mi-copy{flex:none;align-self:center;font:600 12px/1.2 var(--body);padding:6px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);color:var(--ink);cursor:pointer;white-space:normal;max-width:96px}
+.mi-copy:hover{border-color:var(--track);color:var(--track)}
 .subnav{display:flex;gap:2px;margin:0 0 12px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
 .sysnav a{white-space:nowrap;margin-bottom:-1px}
 .syshead{min-height:34px;align-items:center;margin:0 0 14px}
@@ -569,6 +572,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2"/></svg><span class="lbl"> Экраны</span> ▾</button>
     <div class="menu right" id="scrMenu">
       <a id="lnkJudge" target="_blank"><b>Судья на финише ↗</b><small>телефон: старт, финиш, ввод номеров, секундомер</small></a>
+      <div class="mi-row"><a id="lnkSector" target="_blank"><b>📱 Судья на секторе ↗</b><small>планшет ввода результатов: попытки в прыжках и метаниях, секундомеры</small></a><button type="button" class="mi-copy" id="cpSector" title="Скопировать ссылку для судей на поле">Копировать ссылку</button></div>
       <a id="lnkAnn" target="_blank"><b>Диктор ↗</b><small>кто подбегает к финишу</small></a>
       <a id="lnkBoard" target="_blank"><b>Табло ↗</b><small>для экрана у финиша</small></a>
       <a id="lnkProto" target="_blank"><b>Протокол ↗</b><small>результаты для печати и сайта</small></a>
@@ -1334,6 +1338,8 @@ function toggleMenu(id, btn){
 }
 $("evBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("evMenu", $("evBtn")); };
 $("scrBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("scrMenu"); };
+$("cpSector").onclick = async (e) => { e.stopPropagation(); const url = new URL($("lnkSector").getAttribute("href"), location.origin).href;
+  try{ await navigator.clipboard.writeText(url); toast("Ссылка скопирована: " + url); }catch(err){ prompt("Скопируйте ссылку для судей на секторе:", url); } };
 document.addEventListener("click", (e) => { if (!e.target.closest(".menu") && !e.target.closest(".more")) closeMenus(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
 $("evMenu").addEventListener("click", (e) => {
@@ -1419,6 +1425,7 @@ function renderEvents(){
   $("evMenu").innerHTML = mlist.map(e => `<button class="mi ${e.id===curId?"sel":""}" data-id="${e.id}"><b class="${e.status==="running"?"live":""}">${esc(e.name)}</b><small>${esc([fmtDate(e.date), e.place].filter(Boolean).join(" · ") || "без даты")}${e.archived?" · архив":""}</small></button>`).join("")
     + `${mlist.length?"<hr>":""}<a href="#home"><b>Все соревнования и архив</b></a><button class="mi" data-new="1"><b>+ Новое соревнование</b></button>`;
   $("lnkJudge").href = ev ? "/judge?event="+ev.id : "/judge";
+  $("lnkSector").href = ev ? "/sector?event="+ev.id : "/sector";
   $("lnkAnn").href = ev ? "/announcer?event="+ev.id : "/announcer";
   $("lnkBoard").href = ev ? "/board?event="+ev.id : "/board";
   $("lnkProto").href = ev ? "/protocol?event="+ev.id : "/protocol";

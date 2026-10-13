@@ -102,7 +102,8 @@ async function load(){
     const hasW=(ev.waves||[]).length>0;
     $("hdPlace").textContent=hasW?"Место в забеге":"Место";
     // последние по времени прихода на финиш, а не по порядку забегов
-    const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||0)-(a.finish_epoch_ms||0)).slice(0,10);
+    // свежие сверху: финиш по чипу/судье или время ввода результата с сектора (метания, прыжки, секундомеры)
+    const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,10);
     $("hd").classList.toggle("hide",!last.length);
     $("list").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time,isNew=!first&&!seen.has(k);seen.add(k);
       const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";

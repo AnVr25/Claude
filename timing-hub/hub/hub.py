@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "4.2.0"
+VERSION = "4.3.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -728,6 +728,7 @@ class Store:
         add("entries", (("picked_at", "TEXT"), ("members", "TEXT")))
         add("entries", (("rank", "TEXT"), ("detail", "TEXT")))       # 3.2: разряд; показания секундомеров и попытки (JSON)
         add("entries", (("done_rank", "TEXT"),))                      # 3.5: выполненный разряд (вносит секретарь)
+        add("entries", (("result_at", "TEXT"),))                      # 4.3: когда введён результат (для табло)
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
         self.con.executescript(
@@ -1116,7 +1117,7 @@ class Store:
     def entries_rows(self, eid: int) -> list:
         rows = self._rows(self.con.execute(
             "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
-            " picked_at, members, rank, detail, done_rank FROM entries"
+            " picked_at, members, rank, detail, done_rank, result_at FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
         for r in rows:
             try:
@@ -1128,13 +1129,14 @@ class Store:
     def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str],
                          detail: Optional[dict] = None, set_detail: bool = False) -> int:
         """Итог участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
+        at = fmt_db(now_local()) if (result or status or detail) else None      # время ввода — табло показывает свежие сверху
         if set_detail:
             dj = json.dumps(detail, ensure_ascii=False) if detail else None
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, dj, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ?, result_at = ? WHERE event_id = ? AND bib = ?",
+                                   (result or None, status or None, dj, at, eid, bib))
         else:
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, result_at = ? WHERE event_id = ? AND bib = ?",
+                                   (result or None, status or None, at, eid, bib))
         return cur.rowcount
 
     def set_picked(self, eid: int, bib: str, ts: Optional[str]) -> int:
@@ -2598,8 +2600,10 @@ class Hub:
                 txt = entered[chip][1]
                 pv = prev_by_wave.get(w)
                 place = pv[1] if pv and pv[0] == txt else place_by_wave[w]   # одинаковый результат — одно место
+                ra = info.get(chip, {}).get("result_at")
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt, seconds=round(sec, 3),
-                         finish_at=None, finish_epoch_ms=None, entered=True)
+                         finish_at=None, finish_epoch_ms=None, entered=True,
+                         entered_epoch_ms=self._epoch_ms(parse_db(ra)) if ra else None)
                 if rtype_of.get(chip, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
                     r.update(time=txt, seconds=None, rtype=rtype_of[chip], value=round(-sec, 2))
             else:
@@ -4423,7 +4427,7 @@ class Hub:
         return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
 
     # ---- «Оборудование»: сервер, службы, VPN, кто подключён
-    PAGES = {"/": "Админка", "/judge": "Судья", "/announcer": "Диктор", "/board": "Табло", "/protocol": "Протокол"}
+    PAGES = {"/": "Админка", "/judge": "Судья", "/sector": "Судья на секторе", "/announcer": "Диктор", "/board": "Табло", "/protocol": "Протокол"}
 
     def _note_client(self, writer, headers: dict, path: str) -> None:
         peer = writer.get_extra_info("peername")
@@ -5711,7 +5715,7 @@ class Hub:
     ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
     # «Судья на секторе / секретарь вида»: только ввод результатов (шаг 4 мастера) и табло — ни заявок с личными данными,
     # ни сетки, ни настроек, ни оборудования
-    SECTOR_PAGES = ("/", "/api/me", "/api/logout", "/api/me/password", "/api/clock", "/api/disciplines")
+    SECTOR_PAGES = ("/sector", "/board", "/api/me", "/api/logout", "/api/me/password", "/api/clock", "/api/disciplines")
     SECTOR_GET = re.compile(r"/api/events(/\d+(/(startlist|results))?)?")
     SECTOR_POST = re.compile(r"/api/events/\d+/results")
 
@@ -5771,7 +5775,7 @@ class Hub:
         self.store.audit(f"{u['login']}@{ip}", None, "Вход")
         cookie = (f"{self.SESSION_COOKIE}={tok}; Path=/; Max-Age={self.SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax"
                   + ("; Secure" if secure else ""))
-        nxt = "/judge" if u["role"] == "judge" else "/#wizard" if u["role"] == "sector" else self._safe_next(d.get("next"))
+        nxt = "/judge" if u["role"] == "judge" else "/sector" if u["role"] == "sector" else self._safe_next(d.get("next"))
         return 200, {"ok": True, "user": u, "next": nxt}, {"Set-Cookie": cookie}
 
     LOGIN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,31}")
@@ -5937,7 +5941,7 @@ class Hub:
             if not self.role_allows(user["role"], method, path):
                 if method == "GET" and not path.startswith("/api/"):
                     await self._send(writer, 302, "text/plain", "",
-                                     extra={"Location": "/judge" if user["role"] == "judge" else "/"})
+                                     extra={"Location": {"judge": "/judge", "sector": "/sector"}.get(user["role"], "/")})
                 else:
                     await self._send(writer, 403, J, json.dumps({"error": "недостаточно прав"}, ensure_ascii=False))
                 return
@@ -5986,8 +5990,8 @@ class Hub:
                 await self._send(writer, code, ctype, data, extra=extra)
             elif method != "GET":
                 await self._send(writer, 405, "text/plain", "метод не поддерживается")
-            elif path in ("/", "/board", "/judge", "/announcer", "/protocol"):
-                name = {"/": "ui.html", "/board": "board.html", "/judge": "judge.html",
+            elif path in ("/", "/board", "/judge", "/announcer", "/protocol", "/sector"):
+                name = {"/": "ui.html", "/board": "board.html", "/judge": "judge.html", "/sector": "sector.html",
                         "/announcer": "announcer.html", "/protocol": "protocol.html"}[path]
                 page = self._ui_file(name)
                 if page is None:

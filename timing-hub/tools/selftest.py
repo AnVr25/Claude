@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.2.0 и дата сборки 13.10.2026", st3["version"] == "4.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.3.0 и дата сборки 13.10.2026", st3["version"] == "4.3.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1345,9 +1345,22 @@ def main() -> int:
         code, d, ck = spost("/api/login", {"login": "sector1", "password": "sector-pass-1", "next": "/"})
         sck = ck.split(";")[0]
         se = e9
-        check("4.0: судья на секторе после входа попадает в ввод результатов мастера", code == 200 and d.get("next") == "/#wizard", str(d))
+        check("4.3: судья на секторе после входа попадает на свой экран /sector", code == 200 and d.get("next") == "/sector", str(d))
+        req_ = urllib.request.Request(f"http://127.0.0.1:{p_web}/", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+
+        class _NoRedir(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        try:
+            urllib.request.build_opener(_NoRedir).open(req_, timeout=10)
+            loc = ""
+        except urllib.error.HTTPError as e_:
+            loc = e_.headers.get("Location", "")
+        page_ = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{p_web}/sector?event={e9}", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10).read().decode()
+        check("4.3: админка «/» судье на секторе закрыта (переход на /sector), страница /sector открывается",
+              loc == "/sector" and "Судья на секторе" in page_ and "/api/events/" in page_, loc)
         check("4.0: судье на секторе доступны соревнования, стартовый список, результаты и справочник дисциплин",
-              sget("/", sck) == 200 and sget("/api/events", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
+              sget("/sector", sck) == 200 and sget("/board", sck) == 200 and sget("/api/events", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
               and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200)
         check("4.0: судье на секторе закрыты заявки (личные данные), система, пользователи, ридеры",
               sget(f"/api/events/{se}/regs", sck) == 403 and sget("/api/system", sck) == 403 and sget("/api/users", sck) == 403
@@ -1368,6 +1381,9 @@ def main() -> int:
             {"bib": beg, "a": ["6.10", "X", "5.90"], "auto": True},
             {"bib": grm, "a": ["5.75", "5.50"], "auto": True}]}).encode(), J)
         fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        check("4.3: у введённого вручную результата есть время ввода (табло показывает свежие сверху)",
+              all(isinstance(fin9[b_].get("entered_epoch_ms"), int) and fin9[b_]["entered_epoch_ms"] > 1.7e12 for b_ in (vas, beg, grm)),
+              str({k: v.get("entered_epoch_ms") for k, v in fin9.items()}))
         check("3.6: разряд считается сам — 60 м девочка 15 лет 9.2 (ручной) → 1 юн.; длина юноша 16 лет 6.10 → 2 р.",
               fin9[vas]["done_rank"] == "1 юн." and fin9[vas]["done_rank_src"] == "auto"
               and fin9[beg]["done_rank"] == "2 р.", str({k: (v["result"], v["done_rank"]) for k, v in fin9.items()}))

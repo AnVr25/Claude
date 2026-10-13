@@ -53,6 +53,11 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--start);outline-
 
 /* секундомер */
 .clockbox{margin-top:14px;padding:12px 0 4px;border-top:1px solid var(--night-line)}
+/* технический вид (попытки): секундомер финиша не используется — ведём на экран судьи на секторе */
+.techbox{margin-top:14px;padding:14px;border-radius:var(--r);background:var(--night-2);border:1px solid var(--start);display:grid;gap:8px}
+.techbox b{font:600 18px/1.25 var(--head)}.techbox span{color:var(--j-soft);font-size:15px}
+.techbox .go{display:block;text-align:center;padding:14px;border-radius:var(--r);background:var(--start);color:#fff;font:700 17px/1.2 var(--head);text-decoration:none}
+body.techheat .clockbox,body.techheat .modes,body.techheat #paneNum,body.techheat #paneTap,body.techheat .nextbox{display:none!important}
 .heatinfo{display:flex;gap:6px 8px;align-items:center;flex-wrap:wrap;font:600 17px/1.25 var(--head);letter-spacing:.2px}
 .heatinfo .small{font:400 14px/1.35 var(--body)}
 .clock{font:600 clamp(60px,19vw,84px)/1 var(--head);font-variant-numeric:tabular-nums;letter-spacing:-.5px;margin-top:6px;white-space:nowrap}
@@ -150,6 +155,11 @@ h3{font:600 15px/1.2 var(--head);letter-spacing:.6px;text-transform:uppercase;co
 
   <details class="docs hide" id="docs"><summary>📁 Документы для судей <span id="docsN"></span></summary><div id="docsList"></div></details>
 
+  <div class="techbox hide" id="techBox" role="note">
+    <b>Это техническая дисциплина — попытки здесь не вводятся</b>
+    <span>Секундомер финиша нужен только для бега. Метры, X и «-» для прыжков и метаний вносятся на экране «Судья на секторе».</span>
+    <a class="go" id="techGo" href="/sector">📱 Открыть «Судья на секторе» →</a>
+  </div>
   <div class="clockbox">
     <div class="heatinfo" id="heatInfo"></div>
     <div class="clock idle" id="clock">Старт не дан</div>
@@ -262,7 +272,16 @@ function renderEv(keep){
   if(dPrev&&!devs.includes(dPrev)) devs.push(dPrev);
   $("devSel").innerHTML=devs.map(d=>`<option>${esc(d)}</option>`).join("");
   if(dPrev) $("devSel").value=dPrev;
-  renderHeat(); loadMarks(); loadDocs();
+  renderHeat(); loadMarks(); loadDocs(); loadTech();
+}
+// какие забеги — технические виды (по данным сервера: тип результата дисциплины)
+var techHeats={}, techEv=null;
+async function loadTech(){
+  if(!ev||techEv===ev.id) return;
+  try{ const sl=await api(`/api/events/${ev.id}/startlist`); techEv=ev.id; techHeats={};
+    sl.heats.forEach(h=>{ const es=h.entries||[]; techHeats[h.name]=h.rtype==="distance"||h.rtype==="height"||(h.slots||0)>0
+      ||(es.length>0&&es.every(e=>e.rtype==="distance"||e.rtype==="height"||(e.slots||0)>0)); });
+    renderHeat(); }catch(e){}
 }
 async function loadDocs(){
   if(!ev){$("docs").classList.add("hide");return;}
@@ -277,6 +296,9 @@ async function loadDocs(){
 }
 function renderHeat(){
   const h=heat(), st=heatState();
+  const tech=!!(h&&techHeats[h.name]);
+  document.body.classList.toggle("techheat",tech); $("techBox").classList.toggle("hide",!tech);
+  if(ev) $("techGo").href="/sector?event="+ev.id;
   const lbl={planned:"ожидает старта",running:"идёт",finished:"завершён",none:"",}[st]||"";
   $("heatInfo").innerHTML=h?`<b>${esc(h.name)}</b>${h.category?" · "+esc(h.category):""}${h.distance?" · "+esc(h.distance):""} <span class="badge ${st==="running"?"run":st==="finished"?"fin":""}">${lbl}</span>`:(ev&&!ev.waves.length?'<span class="small">Забегов нет — общий старт или создайте забег ниже</span>':"");
   $("btnStart").classList.toggle("hide",!ev||!(st==="planned"));
