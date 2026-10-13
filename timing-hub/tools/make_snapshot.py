@@ -117,9 +117,9 @@ st_tail = [ln for ln in selftest.stdout.splitlines() if ln.startswith("Итог�
 st_checks = [ln for ln in selftest.stdout.splitlines() if re.match(r"\[OK  \] (3\.[4-6]|3\.5|3\.6)", ln)]
 norms = H.Hub.rank_norms()["data"]
 
-w(f"# system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.6")
+w(f"# system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7")
 w()
-w(f"- **Версия сервера (`VERSION`):** `{H.VERSION}` (линейка v3.6; 3.6.1 — установочная сборка с «Метанием мяча/снаряда»)")
+w(f"- **Версия сервера (`VERSION`):** `{H.VERSION}` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)")
 w(f"- **Дата сборки (`BUILD_DATE`):** `{H.BUILD_DATE}`")
 w(f"- **Ветка / коммит:** `{branch}` / `{commit}`")
 w(f"- **Дамп сформирован:** {dt.datetime.now():%Y-%m-%d %H:%M} скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)")
@@ -288,7 +288,7 @@ w()
 a, b, src = js_decl(PR, "setPage")
 w(f"#### `setPage` — {ref('hub/protocol.html', a, b)}\n")
 code("js", src)
-for nm in ("buildFinal", "render", "renderCart", "syncStartCtl"):
+for nm in ("groupList", "tabsFor", "currentItem", "sheetsFor", "showSheets", "drawTabs", "addTabToCart", "buildFinal", "render", "renderCart", "syncStartCtl"):
     a, b, src = js_decl(PR, nm)
     w(f"#### `{nm}` — {ref('hub/protocol.html', a, b)}\n")
     code("js", src)
@@ -402,7 +402,7 @@ w()
 w("1. **Нет функции `add_entry` как метода Hub.** Есть `Store.add_entry` (низкоуровневая вставка) и ветка API `entry` (§3.8), которая и является прикладным «добавлением участника в забег».")
 w("2. **`table()` не в `ui.html`**, а в `protocol.html` (см. §4.1).")
 w(f"3. **Выгрузка в сеть** (`publish`) открывает на публичной странице протокол соревнования **целиком** (`pub_start`/`pub_results`), а не отдельные листы корзины; требует настроенного `public.url` и `ours=true`.")
-w("4. **Версия.** Запрошена фиксация «v3.6»; в коде `3.6.1`. Понижать нельзя: механизм обновления сравнивает строки (`latest != VERSION`) и предложил бы «откат» установленным 3.6.1; линейка 3.6 сохранена.")
+w("4. **Версия.** `3.7.0`. Механизм обновления сравнивает строки (`latest != VERSION`), поэтому версия только растёт.")
 w("5. **Push без force.** Изменения отправляются обычным `git push`; принудительная отправка не нужна (ветка не расходилась с удалённой) и могла бы стереть чужие коммиты.")
 w("6. **Корзина хранится в `localStorage` браузера секретаря** (по событию), не на сервере: на другом компьютере она пуста.")
 w(f"7. **Разряды по нормам:** источник — {norms.get('source')}; {norms.get('count')} норм; пропущены 2 ячейки-опечатки таблицы (`skipped` в `rank_norms.json`). Не учитываются ветер, эстафеты, «бег 24 часа»; МСМК не присваивается автоматически. Для 500 м, 2000 м, 80 м с/б, ходьбы 1500 м норм в таблице нет.")

@@ -1,11 +1,11 @@
-# system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.6
+# system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `3.6.1` (линейка v3.6; 3.6.1 — установочная сборка с «Метанием мяча/снаряда»)
+- **Версия сервера (`VERSION`):** `3.7.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-13`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `72977c5`
-- **Дамп сформирован:** 2026-10-13 06:22 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 250 из 250 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 6475 строк, `hub/ui.html` 3152, `hub/protocol.html` 524
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `1a87b16`
+- **Дамп сформирован:** 2026-10-13 06:43 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 251 из 251 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 6480 строк, `hub/ui.html` 3133, `hub/protocol.html` 600
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -496,7 +496,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 4182–4285
+#### `Hub.generate_scoped` — `hub/hub.py` строки 4182–4290
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -553,14 +553,19 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
         plan, tech = [], kind == "tech"
         if tech:
-            lst = sorted(regs, key=lambda r: (cat_order.get(r.get("category") or "", 99), r["id"]))
-            base = "Общий список · " + dist + (" · " + ("Мальчики" if sex == "М" else "Девочки") if sex else "") \
-                + (" · " + "/".join(ages) if ages else "")
-            name, i = base, 1
-            while name in alive:
-                i += 1
-                name = f"{base} ({i})"
-            plan.append((name, "", lst, False))
+            # техника: дорожек нет; у каждой категории (пол × возраст) — свой сквозной список, своя нумерация и свои места
+            bycat: dict = {}
+            for r in regs:
+                bycat.setdefault(r.get("category") or "", []).append(r)
+            for cat in sorted(bycat, key=lambda c: (cat_order.get(c, 99), c)):
+                lst = sorted(bycat[cat], key=lambda r: r["id"])
+                base = "Общий список · " + dist + (" · " + cat if cat else (" · " + ("Мальчики" if sex == "М" else "Девочки") if sex else ""))
+                name, i = base, 1
+                while name in alive:
+                    i += 1
+                    name = f"{base} ({i})"
+                alive.add(name)
+                plan.append((name, cat, lst, False))
         else:
             n = max([int(m.group(1)) for m in (re.fullmatch(r"Забег (\d+)", x) for x in alive) if m] or [0])
             groups: dict = {}
@@ -605,7 +610,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.generate_heats` — `hub/hub.py` строки 4287–4358
+#### `Hub.generate_heats` — `hub/hub.py` строки 4292–4363
 
 ```python
     def generate_heats(self, ev: dict, lanes: int, mode: str = "heats") -> dict:
@@ -697,7 +702,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4360–4377
+#### `Hub.reset_heats` — `hub/hub.py` строки 4365–4382
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -867,7 +872,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4379–4398
+#### `Hub.startlist` — `hub/hub.py` строки 4384–4403
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -1688,25 +1693,30 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 > ВАЖНО для аудитора: в ТЗ функция `table()` названа находящейся в `ui.html`. Фактически она живёт в `hub/protocol.html` (одна страница печати для админки и публичного сайта). `ui.html` печатных таблиц не строит.
 
-#### `isTech` — `hub/protocol.html` строки 303–303
+#### `isTech` — `hub/protocol.html` строки 317–317
 
 ```js
 const isTech=(rtype,slots,att)=>rtype==="distance"||rtype==="height"||(slots||0)>0||att===true;
 ```
 
-#### `partsOf` — `hub/protocol.html` строки 305–311
+#### `partsOf` — `hub/protocol.html` строки 320–331
 
 ```js
 function partsOf(h){
   const mk=(o,es,tech)=>Object.assign({},h,o,{entries:es,tech,src:h});
-  if(h.distance||!h.entries.some(e=>e.distance)) return [mk({},h.entries,isTech(h.rtype,h.slots,h.attempts))];
-  const m={}; h.entries.forEach(e=>{(m[e.distance||""]||(m[e.distance||""]=[])).push(e);});
-  return Object.keys(m).sort().map(k=>{const es=m[k], t=!!k&&isTech(es[0].rtype,es[0].slots);
-    return mk({distance:k,rtype:es[0].rtype||h.rtype,slots:t?(es[0].slots||6):0},es,t);});
+  const mixD=!h.distance&&h.entries.some(e=>e.distance), mixC=!h.category&&h.entries.some(e=>e.category);
+  if(!mixD&&!mixC) return [mk({},h.entries,isTech(h.rtype,h.slots,h.attempts))];
+  const m=new Map();
+  h.entries.forEach(e=>{ const d=mixD?(e.distance||""):h.distance, c=mixC?(e.category||""):(h.category||""), k=d+"|"+c;
+    if(!m.has(k)) m.set(k,{d,c,es:[]}); m.get(k).es.push(e); });
+  return [...m.values()].map(({d,c,es})=>{
+    const t=mixD?(!!d&&isTech(es[0].rtype,es[0].slots)):(isTech(h.rtype,h.slots,h.attempts)||isTech(es[0].rtype,es[0].slots));
+    return mk({distance:d,category:c,rtype:mixD?(es[0].rtype||h.rtype):h.rtype,slots:t?(es[0].slots||h.slots||6):0},es,t);
+  });
 }
 ```
 
-#### `startSheet` — `hub/protocol.html` строки 313–365
+#### `startSheet` — `hub/protocol.html` строки 333–385
 
 ```js
 function startSheet(o){
@@ -1756,7 +1766,7 @@ function startSheet(o){
     });
   }
   const empty=!body;
-  if(empty) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Забегов пока нет — сформируйте их во вкладке «Регистрация».</div>';
+  if(empty) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Сетки пока нет — сформируйте её в «Протоколы → Мастер», шаг 2.</div>';
   const html=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ")+body+
     `<div class="note">${list?"Участники записаны одним сквозным списком в порядке нагрудных номеров. ":"Забеги сформированы по заявленным результатам. "}${tech?"Графы «Попытка 1–6» и «Лучший результат» — для записи судьями от руки.":"Графы «Сек. 1–3» — для записи судьями показаний трёх ручных секундомеров."}</div>`+signs(ev)+
     `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`;
@@ -1764,15 +1774,15 @@ function startSheet(o){
 }
 ```
 
-#### `renderStart` — `hub/protocol.html` строки 366–372
+#### `renderStart` — `hub/protocol.html` строки 454–460
 
 ```js
 function renderStart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
-  const list=$("smode").value==="list";
-  const r=startSheet({gf:$("grp").value,sf:$("sexf").value,list,coach:$("showCoach").checked,landscape:$("orient").value==="landscape"});
-  setPage(r.land); if(r.tech&&list) $("orient").value="landscape";
-  $("sheet").innerHTML=r.html;
+  const tabs=tabsFor(true); if(!tabs.some(t=>t.id===TAB)) TAB="";
+  drawTabs(tabs);
+  const secs=sheetsFor(currentItem(true));
+  showSheets(secs);
 }
 ```
 
@@ -1780,7 +1790,7 @@ function renderStart(){
 
 ### 4.2 Переключение печатных стилей landscape / portrait — `hub/protocol.html`
 
-#### `setPage` — `hub/protocol.html` строки 294–299
+#### `setPage` — `hub/protocol.html` строки 308–313
 
 ```js
 function setPage(land){
@@ -1791,11 +1801,104 @@ function setPage(land){
 }
 ```
 
-#### `buildFinal` — `hub/protocol.html` строки 413–520
+#### `groupList` — `hub/protocol.html` строки 389–398
 
 ```js
-function buildFinal(){
-  const ev=R.event, mode=$("mode").value, gf=$("grp").value, tf=$("team").hidden?"":$("team").value, sf=$("sexf").value;
+function groupList(start){
+  const out=new Map();
+  const add=(x,dist,cat)=>{ if(DIST&&dist!==DIST) return; const k=dist+"|"+cat;
+    if(!out.has(k)) out.set(k,{key:k,dist,cat,M:0,F:0,n:0}); const g=out.get(k), s=sexOf(x); g.n++; if(s==="М") g.M++; if(s==="Ж") g.F++; };
+  if(start){ if(!SL) return [];
+    SL.heats.forEach(h=>partsOf(h).forEach(pt=>pt.entries.forEach(e=>add(e,pt.distance||"",pt.category||""))));
+    if($("smode").value==="list") partsOf({name:"",category:"",distance:"",entries:SL.no_heat||[],rtype:"time",slots:0}).forEach(pt=>pt.entries.forEach(e=>add(e,pt.distance||"",pt.category||"")));
+  } else if(R) R.finished.concat(R.on_course,R.not_seen).forEach(x=>add(x,x.distance||"",x.category||""));
+  return [...out.values()];
+}
+```
+
+#### `tabsFor` — `hub/protocol.html` строки 399–407
+
+```js
+function tabsFor(start){
+  const gs=groupList(start), n=gs.reduce((a,g)=>a+g.n,0), M=gs.reduce((a,g)=>a+g.M,0), F=gs.reduce((a,g)=>a+g.F,0);
+  const tabs=[{id:"",label:"Все участники",n}];
+  if(M) tabs.push({id:"М",label:"Мальчики / Мужчины",n:M});
+  if(F) tabs.push({id:"Ж",label:"Девочки / Женщины",n:F});
+  const multiD=new Set(gs.map(g=>g.dist)).size>1;
+  if(gs.length>1) gs.forEach(g=>tabs.push({id:g.key,label:multiD?gtitle(g.dist,g.cat):(g.cat||"Без категории"),n:g.n}));
+  return tabs;
+}
+```
+
+#### `currentItem` — `hub/protocol.html` строки 409–412
+
+```js
+function currentItem(start){
+  return {type:start?"start":"final", dist:DIST, gk:TAB.includes("|")?TAB:"", sf:TAB==="М"||TAB==="Ж"?TAB:"",
+          mode:start?($("smode").value==="list"?"list":"heats"):($("mode").value==="heats"?"heats":"overall"), orient:$("orient").value};
+}
+```
+
+#### `sheetsFor` — `hub/protocol.html` строки 414–422
+
+```js
+function sheetsFor(it){
+  const start=it.type!=="final", coach=$("showCoach").checked;
+  let keys=it.gk?[it.gk]:groupList(start).filter(g=>!it.sf||(it.sf==="М"?g.M:g.F)).map(g=>g.key);
+  if(!keys.length) keys=[null];
+  const out=keys.map(k=>start
+    ? startSheet({gf:k??"__none__",sf:it.sf,list:it.mode==="list",coach,landscape:it.orient==="landscape"})
+    : (f=>({html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)}))(buildFinal({gf:k??"__none__",sf:it.sf,mode:it.mode==="heats"?"heats":"overall"})));
+  return out.filter(r=>!r.empty).length?out.filter(r=>!r.empty):out.slice(0,1);
+}
+```
+
+#### `showSheets` — `hub/protocol.html` строки 424–433
+
+```js
+function showSheets(secs){
+  if(secs.length===1){ setPage(secs[0].land); $("sheet").innerHTML=secs[0].html; return; }
+  let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
+  const first=secs[0].land;
+  st.textContent=`@page{size:A4 ${first?"landscape":"portrait"};margin:${first?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`
+    +`@page cpl{size:A4 landscape;margin:10mm 12mm 12mm}@page cpp{size:A4 portrait;margin:12mm 12mm 14mm}`
+    +`.cp{page-break-after:always;break-after:page}.cp:last-child{page-break-after:auto;break-after:auto}.cp.land{page:cpl}.cp.port{page:cpp}`;
+  $("sheet").classList.toggle("land",secs.some(r=>r.land));
+  $("sheet").innerHTML=secs.map(r=>`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`).join("");
+}
+```
+
+#### `drawTabs` — `hub/protocol.html` строки 434–440
+
+```js
+function drawTabs(tabs){
+  const box=$("ptabs");
+  if(!tabs){ box.innerHTML=""; box.hidden=true; return; }
+  box.hidden=false;
+  box.innerHTML=`<div class="tl" role="tablist" aria-label="Группы протокола">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${t.id===TAB}" class="${t.id===TAB?"on":""}" data-tab="${esc(t.id)}">${esc(t.label)}<i>${t.n}</i></button>`).join("")}</div>`
+    +(PUB?"":`<button type="button" class="cartadd" id="tabCart">🛒 Добавить текущую вкладку в корзину печати</button><span class="cartmsg" id="cartMsg" role="status"></span>`);
+}
+```
+
+#### `addTabToCart` — `hub/protocol.html` строки 445–453
+
+```js
+function addTabToCart(){
+  const start=isStartView(), it=currentItem(start), tab=tabsFor(start).find(t=>t.id===TAB)||{label:"Все участники"};
+  const label=`${start?"Старт":"Итоги"}: ${DIST||"все дисциплины"} — ${tab.label}${start?(it.mode==="list"?" · общий список":" · по забегам"):""}`;
+  let a=LS.get("ss.cart."+eid,[]); a=Array.isArray(a)?a:[];
+  const same=a.some(x=>["type","dist","gk","sf","mode","orient"].every(k=>(x[k]||"")===(it[k]||"")));
+  if(!same){ a.push(Object.assign({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),on:true,label},it)); LS.set("ss.cart."+eid,a); }
+  const n=sheetsFor(it).length;
+  $("cartMsg").textContent=same?"Эта вкладка уже в корзине":`В корзине: «${tab.label}» — ${n} ${n===1?"лист":n<5?"листа":"листов"}`;
+}
+```
+
+#### `buildFinal` — `hub/protocol.html` строки 489–596
+
+```js
+function buildFinal(o={}){
+  const ev=R.event, mode=o.mode||$("mode").value, gf=o.gf??"", tf=$("team").hidden?"":$("team").value, sf=o.sf||"";
   const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&(!DIST||x.distance===DIST);
   const techX=x=>isTech(x.rt||x.rtype,0,!!(x.attempts&&x.attempts.length));
   const anyDone=R.finished.some(x=>x.done_rank);
@@ -1904,7 +2007,7 @@ function buildFinal(){
 }
 ```
 
-#### `render` — `hub/protocol.html` строки 404–411
+#### `render` — `hub/protocol.html` строки 478–487
 
 ```js
 function render(){
@@ -1912,53 +2015,41 @@ function render(){
   syncStartCtl();
   if(!R){ if(PUB&&SL) renderStart(); return; }
   if($("mode").value==="start") return renderStart();
-  const r=buildFinal();
-  setPage(r.land); $("sheet").innerHTML=r.html;
+  if($("mode").value==="teams"){ drawTabs(null); const r=buildFinal(); setPage(r.land); $("sheet").innerHTML=r.html; return; }
+  const tabs=tabsFor(false); if(!tabs.some(t=>t.id===TAB)) TAB="";
+  drawTabs(tabs);
+  showSheets(sheetsFor(currentItem(false)));
 }
 ```
 
-#### `renderCart` — `hub/protocol.html` строки 374–398
+#### `renderCart` — `hub/protocol.html` строки 462–472
 
 ```js
 function renderCart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
+  drawTabs(null);
   let items=LS.get("ss.cart."+eid,[]); items=Array.isArray(items)?items:[];
   if(QIDS.length) items=items.filter(it=>QIDS.includes(String(it.id)));
-  const coach=$("showCoach").checked, keep={m:$("mode").value,g:$("grp").value,s:$("sexf").value};
-  const secs=items.map(it=>{
-    DIST=it.dist||"";
-    if(it.type==="final"){
-      if(!R) return {empty:true};
-      $("mode").value=it.mode==="heats"?"heats":"overall"; $("grp").value=it.gk||""; $("sexf").value=it.sf||"";
-      if($("grp").value!==(it.gk||"")) return {empty:true};
-      const f=buildFinal(); return {html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)};
-    }
-    return startSheet({gf:it.gk||"",sf:it.sf||"",list:it.mode==="list",coach,landscape:it.orient==="landscape"});
-  }).filter(r=>!r.empty);
-  $("mode").value=keep.m; $("grp").value=keep.g; $("sexf").value=keep.s; DIST="";
-  if(!secs.length){ $("sheet").innerHTML='<div class="empty"><b>Корзина печати пуста</b>Вернитесь в «Регистрацию», отметьте бланки галочками и нажмите «Добавить выделенные в корзину печати».</div>'; return; }
-  let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
-  const first=secs[0].land;
-  st.textContent=`@page{size:A4 ${first?"landscape":"portrait"};margin:${first?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`
-    +`@page cpl{size:A4 landscape;margin:10mm 12mm 12mm}@page cpp{size:A4 portrait;margin:12mm 12mm 14mm}`
-    +`.cp{page-break-after:always;break-after:page}.cp:last-child{page-break-after:auto;break-after:auto}.cp.land{page:cpl}.cp.port{page:cpp}`;
-  $("sheet").classList.toggle("land",secs.some(r=>r.land));
-  $("sheet").innerHTML=secs.map(r=>`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`).join("");
+  const secs=[];
+  items.forEach(it=>{ DIST=it.dist||""; if(it.type==="final"&&!R) return; sheetsFor(it).forEach(r=>{ if(!r.empty) secs.push(r); }); });
+  DIST="";
+  if(!secs.length){ $("sheet").innerHTML='<div class="empty"><b>Корзина печати пуста</b>Откройте «Протоколы → Мастер», выберите вкладку и нажмите «Добавить текущую вкладку в корзину печати».</div>'; return; }
+  showSheets(secs);
 }
 ```
 
-#### `syncStartCtl` — `hub/protocol.html` строки 399–402
+#### `syncStartCtl` — `hub/protocol.html` строки 473–476
 
 ```js
 function syncStartCtl(){
-  const isStart=!R&&PUB&&SL||$("mode").value==="start"; const list=$("smode").value==="list";
-  $("smode").classList.toggle("hide",!isStart); $("sexf").classList.toggle("hide",$("mode").value==="teams"&&!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
+  const isStart=isStartView(); const list=$("smode").value==="list";
+  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
 }
 ```
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1966–2039
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1956–2004
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1977,7 +2068,7 @@ function renderCart(){
   const a = cartGet(), on = a.filter(x => x.on).length;
   const html = `<h3>🛒 Корзина печати <span class="small muted">${a.length ? "— листов: " + a.length + ", к печати: " + on : ""}</span></h3>
     ${a.map(it => `<div class="ci"><label><input type="checkbox" data-cs="${esc(it.id)}" ${it.on ? "checked" : ""}> <span>${esc(it.label)}</span></label><button data-rm="${esc(it.id)}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("")
-      || '<p class="small muted" style="margin:0">Корзина пуста. В мастере на шагах «Стартовый протокол» и «Итоговый протокол» есть кнопка «🛒 Добавить в корзину».</p>'}
+      || '<p class="small muted" style="margin:0">Корзина пуста. Над протоколом выберите вкладку (все, мальчики, девочки или категорию) и нажмите «🛒 Добавить текущую вкладку в корзину печати».</p>'}
     <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🌐 Выгрузить в общую сеть</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
   document.querySelectorAll(".cartmount").forEach(m => { m.innerHTML = html; });
 }
@@ -2007,46 +2098,21 @@ document.addEventListener("change", (e) => {
   const c = e.target.closest("[data-cs]"); if (!c) return;
   const a = cartGet(); const it = a.find(x => x.id === c.dataset.cs); if (it) { it.on = c.checked; cartSet(a); }
 });
-let cartForms = [];
-function renderCartForms(sl){
-  const groups = {};
-  sl.heats.concat((sl.no_heat||[]).length ? [{category:"", distance:"", entries:sl.no_heat}] : []).forEach(h => h.entries.forEach(e => {
-    const d = e.distance || h.distance || "", c = h.category || e.category || "", k = d + "|" + c;
-    const g = groups[k] || (groups[k] = {gk:k, d, c, M:0, F:0, O:0}); const x = sexOfE(e); g[x==="М"?"M":x==="Ж"?"F":"O"]++;
-  }));
-  cartForms = [];
-  Object.values(groups).sort((a,b) => a.gk.localeCompare(b.gk, "ru", {numeric:true})).forEach(g => {
-    const word = (sf) => { const base = [g.c, g.d].filter(Boolean).join(" "); if (!sf) return base || "Все участники";
-      const sw = sf==="М" ? "Мальчики" : "Девочки"; return (new RegExp(sf==="М"?"юнош|мальч|мужч":"девуш|девоч|женщ","i").test(g.c) ? "" : sw + " ") + (base || "все"); };
-    if (g.M && g.F) { cartForms.push({gk:g.gk, d:g.d, sf:"", n:g.M+g.F+g.O}); cartForms.push({gk:g.gk, d:g.d, sf:"М", n:g.M}); cartForms.push({gk:g.gk, d:g.d, sf:"Ж", n:g.F}); }
-    else cartForms.push({gk:g.gk, d:g.d, sf:"", n:g.M+g.F+g.O});
-    cartForms.filter(f => f.gk === g.gk).forEach(f => { f.label = "Старт: " + word(f.sf); });
-  });
-  $("gCartList").innerHTML = cartForms.map((f,i) => `<label><input type="checkbox" data-i="${i}"> <b>${esc(f.label)}</b> <span class="small muted">${f.n} уч.</span></label>`).join("") || '<p class="small muted" style="margin:0">Бланков пока нет — сформируйте забеги или общий список.</p>';
-  renderCart();
-}
-$("gCartAll").onclick = () => { const cb = [...$("gCartList").querySelectorAll("input")]; const on = cb.some(c => !c.checked); cb.forEach(c => c.checked = on); };
-$("gCartAdd").onclick = () => {
-  const sel = [...$("gCartList").querySelectorAll("input:checked")].map(c => cartForms[+c.dataset.i]).filter(Boolean);
-  if (!sel.length) return toast("Отметьте галочками нужные бланки");
-  const v = pmodeVal(), mode = v === "heats" ? "heats" : "list", orient = v === "list-landscape" ? "landscape" : "portrait";
-  const n = cartAdd(sel.map(f => ({type:"start", dist:f.d, gk:f.gk, sf:f.sf, mode, orient, label:f.label + (mode === "list" ? " · общим списком" : "")})));
-  $("gCartList").querySelectorAll("input:checked").forEach(c => c.checked = false);
-  toast(n ? `В корзину добавлено бланков: ${n}` : "Эти бланки уже в корзине");
-};
+// лист, добавленный в корзину во вкладке протокола (встроенный предпросмотр), сразу виден здесь
+window.addEventListener("storage", (e) => { if (curId != null && e.key === cartKey()) renderCart(); });
 ```
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 2041–2223
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 2006–2204
 
 ```js
 const wzp = (() => {
   const W = {disc: "", step: 1, ages: [], sex: "", lanes: 8, regs: [], sl: null, ev: null};
   const AGE_LIM = {u12:[0,12], u14:[0,14], u16:[0,16], u18:[0,18], u20:[0,20], u23:[0,23], sen:[19,200]};
   const STEP_T = {
-    run:   ["Фильтр", "Забеги и дорожки", "Стартовый протокол", "Ввод на финише", "Итоговый протокол"],
-    tech:  ["Фильтр", "Общий список", "Стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
+    run:   ["Фильтр", "Состав по категориям", "Забеги и стартовый протокол", "Ввод на финише", "Итоговый протокол"],
+    tech:  ["Фильтр", "Состав по категориям", "Общий список и стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
   // автоопределение: попытки или расстояние/высота — техника; время — бег; прочее (очки) ведём по беговой ветке
   const kindOf = (name) => { const d = discBy(name); if (!d) return "run"; if (d.attempts || d.result === "distance" || d.result === "height") return "tech"; return "run"; };
   const isPoints = (name) => { const d = discBy(name); return !!d && d.result === "points"; };
@@ -2111,20 +2177,43 @@ const wzp = (() => {
       const es = h.entries.filter(e => (e.distance || h.distance) === W.disc);
       return `<tr><td><b>${esc(h.name)}</b></td><td>${esc(h.category || "")}</td><td>${es.length}</td><td>${es.filter(e => sexOfE(e) === "М").length}</td><td>${es.filter(e => sexOfE(e) === "Ж").length}</td></tr>`; }).join("")}</tbody></table></div>`;
   }
+  // шаг 2: проверка состава — как секретарь перед жеребьёвкой: кто в какой категории, сколько листов получится
   function step2(body, k){
-    const tech = k === "tech", n = regsIn().length;
-    body.innerHTML = `<h2>Шаг 2. ${tech ? "Единый общий список" : "Забеги и дорожки"}</h2>
-      <p class="small muted" style="margin:0">В расчёт идут: ${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))} · участников: <b>${n}</b>.</p>
-      ${tech ? '<div class="wzp-lock">🔒 Для техники дорожки заблокированы: участники идут одним сквозным списком «Общий список» в порядке выполнения попыток.</div>'
-        : `<label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
-      <div class="row"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "Сформировать общий список" : "Сформировать забеги"}</button>
-        <button class="bigred" type="button" id="wzpReset">${tech ? "❌ Сбросить список" : "❌ Удалить все забеги"}</button></div>
-      <h3 style="margin:6px 0 0">Сейчас по дисциплине «${esc(W.disc)}»</h3>${heatsTable()}${nav(true, "К стартовому протоколу")}`;
+    const tech = k === "tech", rs = regsIn(), pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
+    const cats = new Map(); rs.forEach(r => { const c = r.category || ""; if (!cats.has(c)) cats.set(c, {M: 0, F: 0, n: 0, inGrid: 0}); const g = cats.get(c);
+      g.n++; if (String(r.sex || "").toUpperCase() === "М") g.M++; else g.F++; if (r.entry_wave) g.inGrid++; });
+    const noCat = cats.has("") ? cats.get("").n : 0;
+    const rows = [...cats.entries()].map(([c, g]) => `<tr><td><b>${esc(c || "без категории")}</b></td><td>${g.M}</td><td>${g.F}</td><td><b>${g.n}</b></td>
+      <td>${tech ? "1 лист" : Math.ceil(g.n / (W.lanes || 8)) + " " + (Math.ceil(g.n / (W.lanes || 8)) === 1 ? "забег" : "забега")}</td><td>${g.inGrid ? g.inGrid + " уже в сетке" : "—"}</td></tr>`).join("");
+    body.innerHTML = `<h2>Шаг 2. Состав по категориям</h2>
+      <p class="small muted" style="margin:0">${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))}.
+        Каждая категория получает свой ${tech ? "общий список и свой судейский лист" : "забег (забеги) и свой лист"}: своя нумерация, свои места, разные категории не смешиваются.</p>
+      <div class="tbl"><table><thead><tr><th>Категория</th><th>Мальчиков</th><th>Девочек</th><th>Всего</th><th>${tech ? "Список" : "Забегов при " + (W.lanes || 8) + " дор."}</th><th>Сетка</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="empty">Подтверждённых заявок по этим условиям нет.</td></tr>`}</tbody></table></div>
+      ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — в сетку они не попадут, пока их не подтвердить.</div>` : ""}
+      ${noCat ? `<div class="wzp-lock">⚠️ У ${noCat} участников не определена категория — проверьте правила категорий и год рождения в «Регистрации».</div>` : ""}
+      ${nav(true, tech ? "К общему списку" : "К забегам")}`;
+  }
+  // шаг 3: сетка и стартовый протокол на одном экране — ровно две кнопки управления сеткой, ниже бланк с вкладками групп
+  function step3(body, k){
+    const tech = k === "tech", n = regsIn().length, q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
+    body.innerHTML = `<h2>Шаг 3. ${tech ? "Общий список и стартовый протокол" : "Забеги и стартовый протокол"}</h2>
+      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожки заблокированы. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
+        : `<p class="small muted" style="margin:0">Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3».</p>
+           <label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
+      <div class="row wzp-ctl"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "⚡ Сформировать общий список" : "⚡ Сформировать забеги"}</button>
+        <button class="danger" type="button" id="wzpReset" ${myHeats().length ? "" : "disabled"}>❌ Сбросить сетку / Удалить забеги</button>
+        <span class="small muted">${n} участников по фильтру шага 1</span></div>
+      ${myHeats().length ? `<p class="small muted" style="margin:0">Над бланком — вкладки: «Все участники», «Мальчики», «Девочки» и каждая категория. Нужную вкладку можно сразу положить в корзину печати.</p>
+        <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>
+        <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>`
+        : '<div class="card empty">Сетки по этой дисциплине пока нет — нажмите «⚡ Сформировать…».</div>'}
+      ${nav(true, "К вводу результатов")}`;
   }
   async function gen(){
     const e0 = ev(), tech = kind() === "tech";
     if (tech === false) W.lanes = +($("wzpLanes") || {}).value || W.lanes;
-    if (myHeats().length && !confirm("По этой дисциплине сетка уже есть. Пересобрать для выбранных участников? Номера сохранятся, остальные участники не затрагиваются.")) return;
+    if (myHeats().length && !confirm("По этой дисциплине сетка уже есть. Пересобрать её для участников по фильтру шага 1? Номера сохранятся, другие дисциплины и участники вне фильтра не затрагиваются.")) return;
     try{
       const r = await api(`/api/events/${e0.id}/heats`, {distance: W.disc, ages: W.ages, sex: W.sex, lanes: W.lanes});
       toast(tech ? `Общий список сформирован, участников: ${r.entries}` : `Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`);
@@ -2133,18 +2222,11 @@ const wzp = (() => {
   }
   async function reset(){
     const e0 = ev();
-    if (!confirm(`Вы уверены, что хотите полностью очистить и удалить все сформированные забеги в этой дисциплине (${W.disc})? Это действие нельзя отменить!`)) return;
+    if (!confirm(`Сбросить сетку дисциплины «${W.disc}» и удалить все её забеги и списки? Номера участников сохранятся. Это действие нельзя отменить.`)) return;
     try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves}, участников ${r.entries}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
-  function step3(body, k){
-    const tech = k === "tech", q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
-    body.innerHTML = `<h2>Шаг 3. Стартовый протокол</h2>
-      <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: шесть пустых граф «Попытка 1…6» и «Лучший результат» — судьи пишут от руки на секторе." : "Вертикальный лист: три пустые графы «Сек. 1 | Сек. 2 | Сек. 3» для показаний секундомеров."}</p>
-      <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>
-      <div class="row"><button class="primary" type="button" id="wzpCartS">🛒 Добавить в корзину</button><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "К вводу результатов")}`;
-  }
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
@@ -2153,7 +2235,7 @@ const wzp = (() => {
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
-      <div class="row"><button class="primary" type="button" id="wzpCartF">🛒 Добавить в корзину</button><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
+      <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
   }
   /* шаг 4: экранная сетка ввода */
   function step4(body, k){
@@ -2167,12 +2249,15 @@ const wzp = (() => {
       return `<tr data-bib="${esc(r.bib)}">${tech || pts ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td><td><b>${esc(r.name || "")}</b><div class="small muted">${esc(r.birth_year || "")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank || "")}</td>${main}
         ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td><input class="dr" value="${esc(r.done_rank || "")}" list="wzpRanks" placeholder="${esc((W.auto || {})[r.bib] || "—")}" title="${(W.auto || {})[r.bib] ? "По нормам ЕВСК: " + esc(W.auto[r.bib]) + ". Впишите, только если нужно иначе." : "По нормам разряд не выполнен (или нормы для дисциплины нет)"}" aria-label="Выполненный разряд ${esc(r.bib)}" style="min-width:64px"></td>
         <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([c, t]) => `<option value="${c}" ${r.status === c ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>`; };
-    const sorted = es.slice().sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
+    const sorted = es.slice().sort((a, b) => String(a.category || "").localeCompare(String(b.category || ""), "ru") || String(a._heat).localeCompare(String(b._heat), "ru", {numeric: true})
+      || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
+    let lastCat = null;
+    const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
     body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}
         Выполненный разряд система считает сама по нормам ЕВСК и показывает серым после сохранения; вписывайте его только если нужно иначе.</p>
       <datalist id="wzpRanks">${RANKS.map(r => `<option value="${esc(r)}">`).join("")}</datalist>
-      <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${sorted.map(row).join("") || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
+      <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
       <div class="row"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button><span class="small muted">Enter — к следующему полю. Изменённые строки подсвечены.</span></div>${nav(true, "К итоговому протоколу")}`;
   }
   async function saveRows(){
@@ -2199,9 +2284,6 @@ const wzp = (() => {
     if (e.target.id === "wzpGen") return gen();
     if (e.target.id === "wzpReset") return reset();
     if (e.target.id === "wzpSave") return saveRows();
-    const tech = kind() === "tech";
-    if (e.target.id === "wzpCartS") { const n = cartAdd([{type: "start", dist: W.disc, gk: "", sf: W.sex, mode: tech ? "list" : "heats", orient: tech ? "landscape" : "portrait", label: label("Старт") + (tech ? " · горизонтальный, 6 попыток" : " · 3 секундомера")}]); toast(n ? "Добавлено в корзину" : "Этот лист уже в корзине"); }
-    if (e.target.id === "wzpCartF") { const n = cartAdd([{type: "final", dist: W.disc, gk: "", sf: W.sex, mode: "overall", orient: tech ? "landscape" : "portrait", label: label("Итоги") + (tech ? " · горизонтальный, 6 попыток" : " · места и разряды")}]); toast(n ? "Добавлено в корзину" : "Этот лист уже в корзине"); }
   });
   root.addEventListener("change", (e) => {
     if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); return render(); }
@@ -2228,7 +2310,7 @@ const wzp = (() => {
 
 ### 4.5 Расчёт официального результата на клиенте (зеркало серверного) — `hub/ui.html`
 
-#### `parseT` — `hub/ui.html` строки 2961–2966
+#### `parseT` — `hub/ui.html` строки 2942–2947
 
 ```js
 function parseT(t){
@@ -2239,7 +2321,7 @@ function parseT(t){
 }
 ```
 
-#### `fmtT` — `hub/ui.html` строки 2967–2970
+#### `fmtT` — `hub/ui.html` строки 2948–2951
 
 ```js
 function fmtT(sec){
@@ -2248,7 +2330,7 @@ function fmtT(sec){
 }
 ```
 
-#### `swMain` — `hub/ui.html` строки 2971–2975
+#### `swMain` — `hub/ui.html` строки 2952–2956
 
 ```js
 function swMain(vals){
@@ -2258,7 +2340,7 @@ function swMain(vals){
 }
 ```
 
-#### `attBest` — `hub/ui.html` строки 2976–2979
+#### `attBest` — `hub/ui.html` строки 2957–2960
 
 ```js
 function attBest(vals, hi){
@@ -2271,7 +2353,7 @@ function attBest(vals, hi){
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1776–1776
+#### `rankOpts` — `hub/ui.html` строки 1768–1768
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2330,13 +2412,13 @@ rank = self.norm_rank(d.get("rank"))
 
 Статические правила страницы:
 
-#### `hub/protocol.html` строки 108–108
+#### `hub/protocol.html` строки 121–121
 
 ```css
 @media print{.cp+.cp{margin-top:0;border-top:0;padding-top:0}}
 ```
 
-#### `hub/protocol.html` строки 116–126
+#### `hub/protocol.html` строки 129–139
 
 ```css
 @media print{
@@ -2385,7 +2467,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 250 из 250 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 251 из 251 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2413,7 +2495,7 @@ table.att,table.swt{table-layout:auto}
 1. **Нет функции `add_entry` как метода Hub.** Есть `Store.add_entry` (низкоуровневая вставка) и ветка API `entry` (§3.8), которая и является прикладным «добавлением участника в забег».
 2. **`table()` не в `ui.html`**, а в `protocol.html` (см. §4.1).
 3. **Выгрузка в сеть** (`publish`) открывает на публичной странице протокол соревнования **целиком** (`pub_start`/`pub_results`), а не отдельные листы корзины; требует настроенного `public.url` и `ours=true`.
-4. **Версия.** Запрошена фиксация «v3.6»; в коде `3.6.1`. Понижать нельзя: механизм обновления сравнивает строки (`latest != VERSION`) и предложил бы «откат» установленным 3.6.1; линейка 3.6 сохранена.
+4. **Версия.** `3.7.0`. Механизм обновления сравнивает строки (`latest != VERSION`), поэтому версия только растёт.
 5. **Push без force.** Изменения отправляются обычным `git push`; принудительная отправка не нужна (ветка не расходилась с удалённой) и могла бы стереть чужие коммиты.
 6. **Корзина хранится в `localStorage` браузера секретаря** (по событию), не на сервере: на другом компьютере она пуста.
 7. **Разряды по нормам:** источник — Нормы ЕВСК по виду спорта «лёгкая атлетика» — приложение № 16 к приказу Минспорта России от 10.03.2026; 264 норм; пропущены 2 ячейки-опечатки таблицы (`skipped` в `rank_norms.json`). Не учитываются ветер, эстафеты, «бег 24 часа»; МСМК не присваивается автоматически. Для 500 м, 2000 м, 80 м с/б, ходьбы 1500 м норм в таблице нет.
@@ -2438,6 +2520,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+1a87b16 2026-10-13 release: глобальный дамп архитектуры Мастера протоколов v3.6
 72977c5 2026-10-13 chore: версия 3.6.1 (справочник: метание мяча/снаряда) для установки через кнопку обновления
 076cf3c 2026-10-13 feat: в справочник дисциплин добавлено «Метание мяча/снаряда» (техника, 6 попыток)
 ccc81bc 2026-10-13 feat: выполненные разряды по нормам ЕВСК в итоговом протоколе v3.6.0
@@ -2451,6 +2534,5 @@ a668bf4 2026-10-13 Справочник дисциплин лёгкой атле
 31037a6 2026-10-13 Слияние origin/claude/greeting-d2g8ji в v3.0.0: версия 3.0.0 от 13.10.2026, тесты ручного подтверждения обновления
 4aaaf55 2026-10-13 major: полностью переработан стартовый экран, запущен Мастер подбора соревнования v3.0.0
 d5bb0d1 2026-10-12 ✅ Переделка логики обновлений: ручное подтверждение (часть 2)
-9fa11d3 2026-10-12 🔄 Переделка логики обновлений: ручное подтверждение (часть 1)
 ```
 

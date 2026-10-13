@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.6.1"
+VERSION = "3.7.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4233,14 +4233,19 @@ class Hub:
         cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
         plan, tech = [], kind == "tech"
         if tech:
-            lst = sorted(regs, key=lambda r: (cat_order.get(r.get("category") or "", 99), r["id"]))
-            base = "Общий список · " + dist + (" · " + ("Мальчики" if sex == "М" else "Девочки") if sex else "") \
-                + (" · " + "/".join(ages) if ages else "")
-            name, i = base, 1
-            while name in alive:
-                i += 1
-                name = f"{base} ({i})"
-            plan.append((name, "", lst, False))
+            # техника: дорожек нет; у каждой категории (пол × возраст) — свой сквозной список, своя нумерация и свои места
+            bycat: dict = {}
+            for r in regs:
+                bycat.setdefault(r.get("category") or "", []).append(r)
+            for cat in sorted(bycat, key=lambda c: (cat_order.get(c, 99), c)):
+                lst = sorted(bycat[cat], key=lambda r: r["id"])
+                base = "Общий список · " + dist + (" · " + cat if cat else (" · " + ("Мальчики" if sex == "М" else "Девочки") if sex else ""))
+                name, i = base, 1
+                while name in alive:
+                    i += 1
+                    name = f"{base} ({i})"
+                alive.add(name)
+                plan.append((name, cat, lst, False))
         else:
             n = max([int(m.group(1)) for m in (re.fullmatch(r"Забег (\d+)", x) for x in alive) if m] or [0])
             groups: dict = {}

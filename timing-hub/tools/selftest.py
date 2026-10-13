@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.6.1 и дата сборки 13.10.2026", st3["version"] == "3.6.1" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.7.0 и дата сборки 13.10.2026", st3["version"] == "3.7.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1292,6 +1292,11 @@ def main() -> int:
         check("3.5: после списка мальчиков девочки на месте: 2 списка, 4 прыгуна, у всех slots=6, дорожек нет",
               code == 200 and len(sl9["heats"]) == 2 and len(jump) == 4 and all(e["slots"] == 6 and e["lane"] is None for e in jump)
               and {sexo for sexo in (e["sex"] for e in jump)} == {"М", "Ж"}, txt[:400])
+        code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "Прыжок в длину"}).encode(), J)
+        g4 = json.loads(txt)
+        check("3.7: техника без фильтра пола — отдельный общий список на каждую категорию, категории не смешиваются",
+              code == 200 and sorted(h["category"] for h in g4["heats"]) == ["Девушки", "Юноши"]
+              and all(h["name"].startswith("Общий список · Прыжок в длину · ") for h in g4["heats"]) and g4["entries"] == 4, txt[:300])
         code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "lanes": 2}).encode(), J)
         g3 = json.loads(txt)
         _, txt = http("GET", f"/api/events/{e9}/startlist")
