@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.9.0"
+VERSION = "4.0.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -3430,6 +3430,19 @@ class Hub:
             self.store.audit(who, eid, what.get(upd.get("status"), "Заявка изменена"),
                              f"{r['last_name']} {r['first_name']} · {r['distance']}")
             return ok({"reg": self.store.get_registration(sub_id)})
+        if action == "clearresults":
+            # «Очистить протокол»: результаты, отметки, секундомеры, попытки и ручные разряды выбранных участников
+            bibs = {str(b) for b in (data.get("bibs") or []) if str(b).strip()}
+            if not bibs:
+                return err("не указано, чьи результаты очистить")
+            have = {e["bib"] for e in self.store.entries_rows(eid)}
+            n = 0
+            for b in sorted(bibs & have):
+                self.store.set_entry_result(eid, b, None, None, None, True)
+                self.store.update_entry(eid, b, done_rank=None)
+                n += 1
+            self.store.audit(who, eid, "Очищены результаты", f"{data.get('label') or ''} участников: {n}".strip())
+            return ok({"cleared": n})
         if action == "publish":
             # «Выгрузить в общую сеть»: стартовый и/или итоговый протокол становится виден на публичной странице события
             upd = {}
@@ -5609,7 +5622,7 @@ class Hub:
             return hmac.compare_digest(u, web.get("user", "admin")) and hmac.compare_digest(p, pwd)
         return False
 
-    ROLES = {"admin": "Администратор", "secretary": "Секретарь", "judge": "Судья"}
+    ROLES = {"admin": "Администратор", "secretary": "Секретарь", "judge": "Судья", "sector": "Судья на секторе / секретарь вида"}
     SESSION_COOKIE = "ss_session"
     SESSION_DAYS = 30
 
@@ -5696,6 +5709,11 @@ class Hub:
     JUDGE_POST = re.compile(r"/api/events/\d+/(manual(/\d+)?|start|waves)")
     JUDGE_PAGES = ("/judge", "/board", "/announcer", "/protocol", "/api/me", "/api/logout")
     ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
+    # «Судья на секторе / секретарь вида»: только ввод результатов (шаг 4 мастера) и табло — ни заявок с личными данными,
+    # ни сетки, ни настроек, ни оборудования
+    SECTOR_PAGES = ("/", "/api/me", "/api/logout", "/api/me/password", "/api/clock", "/api/disciplines")
+    SECTOR_GET = re.compile(r"/api/events(/\d+(/(startlist|results))?)?")
+    SECTOR_POST = re.compile(r"/api/events/\d+/results")
 
     def role_allows(self, role: str, method: str, path: str) -> bool:
         if role == "admin":
@@ -5706,6 +5724,11 @@ class Hub:
             if path in self.JUDGE_PAGES or re.fullmatch(r"/files/\d+", path):
                 return True
             rx = self.JUDGE_GET if method == "GET" else self.JUDGE_POST
+            return bool(rx.fullmatch(path))
+        if role == "sector":
+            if path in self.SECTOR_PAGES:
+                return True
+            rx = self.SECTOR_GET if method == "GET" else self.SECTOR_POST
             return bool(rx.fullmatch(path))
         return False
 
@@ -5748,7 +5771,7 @@ class Hub:
         self.store.audit(f"{u['login']}@{ip}", None, "Вход")
         cookie = (f"{self.SESSION_COOKIE}={tok}; Path=/; Max-Age={self.SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax"
                   + ("; Secure" if secure else ""))
-        nxt = "/judge" if u["role"] == "judge" else self._safe_next(d.get("next"))
+        nxt = "/judge" if u["role"] == "judge" else "/#wizard" if u["role"] == "sector" else self._safe_next(d.get("next"))
         return 200, {"ok": True, "user": u, "next": nxt}, {"Set-Cookie": cookie}
 
     LOGIN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,31}")

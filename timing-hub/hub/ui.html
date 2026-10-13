@@ -203,6 +203,18 @@ button.bigprint{background:var(--track);border-color:var(--track);color:#fff;fon
 button.bigprint:hover{filter:brightness(1.08)}
 .cartbox .ci label{flex:1;min-width:0}
 body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
+.wzp-sync{font-size:14px;color:var(--muted)}.wzp-sync.ok{color:#17905A}.wzp-sync.bad{color:var(--track);font-weight:700}.wzp-sync.busy{color:var(--muted)}
+.wzp-ctl #wzpClear{margin-left:auto}
+.wzp-pub label{min-height:40px}
+/* судья на секторе / секретарь вида: только ввод результатов — без настроек, оборудования, пользователей и удаления */
+body[data-role=sector] #lane,body[data-role=sector] #ipicoNav,body[data-role=sector] #healthBar,body[data-role=sector] .evswitch.scr,
+body[data-role=sector] #gear,body[data-role=sector] #wzpBack,body[data-role=sector] #wzpSteps,body[data-role=sector] .cartmount,
+body[data-role=sector] #evMenu a[href="#home"],body[data-role=sector] #evMenu [data-new],body[data-role=sector] #evMenu hr,
+body[data-role=sector] .wzp-nav,body[data-role=sector] #wzpClear,body[data-role=sector] .wzp-title h1{display:none!important}
+body[data-role=sector] header .logos{pointer-events:none}
+body[data-role=sector] .wzp-grid input,body[data-role=sector] .wzp-grid select{min-height:46px;font-size:18px}
+body[data-role=sector] .wzp-grid input{min-width:78px}
+body[data-role=sector] #wzpSave{min-height:52px;font-size:18px;padding:12px 24px}
 .wzp-head{display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .wzp-title{display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap;min-width:0}
 .wzp-title h1{margin:0;font-size:26px}
@@ -1132,7 +1144,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="form uadd">
       <div><label for="uLogin">Логин</label><input id="uLogin" placeholder="petrova" autocapitalize="none" spellcheck="false"></div>
       <div><label for="uName">Имя</label><input id="uName" placeholder="Петрова Анна"></div>
-      <div><label for="uRole">Роль</label><select id="uRole"><option value="secretary">Секретарь</option><option value="judge">Судья</option><option value="admin">Администратор</option></select></div>
+      <div><label for="uRole">Роль</label><select id="uRole"><option value="secretary">Секретарь</option><option value="judge">Судья на финише</option><option value="sector">Судья на секторе / секретарь вида</option><option value="admin">Администратор</option></select></div>
       <div><label for="uNote">Примечание</label><input id="uNote" placeholder="судья на финише, до 30.10" maxlength="200"></div>
     </div>
     <div class="row" style="margin-top:12px"><button class="primary" id="uSave">Добавить</button></div>
@@ -1222,6 +1234,8 @@ $("wlAll").onclick = () => { if (DIR) dirAll = true; };
 $("sbStart").onclick = () => wzOpen();
 function showTab(){
   let tab = tabName();
+  if (isSector()) { tab = "wizard"; document.body.dataset.view = tab;
+    document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-wizard")); $("lane").classList.add("hide"); closeMenus(); wzp.open(); return; }
   if (!document.getElementById("tab-"+tab)) tab = "home";
   if ((tab === "hw" || tab === "users") && ME && ME.role !== "admin") tab = "log";
   if (STEPS.includes(tab) && !curEvent()) tab = "home";
@@ -1426,6 +1440,7 @@ $("btnAddWave").onclick = async () => {
 };
 function selectEvent(id){
   if (id === curId) return;
+  if (isSector()) { curId = id; store.set("timing.event", String(id)); renderEvents(); wzp.open(); return; }
   curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
   lastId = 0; $("feedBody").innerHTML = "";
   renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
@@ -1777,6 +1792,7 @@ const RANKS = ["Б/р","3 юн.","2 юн.","1 юн.","3 р.","2 р.","1 р.","К
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
 function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
 function renderRegHead(force){
+  if (isSector()) return;                       // судье на секторе заявки и QR-код формы не нужны
   const ev = curEvent();
   if (!ev) return;
   if (!force && regLoaded === ev.id && regBusy()) return;
@@ -2039,15 +2055,17 @@ const wzp = (() => {
   const myHeats = () => W.sl ? W.sl.heats.filter(h => h.distance === W.disc || h.entries.some(e => e.distance === W.disc)) : [];
   async function load(){
     const e0 = ev(); if (!e0) return;
-    try{ const [r, sl, rs] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
+    // судье на секторе заявки (личные данные) не нужны и не выдаются — работает по стартовому списку
+    try{ const [r, sl, rs] = await Promise.all([isSector() ? Promise.resolve({regs: []}) : api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
       W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
   }
   async function open(){
-    const e0 = ev(); if (!e0) return;
+    const e0 = ev(); if (!e0) { $("wzpBody").innerHTML = '<p class="muted">Выберите соревнование в меню вверху.</p>'; return; }
     const back = store.get("ss.lastStep"); $("wzpBack").href = "#" + (back && back !== "wizard" ? back : "reg");
     $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
     if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }
+    if (isSector()) W.step = 4;
     await load();
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
@@ -2055,7 +2073,7 @@ const wzp = (() => {
     $("wzpDisc").value = W.disc; render();
   }
   function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step, sex: W.sex, ages: W.ages})); }catch(x){} }
-  function go(n){ W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+  function go(n){ W.step = isSector() ? 4 : Math.max(1, Math.min(5, n)); save(); render(); }
   function render(){
     const k = kind(), t = STEP_T[k];
     $("wzpKind").className = "wzp-kind " + k;
@@ -2141,6 +2159,11 @@ const wzp = (() => {
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      <fieldset class="pmode wzp-pub"><legend>Публикация в общей сети SakhStart</legend>
+        <label><input type="checkbox" id="wzpPubS" ${ev().pub_start ? "checked" : ""}> <b>Стартовый протокол на сайте</b><span class="small muted"> — зрители и участники видят составы и забеги</span></label>
+        <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол на сайте</b><span class="small muted"> — места, результаты и разряды</span></label>
+        <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
+      </fieldset>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
       <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
   }
@@ -2165,28 +2188,65 @@ const wzp = (() => {
       || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
     let lastCat = null;
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
-    body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
+    body.innerHTML = `<h2>${isSector() ? "" : "Шаг 4. "}${tech ? "Ввод с сектора" : "Ввод на финише"}${isSector() ? " — " + esc(W.disc) : ""}</h2>
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
-      <div class="row"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button><span class="small muted">Enter — к следующему полю. Изменённые строки подсвечены.</span></div>${nav(true, "К итоговому протоколу")}`;
+      <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
+        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю.</span>
+        ${isSector() || !sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>${isSector() ? "" : nav(true, "К итоговому протоколу")}`;
   }
-  async function saveRows(){
-    const rows = [...document.querySelectorAll("#wzpRows tr.dirty")].map(tr => {
-      const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
-      const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
-      if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
-      return row; });
-    if (!rows.length) return toast("Нет изменений");
+  const rowData = (tr) => {
+    const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
+    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
+    if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
+    return row; };
+  const sync = (t, cls) => { const s = $("wzpSync"); if (s) { s.textContent = t; s.className = "wzp-sync " + (cls || ""); } };
+  let autoT = null, saving = false;
+  // мгновенная отправка: строка уходит на сервер, как только судья переходит к следующему полю — табло и протокол видят её сразу
+  function queueAuto(ms){ clearTimeout(autoT); autoT = setTimeout(() => saveRows(true), ms ?? 500); }
+  async function saveRows(auto){
+    if (saving) { if (auto) queueAuto(800); return; }
+    const trs = [...document.querySelectorAll("#wzpRows tr.dirty")];
+    if (!trs.length) { if (!auto) toast("Нет изменений"); return; }
+    const rows = trs.map(rowData);
+    saving = true; sync("Сохраняю…", "busy");
     try{
       const r = await api(`/api/events/${curId}/results`, {rows});
-      if (r.errors.length) alert("Не сохранены:\n" + r.errors.join("\n"));
-      toast(`Сохранено: ${r.saved}`);
       const bad = new Set(r.errors.map(x => x.split(":")[0]));
-      document.querySelectorAll("#wzpRows tr.dirty").forEach(tr => { if (!bad.has(tr.dataset.bib)) tr.classList.remove("dirty"); else tr.querySelectorAll("input").forEach(i => i.classList.add("err")); });
-      if (!bad.size) { await load(); render(); }
-      loadResults(); loadEvents._sig = null; loadEvents();
-    }catch(err){ toast("Ошибка: " + err.message); }
+      trs.forEach(tr => { if (!bad.has(tr.dataset.bib)) { if (rowData(tr) && JSON.stringify(rowData(tr)) === JSON.stringify(rows.find(x => x.bib === tr.dataset.bib))) tr.classList.remove("dirty"); }
+        else tr.querySelectorAll("input").forEach(i => i.classList.add("err")); });
+      if (r.errors.length) { sync("Не сохранено: " + r.errors.join("; "), "bad"); if (!auto) alert("Не сохранены:\n" + r.errors.join("\n")); }
+      else sync(`Сохранено в ${new Date().toLocaleTimeString("ru-RU")} — результаты уже на сервере и на табло`, "ok");
+      if (!auto) toast(`Сохранено: ${r.saved}`);
+      await load();
+      if (!auto && !bad.size) render(); else refreshRows();
+      if (!isSector()) { loadResults(); loadEvents._sig = null; loadEvents(); }
+    }catch(err){ sync("Нет связи с сервером — изменения не потеряны, повторю через 5 секунд", "bad"); if (!auto) toast("Ошибка: " + err.message); queueAuto(5000); }
+    finally{ saving = false; }
+  }
+  // после автосохранения обновляем только расчётные клетки (официальный результат, «Авто» разряда) — фокус и ввод не сбиваются
+  function refreshRows(){
+    const by = {}; entriesIn().forEach(e => { by[e.bib] = e; });
+    document.querySelectorAll("#wzpRows tr[data-bib]").forEach(tr => {
+      const e = by[tr.dataset.bib]; if (!e || tr.classList.contains("dirty") || tr.contains(document.activeElement)) return;
+      const out = tr.querySelector("[data-out]"); if (out) out.textContent = e.result || "";
+      const dr = tr.querySelector("select.dr"); if (dr && dr.options[0]) { const a = (W.auto || {})[e.bib] || ""; dr.options[0].textContent = a ? `Авто: ${a}` : "Авто: нет"; }
+    });
+  }
+  async function clearAll(){
+    const bibs = [...document.querySelectorAll("#wzpRows tr[data-bib]")].map(tr => tr.dataset.bib);
+    if (!bibs.length) return;
+    const lbl = `${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
+    if (!confirm(`Удалить все результаты дисциплины «${lbl}» (${bibs.length} участников)?\n\nСотрутся секундомеры, попытки, отметки DNS/DNF и ручные разряды. Участники и сетка останутся. Это действие нельзя отменить.`)) return;
+    try{ const r = await api(`/api/events/${curId}/clearresults`, {bibs, label: lbl}); toast(`Протокол очищен: ${r.cleared}`); await load(); render(); loadResults(); }
+    catch(err){ toast("Ошибка: " + err.message); }
+  }
+  async function setPub(kind2, on){
+    try{ const r = await api(`/api/events/${ev().id}/publish`, {[kind2]: on});
+      toast(on ? "Выгружено в общую сеть SakhStart" : "Снято с публичного сайта"); loadEvents._sig = null; await loadEvents(); render();
+      if (on) { const u2 = kind2 === "start" ? r.start_url : r.results_url; const a = $("wzpPubLink"); if (a) { a.href = u2; a.textContent = u2; } } }
+    catch(err){ toast("Ошибка: " + err.message); render(); }
   }
   const root = $("tab-wizard");
   root.addEventListener("click", (e) => {
@@ -2194,14 +2254,17 @@ const wzp = (() => {
     const g = e.target.closest("[data-g]"); if (g) return go(W.step + +g.dataset.g);
     if (e.target.id === "wzpGen") return gen();
     if (e.target.id === "wzpReset") return reset();
-    if (e.target.id === "wzpSave") return saveRows();
+    if (e.target.id === "wzpSave") { clearTimeout(autoT); return saveRows(false); }
+    if (e.target.id === "wzpClear") return clearAll();
   });
   root.addEventListener("change", (e) => {
     if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); save(); return render(); }
     if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
     if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
-    const tr = e.target.closest("#wzpRows tr"); if (tr) tr.classList.add("dirty");
+    if (e.target.id === "wzpPubS") return setPub("start", e.target.checked);
+    if (e.target.id === "wzpPubR") return setPub("results", e.target.checked);
+    const tr = e.target.closest("#wzpRows tr"); if (tr) { tr.classList.add("dirty"); queueAuto(); }
   });
   root.addEventListener("input", (e) => {
     const tr = e.target.closest("#wzpRows tr"); if (!tr) return; tr.classList.add("dirty"); e.target.classList.remove("err");
@@ -2214,7 +2277,7 @@ const wzp = (() => {
     const all = [...document.querySelectorAll("#wzpRows input")], i = all.indexOf(e.target);
     if (all[i + 1]) { all[i + 1].focus(); all[i + 1].select(); } else $("wzpSave").click();
   });
-  $("wzpDisc").onchange = (e) => { W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
+  $("wzpDisc").onchange = (e) => { W.disc = e.target.value; W.step = isSector() ? 4 : 1; W.ages = []; W.sex = ""; save(); render(); };
   return {open};
 })();
 async function moveEntry(tr, body){
@@ -3063,7 +3126,7 @@ async function loadMe(){
   try{ ME = await api("/api/me"); }catch(e){ ME = {login:"?", role:"admin", role_name:""}; }
   $("usrBtn").textContent = ME.login + " ▾";
   $("usrRole").textContent = [ME.name, ME.role_name].filter(Boolean).join(" · ");
-  const adm = ME.role === "admin"; document.body.dataset.adm = adm ? "1" : "0";
+  const adm = ME.role === "admin"; document.body.dataset.adm = adm ? "1" : "0"; document.body.dataset.role = ME.role || "";
   document.querySelectorAll(".adm").forEach(x => x.classList.toggle("hide", !adm));
   $("hVpn").classList.toggle("hide", !adm);
   $("gear").href = adm ? "#hw" : "#log";
@@ -3125,11 +3188,24 @@ $("uSave").onclick = async () => {
   catch(e){ toast("Ошибка: "+e.message); }
 };
 
+/* ---------- судья на секторе / секретарь вида: только ввод результатов (шаг 4 мастера) ---------- */
+function isSector(){ return !!ME && ME.role === "sector"; }
+async function initSector(){
+  try{ const c = await api("/api/clock"); offset = c.server_epoch_ms - Date.now(); }catch(e){}
+  try{ await loadEvents(); }catch(e){ toast("Не удалось загрузить соревнования"); }
+  if (location.hash !== "#wizard") history.replaceState(null, "", "#wizard");
+  showTab();
+  setInterval(tick, 1000);
+  setInterval(async () => { try{ const id = curId; await loadEvents(); if (id !== curId) wzp.open(); }catch(e){} }, 15000);
+}
+
 /* ---------- запуск ---------- */
 (async function init(){
   loadDisc();
   ["nRank", "mRank"].forEach(i => $(i).innerHTML = rankOpts("", "Разряд *"));
-  await loadMe(); await loadStatus(); await loadDevices();
+  await loadMe();
+  if (isSector()) return initSector();
+  await loadStatus(); await loadDevices();
   try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
   showTab();
   setInterval(tick, 100);

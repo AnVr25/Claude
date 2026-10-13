@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.9.0 и дата сборки 13.10.2026", st3["version"] == "3.9.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.0.0 и дата сборки 13.10.2026", st3["version"] == "4.0.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1320,6 +1320,45 @@ def main() -> int:
               and fj["done_rank"] == "2 р.", str(fj)[:300])
         check("3.5: бег — официальный результат по трём секундомерам (среднее 8.33 → 8.4 вверх), разряд сохранён",
               fr["result"] == "8.4" and fr["sw"] == ["8.31", "8.40", "8.33"] and fr["done_rank"] == "3 юн." and fr["rt"] == "time", str(fr)[:300])
+        # 4.0: судья на секторе / секретарь вида — только ввод результатов
+        def spost(path, obj, cookie=None):
+            h = {"Content-Type": "application/json", "X-Requested-With": "timing-hub", "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}
+            if cookie:
+                h["Cookie"] = cookie
+            req = urllib.request.Request(f"http://127.0.0.1:{p_web}{path}", data=json.dumps(obj).encode(), method="POST", headers=h)
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status, json.loads(resp.read() or b"{}"), resp.headers.get("Set-Cookie", "")
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read() or b"{}"), ""
+
+        def sget(path, cookie):
+            req = urllib.request.Request(f"http://127.0.0.1:{p_web}{path}", headers={"Cookie": cookie, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status
+            except urllib.error.HTTPError as e:
+                return e.code
+        _, ad, adck = spost("/api/login", {"login": "admin", "password": "test-pass"})
+        adm4 = adck.split(";")[0]
+        code, d, _ = spost("/api/users", {"login": "sector1", "name": "Судья сектора", "role": "sector", "password": "sector-pass-1"}, adm4)
+        code, d, ck = spost("/api/login", {"login": "sector1", "password": "sector-pass-1", "next": "/"})
+        sck = ck.split(";")[0]
+        se = e9
+        check("4.0: судья на секторе после входа попадает в ввод результатов мастера", code == 200 and d.get("next") == "/#wizard", str(d))
+        check("4.0: судье на секторе доступны соревнования, стартовый список, результаты и справочник дисциплин",
+              sget("/", sck) == 200 and sget("/api/events", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
+              and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200)
+        check("4.0: судье на секторе закрыты заявки (личные данные), система, пользователи, ридеры",
+              sget(f"/api/events/{se}/regs", sck) == 403 and sget("/api/system", sck) == 403 and sget("/api/users", sck) == 403
+              and sget("/api/readers", sck) == 403 and sget("/api/devices", sck) == 403)
+        c1, _, _ = spost(f"/api/events/{se}/results", {"rows": []}, sck)
+        c2, _, _ = spost(f"/api/events/{se}/heats", {"lanes": 8}, sck)
+        c3, _, _ = spost(f"/api/events/{se}/delete", {}, sck)
+        c4, _, _ = spost(f"/api/events/{se}/clearresults", {"bibs": ["1"]}, sck)
+        c5, _, _ = spost(f"/api/events/{se}", {"name": "взлом"}, sck)
+        check("4.0: судья на секторе может только сохранять результаты: сетка, удаление, очистка, настройки — запрещены",
+              c1 == 200 and c2 == 403 and c3 == 403 and c4 == 403 and c5 == 403, f"{c1} {c2} {c3} {c4} {c5}")
         # 3.6: выполненный разряд по нормам ЕВСК (seed/rank_norms.json)
         vas = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Васильева"))
         beg = next(e["bib"] for e in jump if e["name"].startswith("Бегунов"))
@@ -1346,6 +1385,13 @@ def main() -> int:
         fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
         check("3.8: «Авто» возвращает расчёт по нормам", fin9[vas]["done_rank"] == "1 юн." and fin9[beg]["done_rank"] == "2 р."
               and fin9[vas]["done_rank_src"] == "auto", str({k: (v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
+        code, txt = http("POST", f"/api/events/{e9}/clearresults", json.dumps({"bibs": [vas], "label": "60 м"}).encode(), J)
+        fin9c = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        sl9c = {e["bib"]: e for h in json.loads(http("GET", f"/api/events/{e9}/startlist")[1])["heats"] for e in h["entries"]}
+        check("4.0: «Очистить протокол» стирает результат, секундомеры и ручной разряд только выбранных участников",
+              code == 200 and json.loads(txt)["cleared"] == 1 and vas not in fin9c and beg in fin9c
+              and not sl9c[vas].get("result") and not sl9c[vas].get("detail") and not sl9c[vas].get("done_rank"), txt[:200])
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "t": ["9.1", "9.2", "9.15"], "auto": True}]}).encode(), J)
         http("POST", f"/api/events/{e9}", json.dumps({"level": "interregion"}).encode(), J)
         fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
         check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm]["done_rank"] == "КМС", str(fin9[grm])[:200])
