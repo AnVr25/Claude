@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "4.4.0"
+VERSION = "4.5.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -846,7 +846,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS users(
                 login TEXT PRIMARY KEY,
                 name TEXT,
-                role TEXT NOT NULL DEFAULT 'secretary',
+                role TEXT NOT NULL DEFAULT 'judge',
                 pwd TEXT NOT NULL,
                 created_at TEXT,
                 last_login TEXT,
@@ -864,6 +864,8 @@ class Store:
         add("registrations", (("relay", "TEXT"), ("leg", "INTEGER"), ("rank", "TEXT")))
         # 4.4: состояние стадионного табло (пульт управления) — по соревнованию
         self.con.execute("CREATE TABLE IF NOT EXISTS scoreboard(event_id INTEGER PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
+        self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
 
     def get_scoreboard(self, eid: int) -> Optional[dict]:
         row = self.con.execute("SELECT state, updated_at FROM scoreboard WHERE event_id = ?", (eid,)).fetchone()
@@ -4820,12 +4822,16 @@ class Hub:
                     ready_info = json.load(open(info_file, encoding="utf-8"))
             except (OSError, ValueError):
                 pass
+            # 4.5: архив той же или более старой версии — остаток прошлой установки, а не «доступное обновление»
+            if self._vtuple(ready_info.get("version", "")) <= self._vtuple(VERSION):
+                self._drop_ready()
+                ready_info = {}
 
         return {
             "version": VERSION,
             "build_date": BUILD_DATE,
             "pending": os.path.exists(os.path.join(d, "incoming.zip")),
-            "ready": os.path.exists(ready_zip),
+            "ready": os.path.exists(ready_zip) and bool(ready_info),
             "ready_info": ready_info,
             "helper": os.path.isdir(d),
             "status": st,
@@ -4884,17 +4890,24 @@ class Hub:
         return 200, {"ok": True, "from": VERSION, "to": newv, "build_date": build_date, "sha256": sha,
                     "message": "Обновление загружено. Для установки нажмите кнопку в интерфейсе."}
 
+    def _drop_ready(self) -> None:
+        for n in ("ready.zip", "ready-info.json"):
+            try:
+                os.remove(os.path.join(self.update_dir, n))
+            except OSError:
+                pass
+
     def confirm_update_install(self, actor: str) -> tuple:
         """Подтверждение установки: переносит ready.zip -> incoming.zip, запуская установку."""
         d = self.update_dir
         ready_zip = os.path.join(d, "ready.zip")
         ready_info_file = os.path.join(d, "ready-info.json")
 
-        if not os.path.exists(ready_zip):
-            return 404, {"error": "Нет загруженного обновления. Сначала загрузите архив."}
-
         if os.path.exists(os.path.join(d, "incoming.zip")):
             return 409, {"error": "Обновление уже устанавливается — подождите минуту"}
+
+        if not os.path.exists(ready_zip):
+            return 404, {"error": "Нет загруженного обновления — нажмите «Проверить обновления»"}
 
         # Читаем информацию об обновлении
         info = {}
@@ -4904,12 +4917,16 @@ class Hub:
         except (OSError, ValueError):
             pass
 
-        # Переносим ready.zip -> incoming.zip (это запускает timing-update.path)
+        # Переносим ready.zip -> incoming.zip (это запускает timing-update.path); после установки в папке
+        # не остаётся «готового» архива, и страница не предлагает поставить ту же версию ещё раз
         try:
-            import shutil
-            shutil.copy2(ready_zip, os.path.join(d, "incoming.zip"))
+            os.replace(ready_zip, os.path.join(d, "incoming.zip"))
         except OSError as e:
             return 500, {"error": f"Не удалось запустить установку: {e}"}
+        try:
+            os.remove(ready_info_file)
+        except OSError:
+            pass
 
         new_version = info.get("version", "?")
         self.store.audit(actor, None, "Запущена установка обновления",
@@ -4964,8 +4981,22 @@ class Hub:
         latest = m.group(1) if m else "?"
         changes = [{"sha": x["sha"][:7], "date": (x.get("commit") or {}).get("committer", {}).get("date", ""),
                     "message": ((x.get("commit") or {}).get("message") or "").split("\n")[0]} for x in hist]
+        # новее — только бóльшая версия (откат на старую не предлагаем) или та же версия, но свежий коммит,
+        # если известно, какой коммит стоит сейчас (его записывает установка с GitHub)
+        mine = self._gh_installed()
+        same_newer = latest == VERSION and mine.get("version") == VERSION and mine.get("sha") not in ("", None, head["sha"])
         return 200, {"current": VERSION, "latest": latest, "sha": head["sha"], "date": head["date"],
-                     "newer": latest != VERSION, "changes": changes}
+                     "newer": self._vtuple(latest) > self._vtuple(VERSION) or same_newer, "changes": changes}
+
+    @staticmethod
+    def _vtuple(v: str) -> tuple:
+        return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3]) or (0,)
+
+    def _gh_installed(self) -> dict:
+        try:
+            return json.load(open(os.path.join(self.update_dir, "github-installed.json"), encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
 
     def github_fetch(self, sha: str) -> tuple:
         """Выполняется в отдельном потоке: скачивает вершину ветки и собирает такой же timing-hub.zip,
@@ -5714,7 +5745,9 @@ class Hub:
             return hmac.compare_digest(u, web.get("user", "admin")) and hmac.compare_digest(p, pwd)
         return False
 
-    ROLES = {"admin": "Администратор", "secretary": "Секретарь", "judge": "Судья", "sector": "Судья на секторе / секретарь вида"}
+    # Две роли: администратор — всё; судья — вся спортивная работа (мастер протоколов, ввод результатов, печать, табло)
+    ROLES = {"admin": "Администратор", "judge": "Судья"}
+    LEGACY_ROLES = {"secretary": "judge", "sector": "judge"}     # роли до 4.5.0 — сводятся к судье
     SESSION_COOKIE = "ss_session"
     SESSION_DAYS = 30
 
@@ -5751,7 +5784,7 @@ class Hub:
         u = self.store.get_user(login)
         if u:
             ok = self.verify_password(pwd, u["pwd"]) and u.get("active", 1)
-            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]} if ok else None
+            return {"login": u["login"], "name": u["name"] or u["login"], "role": self._role(u["role"])} if ok else None
         web = self.cfg["web"]
         cfg_pwd = web.get("password") or ""
         if cfg_pwd and hmac.compare_digest(login, web.get("user", "admin")) and hmac.compare_digest(pwd, cfg_pwd):
@@ -5763,7 +5796,7 @@ class Hub:
         if u:
             if not u.get("active", 1):
                 return None     # заблокирован
-            return {"login": u["login"], "name": u["name"] or u["login"], "role": u["role"]}
+            return {"login": u["login"], "name": u["name"] or u["login"], "role": self._role(u["role"])}
         if login == self.cfg["web"].get("user", "admin"):
             return {"login": login, "name": "Администратор", "role": "admin"}
         return None
@@ -5797,32 +5830,24 @@ class Hub:
             return {"login": "-", "name": "", "role": "admin"}
         return None
 
-    JUDGE_GET = re.compile(r"/api/(clock|status|scoreboard/state|events|events/\d+(/(results|files|manual|startlist))?)")
-    JUDGE_POST = re.compile(r"/api/events/\d+/(manual(/\d+)?|start|waves)|/api/scoreboard/state")
-    JUDGE_PAGES = ("/judge", "/board", "/announcer", "/protocol", "/scoreboard", "/api/me", "/api/logout")
+    # только администратор: сервер и обновления, оборудование IPICO/Wiclax, VPN, учётные записи, сырые отметки
     ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users)(/.*)?|/raw|/simple")
-    # «Судья на секторе / секретарь вида»: только ввод результатов (шаг 4 мастера) и табло — ни заявок с личными данными,
-    # ни сетки, ни настроек, ни оборудования
-    SECTOR_PAGES = ("/sector", "/board", "/api/me", "/api/logout", "/api/me/password", "/api/clock", "/api/disciplines")
-    SECTOR_GET = re.compile(r"/api/events(/\d+(/(startlist|results))?)?|/api/scoreboard/state")
-    SECTOR_POST = re.compile(r"/api/events/\d+/results")
+    JUDGE_OPEN = ("/api/system/scoreboard/control",)                 # пульт табло — судейский, хоть и под /api/system
+    JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
+
+    def _role(self, role: str) -> str:
+        role = self.LEGACY_ROLES.get(role, role)
+        return role if role in self.ROLES else "judge"
 
     def role_allows(self, role: str, method: str, path: str) -> bool:
+        role = self._role(role)
         if role == "admin":
             return True
-        if role == "secretary":
-            return not self.ADMIN_ONLY.fullmatch(path)
-        if role == "judge":
-            if path in self.JUDGE_PAGES or re.fullmatch(r"/files/\d+", path):
-                return True
-            rx = self.JUDGE_GET if method == "GET" else self.JUDGE_POST
-            return bool(rx.fullmatch(path))
-        if role == "sector":
-            if path in self.SECTOR_PAGES:
-                return True
-            rx = self.SECTOR_GET if method == "GET" else self.SECTOR_POST
-            return bool(rx.fullmatch(path))
-        return False
+        if path in self.JUDGE_OPEN:
+            return True
+        if self.ADMIN_ONLY.fullmatch(path):
+            return False
+        return not (method == "POST" and self.JUDGE_DENY_POST.fullmatch(path))
 
     @staticmethod
     def _auth_user(headers: dict) -> str:
@@ -5863,7 +5888,7 @@ class Hub:
         self.store.audit(f"{u['login']}@{ip}", None, "Вход")
         cookie = (f"{self.SESSION_COOKIE}={tok}; Path=/; Max-Age={self.SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax"
                   + ("; Secure" if secure else ""))
-        nxt = "/judge" if u["role"] == "judge" else "/sector" if u["role"] == "sector" else self._safe_next(d.get("next"))
+        nxt = self._safe_next(d.get("next"))
         return 200, {"ok": True, "user": u, "next": nxt}, {"Set-Cookie": cookie}
 
     LOGIN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,31}")
@@ -5895,6 +5920,8 @@ class Hub:
             if cfg_admin not in have:
                 lst.insert(0, {"login": cfg_admin, "name": "Администратор (из настроек сервера)", "role": "admin",
                                "created_at": None, "last_login": None, "note": "", "active": 1, "builtin": True})
+            for u in lst:
+                u["role"] = self._role(u["role"])
             return 200, {"users": lst, "roles": self.ROLES, "me": me["login"]}
         m = re.fullmatch(r"/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?", path)
         if not m or method != "POST":
@@ -5911,6 +5938,7 @@ class Hub:
                 return 404, {"error": "пользователь не найден"}
             f, what = {}, []
             if "role" in data:
+                data["role"] = self.LEGACY_ROLES.get(str(data["role"]), data["role"])
                 if data["role"] not in self.ROLES:
                     return 400, {"error": "неизвестная роль"}
                 if target == me["login"] and data["role"] != "admin":
@@ -5935,6 +5963,7 @@ class Hub:
             return 200, {"ok": True}
         login = str(data.get("login") or "").strip().lower()
         role = str(data.get("role") or "")
+        role = self.LEGACY_ROLES.get(role, role)
         name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:80]
         pwd = str(data.get("password") or "")
         note = re.sub(r"\s+", " ", str(data["note"] or "")).strip()[:200] if "note" in data else None
@@ -6029,7 +6058,7 @@ class Hub:
             if not self.role_allows(user["role"], method, path):
                 if method == "GET" and not path.startswith("/api/"):
                     await self._send(writer, 302, "text/plain", "",
-                                     extra={"Location": {"judge": "/judge", "sector": "/sector"}.get(user["role"], "/")})
+                                     extra={"Location": "/"})
                 else:
                     await self._send(writer, 403, J, json.dumps({"error": "недостаточно прав"}, ensure_ascii=False))
                 return
@@ -6058,7 +6087,16 @@ class Hub:
                     if blob is not None:
                         code, res = self.receive_update(blob, actor)
                         if code == 200:
+                            # два клика: «Проверить» → «Установить» — скачанная версия сразу уходит в установку
                             self.store.audit(actor, None, "Обновление с GitHub", f"коммит {sha[:7]}")
+                            newv = res.get("to", "")
+                            code, res = self.confirm_update_install(actor)
+                            if code == 200:
+                                try:
+                                    with open(os.path.join(self.update_dir, "github-installed.json"), "w", encoding="utf-8") as fh:
+                                        json.dump({"sha": sha, "version": newv}, fh)
+                                except OSError:
+                                    pass
                     await self._send(writer, code, "application/json; charset=utf-8", json.dumps(res, ensure_ascii=False))
                     return
                 if path == "/api/readers/scan" and method == "POST":

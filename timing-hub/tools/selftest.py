@@ -319,7 +319,7 @@ def main() -> int:
         check("пользователи: короткий пароль отклонён", code == 400, str(d))
         code, d, ck = jpost("/api/login", {"login": "judge1", "password": "judge-pass-1", "next": "/"}, proxied=True)
         jck = ck.split(";")[0]
-        check("судья после входа попадает на экран судьи", code == 200 and d.get("next") == "/judge", str(d))
+        check("судья после входа попадает в админку", code == 200 and d.get("next") == "/", str(d))
         check("судья: соревнования и ручные отметки доступны, система — нет",
               cget("/api/events", jck) == 200 and cget("/api/system", jck) == 403 and cget("/api/users", jck) == 403)
         code, _, _ = jpost(f"/api/events/1/delete", {}, jck, True)
@@ -917,6 +917,17 @@ def main() -> int:
         code, txt = http("POST", "/api/system/update/install", b"{}", J)
         check("обновление: повторное подтверждение, пока идёт установка — отказ", code == 409, txt)
         os.remove(os.path.join(upd, "incoming.zip"))
+        _, txt = http("GET", "/api/system/update")
+        check("4.5: после запуска установки «готовый» архив не висит — страница не предлагает поставить его ещё раз",
+              json.loads(txt)["ready"] is False and not os.path.exists(os.path.join(upd, "ready.zip")), txt[:200])
+        zb2 = io.BytesIO()
+        with zipfile.ZipFile(zb2, "w") as zf:
+            zf.writestr("timing-hub/install.sh", "echo ok")
+            zf.writestr("timing-hub/hub/hub.py", 'VERSION = "%s"' % ust["version"])
+        http("POST", "/api/system/update", zb2.getvalue(), {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
+        _, txt = http("GET", "/api/system/update")
+        check("4.5: архив той же (или старой) версии, что уже стоит, не показывается как «доступное обновление» и удаляется",
+              json.loads(txt)["ready"] is False and not os.path.exists(os.path.join(upd, "ready.zip")), txt[:200])
 
         # файлы по папкам: стартовый список сам попал в «Для судей», загрузка в папку, перенос
         _, txt = http("GET", f"/api/events/{e4}/files?folder=" + urllib.parse.quote("Для судей"))
@@ -1149,7 +1160,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 4.4.0 и дата сборки 13.10.2026", st3["version"] == "4.4.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 4.5.0 и дата сборки 13.10.2026", st3["version"] == "4.5.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1341,37 +1352,45 @@ def main() -> int:
                 return e.code
         _, ad, adck = spost("/api/login", {"login": "admin", "password": "test-pass"})
         adm4 = adck.split(";")[0]
+        # 4.5: две роли — администратор и судья; старые роли «секретарь» и «судья на секторе» сводятся к судье
         code, d, _ = spost("/api/users", {"login": "sector1", "name": "Судья сектора", "role": "sector", "password": "sector-pass-1"}, adm4)
+        code_s, _, _ = spost("/api/users", {"login": "secr1", "name": "Секретарь", "role": "secretary", "password": "secr-pass-1"}, adm4)
+        code_x, _, _ = spost("/api/users", {"login": "boss1", "role": "chief", "password": "boss-pass-1"}, adm4)
+        ulst = {u["login"]: u["role"] for u in json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"http://127.0.0.1:{p_web}/api/users", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10).read())["users"]}
+        roles_ = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"http://127.0.0.1:{p_web}/api/users", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10).read())["roles"]
+        check("4.5: ролей ровно две — Администратор и Судья; «секретарь» и «судья на секторе» сохраняются как судья, неизвестная роль — отказ",
+              roles_ == {"admin": "Администратор", "judge": "Судья"} and ulst.get("sector1") == "judge" and ulst.get("secr1") == "judge"
+              and code_s == 200 and code_x == 400, f"{roles_} {ulst} {code_x}")
         code, d, ck = spost("/api/login", {"login": "sector1", "password": "sector-pass-1", "next": "/"})
         sck = ck.split(";")[0]
         se = e9
-        check("4.3: судья на секторе после входа попадает на свой экран /sector", code == 200 and d.get("next") == "/sector", str(d))
-        req_ = urllib.request.Request(f"http://127.0.0.1:{p_web}/", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+        check("4.5: судья после входа попадает в общую админку (Мастер протоколов)", code == 200 and d.get("next") == "/" and d["user"]["role"] == "judge", str(d))
 
         class _NoRedir(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *a, **k):
                 return None
-        try:
-            urllib.request.build_opener(_NoRedir).open(req_, timeout=10)
-            loc = ""
-        except urllib.error.HTTPError as e_:
-            loc = e_.headers.get("Location", "")
         page_ = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{p_web}/sector?event={e9}", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10).read().decode()
-        check("4.3: админка «/» судье на секторе закрыта (переход на /sector), страница /sector открывается",
-              loc == "/sector" and "Судья на секторе" in page_ and "/api/events/" in page_, loc)
-        check("4.0: судье на секторе доступны соревнования, стартовый список, результаты и справочник дисциплин",
-              sget("/sector", sck) == 200 and sget("/board", sck) == 200 and sget("/api/events", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
-              and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200)
-        check("4.0: судье на секторе закрыты заявки (личные данные), система, пользователи, ридеры",
-              sget(f"/api/events/{se}/regs", sck) == 403 and sget("/api/system", sck) == 403 and sget("/api/users", sck) == 403
-              and sget("/api/readers", sck) == 403 and sget("/api/devices", sck) == 403)
+        check("4.5: судье открыты админка, экраны финиша и сектора, табло, пульт, протокол, заявки",
+              sget("/", sck) == 200 and sget("/judge", sck) == 200 and sget("/sector", sck) == 200 and "Судья на секторе" in page_
+              and sget("/board", sck) == 200 and sget("/scoreboard", sck) == 200 and sget("/protocol", sck) == 200
+              and sget(f"/api/events/{se}/regs", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
+              and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200 and sget("/api/devices", sck) == 200)
+        check("4.5: судье жёстко закрыты «Система», обновления, оборудование IPICO/Wiclax, пользователи",
+              sget("/api/system", sck) == 403 and sget("/api/system/update", sck) == 403 and sget("/api/users", sck) == 403
+              and sget("/api/readers", sck) == 403 and sget("/api/wiclax-ports", sck) == 403 and sget("/api/log", sck) == 200)
         c1, _, _ = spost(f"/api/events/{se}/results", {"rows": []}, sck)
-        c2, _, _ = spost(f"/api/events/{se}/heats", {"lanes": 8}, sck)
+        c2, _, _ = spost(f"/api/events/{se}/heats", {"distance": "нет такой дистанции"}, sck)
         c3, _, _ = spost(f"/api/events/{se}/delete", {}, sck)
-        c4, _, _ = spost(f"/api/events/{se}/clearresults", {"bibs": ["1"]}, sck)
-        c5, _, _ = spost(f"/api/events/{se}", {"name": "взлом"}, sck)
-        check("4.0: судья на секторе может только сохранять результаты: сетка, удаление, очистка, настройки — запрещены",
-              c1 == 200 and c2 == 403 and c3 == 403 and c4 == 403 and c5 == 403, f"{c1} {c2} {c3} {c4} {c5}")
+        c4, _, _ = spost(f"/api/events/{se}/clearresults", {"bibs": []}, sck)
+        c5, _, _ = spost(f"/api/events/{se}", {"organizer": "СШОР"}, sck)
+        c6, _, _ = spost("/api/system/update/install", {}, sck)
+        c7, _, _ = spost("/api/users", {"login": "hack1", "role": "admin", "password": "hack-pass-1"}, sck)
+        c8, _, _ = spost("/api/readers/scan", {}, sck)
+        check("4.5: судья вводит результаты, строит сетку, очищает протокол, правит соревнование — но не удаляет его и не трогает систему",
+              c1 == 200 and c2 != 403 and c4 != 403 and c5 == 200 and c3 == 403 and c6 == 403 and c7 == 403 and c8 == 403,
+              f"{c1} {c2} {c3} {c4} {c5} {c6} {c7} {c8}")
         # 4.4: пульт управления стадионным табло
         code, txt = http("GET", f"/api/scoreboard/state?event={se}")
         sb0 = json.loads(txt) if code == 200 else {}
@@ -1392,15 +1411,15 @@ def main() -> int:
         sb2 = json.loads(txt) if code == 200 else {}
         check("4.4: ротация — интервал не меньше 5 с, в круг попадают только существующие группы",
               code == 200 and sb2["mode"] == "rotate" and sb2["rotate"]["interval"] == 5 and sb2["rotate"]["groups"] == [tk], txt[:300])
-        cs1, _, _ = spost("/api/scoreboard/state", {"event_id": se, "mode": "auto"}, sck)
-        rq = urllib.request.Request(f"http://127.0.0.1:{p_web}/scoreboard?event={se}", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
+        cs1, sbj, _ = spost("/api/scoreboard/state", {"event_id": se, "mode": "fixed", "group": tk}, sck)
+        rq = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/system/scoreboard/control?event={se}", headers={"Cookie": sck, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"})
         try:
             urllib.request.build_opener(_NoRedir).open(rq, timeout=10)
             locs = ""
         except urllib.error.HTTPError as e_:
             locs = e_.headers.get("Location", "")
-        check("4.4: судья на секторе видит состояние табло, но переключать его не может (пульт уводит на /sector)",
-              sget(f"/api/scoreboard/state?event={se}", sck) == 200 and cs1 == 403 and locs == "/sector", f"{cs1} {locs}")
+        check("4.5: судья управляет пультом табло (фиксация лидеров), адрес /api/system/scoreboard/control ему открыт",
+              cs1 == 200 and sbj.get("mode") == "fixed" and locs == f"/scoreboard?event={se}", f"{cs1} {locs}")
         http("POST", "/api/scoreboard/state", json.dumps({"event_id": se, "mode": "auto"}).encode(), J)
         pg = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{p_web}/scoreboard?event={se}", headers={"Cookie": adm4, "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}), timeout=10)
         pgt = pg.read().decode()

@@ -206,15 +206,6 @@ body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
 .wzp-sync{font-size:14px;color:var(--muted)}.wzp-sync.ok{color:#17905A}.wzp-sync.bad{color:var(--track);font-weight:700}.wzp-sync.busy{color:var(--muted)}
 .wzp-ctl #wzpClear{margin-left:auto}
 .wzp-pub label{min-height:40px}
-/* судья на секторе / секретарь вида: только ввод результатов — без настроек, оборудования, пользователей и удаления */
-body[data-role=sector] #lane,body[data-role=sector] #ipicoNav,body[data-role=sector] #healthBar,body[data-role=sector] .evswitch.scr,
-body[data-role=sector] #gear,body[data-role=sector] #wzpSteps,body[data-role=sector] .cartmount,
-body[data-role=sector] #evMenu a[href="#home"],body[data-role=sector] #evMenu [data-new],body[data-role=sector] #evMenu hr,
-body[data-role=sector] .wzp-nav,body[data-role=sector] #wzpClear,body[data-role=sector] .wzp-title h1{display:none!important}
-body[data-role=sector] header .logos{pointer-events:none}
-body[data-role=sector] .wzp-grid input,body[data-role=sector] .wzp-grid select{min-height:46px;font-size:18px}
-body[data-role=sector] .wzp-grid input{min-width:78px}
-body[data-role=sector] #wzpSave{min-height:52px;font-size:18px;padding:12px 24px}
 .wzp-head{display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .wzp-title{display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap;min-width:0}
 .wzp-title h1{margin:0;font-size:26px}
@@ -478,6 +469,16 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 .pagelink{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--ice);border-radius:var(--r);padding:8px 10px;margin-top:10px;font-size:14px}
 .pagelink a{font-weight:700;color:var(--track);word-break:break-all}
 .utbl td{vertical-align:middle}
+.upd .upbox:not(:empty){margin-top:12px}
+.upnote{padding:10px 14px;border-radius:var(--r);background:var(--ice);font-size:14px}
+.upnote.ok{color:#17905A}.upnote.bad{color:var(--track)}
+.upnew{border:1px solid var(--line);border-left:3px solid var(--track);border-radius:var(--r);padding:12px 16px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.upnew-h{font-size:16px}.upnew-h b{font:600 18px var(--head)}
+.upchg{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.upchg li small{margin-left:8px}
+.roles2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin:0 0 10px}
+.roles2>div{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.roles2 b{font:600 16px var(--head)}.roles2 span{font-size:13px;color:var(--muted)}
 .utbl input,.utbl select{font:inherit;font-size:14px;padding:5px 8px;border:1px solid transparent;border-radius:var(--r);background:transparent;color:var(--ink);width:100%;min-width:110px}
 .utbl input:hover,.utbl select:hover{border-color:var(--line)}
 .utbl input:focus,.utbl select:focus{border-color:var(--night);background:var(--panel);outline:3px solid #E71E2533}
@@ -1078,13 +1079,12 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   </div>
 
   <h2 style="margin-top:20px">Обновление сервера</h2>
-  <div class="panel">
+  <div class="panel upd">
     <div class="row between">
       <div><div class="small muted">Установлена версия</div><b id="upVer" style="font:600 24px var(--head)">—</b></div>
-      <div class="row"><button class="primary" id="ghCheck">Проверить обновления</button><input type="file" id="upFile" accept=".zip" class="hide"><button class="sm" id="upBtn">Из файла (timing-hub.zip)</button></div>
+      <button class="primary" id="ghCheck" type="button">🔄 Проверить обновления</button>
     </div>
-    <div id="ghBox" class="small" style="margin-top:8px"></div>
-    <div id="upState" class="small" style="margin-top:8px"></div>
+    <div id="upBox" class="upbox" role="status" aria-live="polite"></div>
     <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
     <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
   </div>
@@ -1173,7 +1173,11 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <div class="pagehead"><div><h1>Система</h1></div></div>
   <nav class="subnav sysnav" aria-label="Разделы системы"></nav>
   <p class="small muted syshead" style="margin:0">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>. VPN для этого не нужен.</p>
-  <p class="small muted" style="margin:0 0 10px"><b>Секретарь</b> — всё, кроме «Системы». <b>Судья</b> — телефон судьи, табло, протокол. <b>Администратор</b> — всё, включая пользователей и обновление. Имя, роль и примечание сохраняются сразу.</p>
+  <div class="roles2">
+    <div><b>👑 Администратор</b><span>Всё без ограничений: сервер и обновления, хронометраж IPICO и Wiclax, VPN и WireGuard, пользователи, удаление соревнований.</span></div>
+    <div><b>⚖️ Судья</b><span>Вся спортивная работа: Мастер протоколов на всех шагах, забеги и сетки, ввод результатов (3 секундомера, 6 попыток, разряды), корзина печати, пульт табло, экраны судьи на финише и на секторе. Без «Системы» и удаления соревнований.</span></div>
+  </div>
+  <p class="small muted" style="margin:0 0 10px">Имя, роль и примечание сохраняются сразу.</p>
   <div id="uNotice"></div>
   <div class="tbl"><table class="utbl">
     <thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Примечание</th><th>Последний вход</th><th></th></tr></thead>
@@ -1184,8 +1188,8 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
     <div class="form uadd">
       <div><label for="uLogin">Логин</label><input id="uLogin" placeholder="petrova" autocapitalize="none" spellcheck="false"></div>
       <div><label for="uName">Имя</label><input id="uName" placeholder="Петрова Анна"></div>
-      <div><label for="uRole">Роль</label><select id="uRole"><option value="secretary">Секретарь</option><option value="judge">Судья на финише</option><option value="sector">Судья на секторе / секретарь вида</option><option value="admin">Администратор</option></select></div>
-      <div><label for="uNote">Примечание</label><input id="uNote" placeholder="судья на финише, до 30.10" maxlength="200"></div>
+      <div><label for="uRole">Роль</label><select id="uRole"><option value="judge">⚖️ Судья</option><option value="admin">👑 Администратор</option></select></div>
+      <div><label for="uNote">Примечание</label><input id="uNote" placeholder="сектор метаний, до 30.10" maxlength="200"></div>
     </div>
     <div class="row" style="margin-top:12px"><button class="primary" id="uSave">Добавить</button></div>
     <p class="small muted" style="margin-bottom:0">Пароль придумается сам и будет показан один раз — передайте его человеку лично. Сменить свой пароль можно в меню с вашим логином вверху справа.</p>
@@ -1288,8 +1292,6 @@ function renderSysNav(active){
 function showTab(){
   let tab = tabName(), pane = "";
   if (/^hw-(timing|net)$/.test(tab)) { pane = tab.slice(3); tab = "hw"; } else if (tab === "hw") pane = "gen";
-  if (isSector()) { tab = "wizard"; document.body.dataset.view = tab;
-    document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-wizard")); $("lane").classList.add("hide"); closeMenus(); wzp.open(); return; }
   if (!document.getElementById("tab-"+tab)) tab = "home";
   if ((tab === "hw" || tab === "users") && ME && ME.role !== "admin") tab = "log";
   if (STEPS.includes(tab) && !curEvent()) tab = "home";
@@ -1405,7 +1407,7 @@ function evRow(e, td){
     <div class="date">${d ? `<b>${+d[2]}</b><span>${MON_S[+d[1]-1]}</span>` : "<b>—</b><span>без даты</span>"}</div>
     <div><div class="t">${esc(e.name)}${e.pub_site?'<span class="tag" title="Показывается в календаре fla65.ru">на сайте</span>':""}</div><div class="m">${esc([e.kind==="stadium"?"стадион":"массовый старт", meta].filter(Boolean).join(" · ") || "нет участников")}</div></div>
     <div class="state ${cls}">${esc(txt)}</div>
-    <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">Открыть снова</button>' : ""}<button class="sm quiet danger" data-act="del">Удалить</button></div>
+    <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">Открыть снова</button>' : ""}${!ME || ME.role === "admin" ? '<button class="sm quiet danger" data-act="del">Удалить</button>' : ""}</div>
   </div>`;
 }
 function renderEvents(){
@@ -1417,7 +1419,7 @@ function renderEvents(){
   const grp = (t, l) => l.length ? `<h2 class="group">${t}</h2>` + l.map(e => evRow(e, td)).join("") : "";
   $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Прошли — ещё не в архиве", rest)
     || `<div class="panel empty">${events.length ? (DIR && !dirAll && events.some(e => !e.archived) ? "В этом направлении соревнований пока нет — создайте новое кнопкой выше или нажмите «показать все»." : "Все соревнования в архиве. Создайте новое или верните из архива.") : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
-  $("calImport").classList.toggle("hide", events.some(e => e.pub_site) || !(ME && ME.role !== "judge"));
+  $("calImport").classList.toggle("hide", events.some(e => e.pub_site));
   const ev = curEvent();
   $("evBtnName").textContent = ev ? ev.name : "Выберите соревнование";
   $("evBtnMeta").textContent = ev ? ([fmtDate(ev.date), ev.place].filter(Boolean).join(" · ") || "без даты") + (ev.archived ? " · архив" : "") : "все соревнования и архив";
@@ -1499,7 +1501,6 @@ $("btnAddWave").onclick = async () => {
 };
 function selectEvent(id){
   if (id === curId) return;
-  if (isSector()) { curId = id; store.set("timing.event", String(id)); renderEvents(); wzp.open(); return; }
   curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
   lastId = 0; $("feedBody").innerHTML = "";
   renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
@@ -1855,7 +1856,6 @@ const RANKS = ["Б/р","3 юн.","2 юн.","1 юн.","3 р.","2 р.","1 р.","К
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
 function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
 function renderRegHead(force){
-  if (isSector()) return;                       // судье на секторе заявки и QR-код формы не нужны
   const ev = curEvent();
   if (!ev) return;
   if (!force && regLoaded === ev.id && regBusy()) return;
@@ -2119,7 +2119,7 @@ const wzp = (() => {
   async function load(){
     const e0 = ev(); if (!e0) return;
     // судье на секторе заявки (личные данные) не нужны и не выдаются — работает по стартовому списку
-    try{ const [r, sl, rs] = await Promise.all([isSector() ? Promise.resolve({regs: []}) : api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
+    try{ const [r, sl, rs] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
       W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
   }
   async function open(){
@@ -2127,7 +2127,6 @@ const wzp = (() => {
     $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
     if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }
-    if (isSector()) W.step = 4;
     await load();
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
@@ -2135,7 +2134,7 @@ const wzp = (() => {
     $("wzpDisc").value = W.disc; render();
   }
   function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step, sex: W.sex, ages: W.ages})); }catch(x){} }
-  function go(n){ W.step = isSector() ? 4 : Math.max(1, Math.min(5, n)); save(); render(); }
+  function go(n){ W.step = Math.max(1, Math.min(5, n)); save(); render(); }
   function render(){
     const k = kind(), t = STEP_T[k];
     $("wzpKind").className = "wzp-kind " + k;
@@ -2250,13 +2249,13 @@ const wzp = (() => {
       || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
     let lastCat = null;
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
-    body.innerHTML = `<h2>${isSector() ? "" : "Шаг 4. "}${tech ? "Ввод с сектора" : "Ввод на финише"}${isSector() ? " — " + esc(W.disc) : ""}</h2>
+    body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
         <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю.</span>
-        ${isSector() || !sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>${isSector() ? "" : nav(true, "К итоговому протоколу")}`;
+        ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>${nav(true, "К итоговому протоколу")}`;
   }
   const rowData = (tr) => {
     const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
@@ -2283,7 +2282,7 @@ const wzp = (() => {
       if (!auto) toast(`Сохранено: ${r.saved}`);
       await load();
       if (!auto && !bad.size) render(); else refreshRows();
-      if (!isSector()) { loadResults(); loadEvents._sig = null; loadEvents(); }
+      loadResults(); loadEvents._sig = null; loadEvents();
     }catch(err){ sync("Нет связи с сервером — изменения не потеряны, повторю через 5 секунд", "bad"); if (!auto) toast("Ошибка: " + err.message); queueAuto(5000); }
     finally{ saving = false; }
   }
@@ -2339,7 +2338,7 @@ const wzp = (() => {
     const all = [...document.querySelectorAll("#wzpRows input")], i = all.indexOf(e.target);
     if (all[i + 1]) { all[i + 1].focus(); all[i + 1].select(); } else $("wzpSave").click();
   });
-  $("wzpDisc").onchange = (e) => { W.disc = e.target.value; W.step = isSector() ? 4 : 1; W.ages = []; W.sex = ""; save(); render(); };
+  $("wzpDisc").onchange = (e) => { W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
   return {open};
 })();
 async function moveEntry(tr, body){
@@ -2736,91 +2735,69 @@ function rdPointOpts(cur){
   const all = [...new Set([...RD_POINTS, ...((rdData&&rdData.devices)||[]), cur])];
   return all.map(x => `<option${x===cur?" selected":""}>${esc(x)}</option>`).join("") + '<option value="__new">другая…</option>';
 }
+// Обновление сервера — два клика: «Проверить обновления» → «⬇️ Установить обновление v…».
+// Одна кнопка проверки, под ней — ровно одна кнопка установки, и только когда есть что ставить.
 let upTimer = null;
+const UP = {u: null, gh: null, phase: "", err: "", from: "", at: 0};   // phase: checking | installing
 async function loadUpdate(){
-  let u; try{ u = await api("/api/system/update"); }catch(e){ return; }
-  $("upVer").textContent = "v" + u.version + (u.build_date ? " · сборка " + u.build_date.split("-").reverse().join(".") : "");
+  let u; try{ u = await api("/api/system/update"); }catch(e){ if (UP.phase === "installing") { clearTimeout(upTimer); upTimer = setTimeout(loadUpdate, 3000); } return; }
+  if (UP.phase === "installing" && UP.from && u.version !== UP.from && !u.pending) {   // сервер перезапустился с новой версией
+    toast(`Установлена v${u.version}. Обновляю страницу…`); setTimeout(() => location.reload(), 1500); }
   const st = u.status || {};
-  const names = {ok:"✅ Готово", running:"⏳ Устанавливаю…", failed:"❌ Ошибка", rolledback:"↩ Откат"};
-  let html = "";
-  if (!u.helper) html = '<span class="muted">Обновление из браузера включится после одной установки этой версии через WinSCP.</span>';
-  else if (u.pending) html = "⏳ Архив принят, установка начнётся через несколько секунд…";
-  else if (u.ready && u.ready_info) {
-    const info = u.ready_info;
-    html = `<div style="padding:12px;background:var(--ice);border-left:3px solid var(--track);border-radius:var(--r);margin:8px 0">
-      <div style="font-weight:600;margin-bottom:8px">🎉 Доступно обновление v${esc(info.version)}</div>
-      <div class="small muted">Дата сборки: ${esc(info.build_date || "неизвестна")} • Загружено: ${esc(info.uploaded_at ? info.uploaded_at.slice(0,16) : "")}</div>
-      <button class="primary" id="confirmInstall" style="margin-top:10px">🚀 Установить обновление v${esc(info.version)}</button>
-      <div class="small muted" style="margin-top:6px">Сервер перезапустится (~1 минута). Прежняя версия сохранится.</div>
-    </div>`;
-  }
-  else if (st.state) html = `${names[st.state]||st.state}: ${esc(st.message||"")} <span class="muted">(${esc(st.at||"")})</span>`;
-  $("upState").innerHTML = html; $("upLog").textContent = u.log || "";
-  $("upBtn").disabled = !u.helper || u.pending || st.state === "running" || u.ready;
-  $("ghCheck").disabled = !u.helper || u.pending || st.state === "running";
-
-  // Обработчик кнопки подтверждения установки
-  if (u.ready && $("confirmInstall")) {
-    $("confirmInstall").onclick = async () => {
-      const info = u.ready_info;
-      if (!confirm(`Установить обновление v${info.version}?\n\nДата сборки: ${info.build_date || "неизвестна"}\n\nСервер перезапустится (около минуты).\nПрежняя версия сохранится, при сбое вернётся сама.`)) return;
-      $("confirmInstall").disabled = true;
-      $("confirmInstall").textContent = "⏳ Запускаю установку…";
-      try{
-        const res = await fetch("/api/system/update/install", {method:"POST", headers:{"X-Requested-With":"timing-hub"}});
-        const j = await res.json();
-        if (!res.ok) throw new Error(j.error || res.status);
-        toast(`Установка запущена: v${u.version} → v${j.to}`);
-      }catch(err){ toast("Ошибка: " + err.message); $("confirmInstall").disabled = false; $("confirmInstall").textContent = `🚀 Установить обновление v${info.version}`; }
-      setTimeout(loadUpdate, 1000);
-    };
-  }
-
+  if (UP.phase === "installing" && !u.pending && (st.state === "failed" || st.state === "rolledback" || Date.now() - UP.at > 5 * 60000)) UP.phase = "";
+  UP.u = u;
+  renderUpdate();
   clearTimeout(upTimer);
-  if (u.pending || st.state === "running") upTimer = setTimeout(loadUpdate, 3000);
+  if (u.pending || st.state === "running" || UP.phase === "installing") upTimer = setTimeout(loadUpdate, 3000);
 }
-// Обновление с GitHub: сервер сам скачивает официальную версию и ставит её так же, как архив из файла
-$("ghCheck").onclick = async () => {
-  const box = $("ghBox");
-  box.innerHTML = "⏳ Проверяю на GitHub…";
-  let r;
-  try{
-    const res = await fetch("/api/system/update/github/check");
-    r = await res.json();
-    if (!res.ok) throw new Error(r.error || res.status);
-  }catch(err){ box.innerHTML = `❌ ${esc(err.message)}`; return; }
-  const list = (r.changes || []).map(c => `<li>${esc(c.message)} <span class="muted mono">· ${esc(c.sha)} · ${esc((c.date||"").slice(0,10))}</span></li>`).join("");
-  if (!r.newer) {
-    box.innerHTML = `✅ Установлена последняя версия <b>v${esc(r.current)}</b>.` + (list ? `<details style="margin-top:4px"><summary class="muted">Последние изменения</summary><ul>${list}</ul></details>` : "");
-    return;
+function renderUpdate(){
+  const u = UP.u; if (!u) return;
+  $("upVer").textContent = "v" + u.version + (u.build_date ? " · сборка " + u.build_date.split("-").reverse().join(".") : "");
+  $("upLog").textContent = u.log || "";
+  const st = u.status || {}, btn = $("ghCheck"), busy = u.pending || st.state === "running" || UP.phase === "installing";
+  const gh = UP.gh, offer = !busy && (gh && gh.newer ? {v: gh.latest, gh: true} : u.ready && u.ready_info && u.ready_info.version ? {v: u.ready_info.version, gh: false} : null);
+  btn.disabled = !u.helper || busy || UP.phase === "checking";
+  btn.textContent = UP.phase === "checking" ? "⏳ Проверяю…" : busy ? "⏳ Идёт установка…" : offer ? `✓ Найдена версия v${offer.v}` : gh ? "🔄 Проверить ещё раз" : "🔄 Проверить обновления";
+  btn.classList.toggle("primary", !offer && !busy); btn.classList.toggle("quiet", !!offer || busy);
+  let html = "";
+  if (!u.helper) html = '<p class="muted">Обновление из браузера включится после одной установки этой версии через WinSCP.</p>';
+  else if (busy) html = `<div class="upnote">⏳ Устанавливаю обновление. Сервер перезапустится примерно через минуту, страница обновится сама. Прежняя версия сохранена — при сбое вернётся автоматически.</div>`;
+  else if (UP.err) html = `<div class="upnote bad">Не удалось: ${esc(UP.err)}. Проверьте связь сервера с интернетом и нажмите «Проверить» ещё раз.</div>`;
+  else if (offer) {
+    const list = offer.gh ? (gh.changes || []).filter(c => c.message).slice(0, 8).map(c => `<li><span>${esc(c.message)}</span><small class="muted mono">${esc((c.date||"").slice(0,10).split("-").reverse().join("."))} · ${esc(c.sha)}</small></li>`).join("") : "";
+    html = `<div class="upnew"><div class="upnew-h">Доступна версия <b>v${esc(offer.v)}</b> <span class="muted">· сейчас v${esc(u.version)}</span></div>
+      ${list ? `<div class="small muted">Что изменилось:</div><ul class="upchg">${list}</ul>` : ""}
+      <button class="primary" type="button" id="upInstall">⬇️ Установить обновление v${esc(offer.v)}</button>
+      <div class="small muted">Сервер перезапустится примерно на минуту — не устанавливайте во время старта.</div></div>`;
   }
-  box.innerHTML = `Доступна версия <b>v${esc(r.latest)}</b> (сейчас v${esc(r.current)}). Последние изменения:<ul style="margin:4px 0">${list}</ul>` +
-    `<button class="primary" id="ghInstall">⬇ Установить v${esc(r.latest)}</button>`;
-  $("ghInstall").onclick = async () => {
-    if (!confirm(`Установить v${r.latest} с GitHub?\n\nСервер перезапустится (около минуты). Прежняя версия сохранится, при сбое вернётся сама.`)) return;
-    $("ghInstall").disabled = true; $("ghInstall").textContent = "⏳ Скачиваю…";
-    try{
-      const res = await fetch("/api/system/update/github", {method:"POST", body: JSON.stringify({sha: r.sha}), headers:{"X-Requested-With":"timing-hub","Content-Type":"application/json"}});
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || res.status);
-      toast(`Принято: v${j.from} → v${j.to}. Устанавливаю…`);
-      box.innerHTML = "";
-    }catch(err){ toast("Ошибка: " + err.message); $("ghInstall").disabled = false; $("ghInstall").textContent = `⬇ Установить v${r.latest}`; }
-    setTimeout(loadUpdate, 1000);
-  };
-};
-$("upBtn").onclick = () => $("upFile").click();
-$("upFile").onchange = async () => {
-  const f = $("upFile").files[0]; $("upFile").value = ""; if (!f) return;
-  if (!confirm(`Загрузить обновление из «${f.name}»?\n\nАрхив будет проверен и сохранён.\nУстановка произойдёт после вашего подтверждения.`)) return;
+  else if (gh) html = `<div class="upnote ok">✅ Установлена последняя версия v${esc(u.version)}.</div>`;
+  else if (st.state === "failed" || st.state === "rolledback") html = `<div class="upnote bad">${st.state === "failed" ? "❌ Прошлое обновление не установилось" : "↩ Прошлое обновление откатилось к прежней версии"}: ${esc(st.message||"")} <span class="muted">(${esc(st.at||"")})</span></div>`;
+  $("upBox").innerHTML = html;
+  const ib = $("upInstall"); if (ib) ib.onclick = () => installUpdate(offer);
+}
+$("ghCheck").onclick = async () => {
+  UP.phase = "checking"; UP.err = ""; renderUpdate();
   try{
-    const r = await fetch("/api/system/update", {method:"POST", body:f, headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}});
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.status);
-    toast(`Загружено: v${j.from} → v${j.to}. Нажмите кнопку установки для применения.`);
-  }catch(err){ toast("Ошибка: " + err.message); }
-  setTimeout(loadUpdate, 1000);
+    const res = await fetch("/api/system/update/github/check"), r = await res.json();
+    if (!res.ok) throw new Error(r.error || res.status);
+    UP.gh = r;
+  }catch(err){ UP.err = err.message; UP.gh = null; }
+  UP.phase = ""; renderUpdate();
 };
+async function installUpdate(offer){
+  if (!confirm(`Установить обновление v${offer.v}?\n\nСервер перезапустится (около минуты). Прежняя версия сохранится и при сбое вернётся сама.`)) return;
+  const ib = $("upInstall"); ib.disabled = true; ib.textContent = "⏳ Скачиваю и устанавливаю…";
+  try{
+    const res = offer.gh
+      ? await fetch("/api/system/update/github", {method:"POST", body: JSON.stringify({sha: UP.gh.sha}), headers:{"X-Requested-With":"timing-hub","Content-Type":"application/json"}})
+      : await fetch("/api/system/update/install", {method:"POST", headers:{"X-Requested-With":"timing-hub"}});
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.status);
+    UP.phase = "installing"; UP.from = UP.u.version; UP.at = Date.now(); UP.gh = null;
+    toast(`Установка запущена: v${j.from || UP.from} → v${j.to}`);
+  }catch(err){ UP.err = err.message; }
+  renderUpdate(); setTimeout(loadUpdate, 1500);
+}
 async function loadReaders(){
   try{ rdData = await api("/api/readers"); }catch(e){ return; }
   const d = rdData;
@@ -3250,23 +3227,12 @@ $("uSave").onclick = async () => {
   catch(e){ toast("Ошибка: "+e.message); }
 };
 
-/* ---------- судья на секторе / секретарь вида: только ввод результатов (шаг 4 мастера) ---------- */
-function isSector(){ return !!ME && ME.role === "sector"; }
-async function initSector(){
-  try{ const c = await api("/api/clock"); offset = c.server_epoch_ms - Date.now(); }catch(e){}
-  try{ await loadEvents(); }catch(e){ toast("Не удалось загрузить соревнования"); }
-  if (location.hash !== "#wizard") history.replaceState(null, "", "#wizard");
-  showTab();
-  setInterval(tick, 1000);
-  setInterval(async () => { try{ const id = curId; await loadEvents(); if (id !== curId) wzp.open(); }catch(e){} }, 15000);
-}
 
 /* ---------- запуск ---------- */
 (async function init(){
   loadDisc();
   ["nRank", "mRank"].forEach(i => $(i).innerHTML = rankOpts("", "Разряд *"));
   await loadMe();
-  if (isSector()) return initSector();
   await loadStatus(); await loadDevices();
   try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
   showTab();
