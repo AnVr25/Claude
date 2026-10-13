@@ -123,6 +123,7 @@ def main() -> int:
                 "password": "test-pass", "api_key": "test-key"},
         "public": {"enabled": True, "listen_host": "127.0.0.1", "listen_port": p_pub, "url": "https://reg.example.ru"},
         "mail": {"outbox_dir": os.path.join(tmp, "outbox")},
+        "operator": {"name": "РОО «Федерация лёгкой атлетики Сахалинской области»", "email": "pd@example.ru"},
         "sources": [
             {"id": "FINISH", "name": "Финиш (push)", "mode": "listen", "listen_host": "127.0.0.1",
              "listen_port": p_push, "parser": "auto"},
@@ -591,6 +592,23 @@ def main() -> int:
         c3, d3, _ = tpost(TA + "register", {"name": "Иванова Мария Петровна", "team": "СШОР по лёгкой атлетике",
                                              "email": "Coach@Example.ru", "password": "coach-pass-1", "consent": True})
         msg_, code_ = last_mail()
+        cn1, dn1, _ = tpost(TA + "register", {"name": "Сидоров Олег", "team": "ДЮСШ", "email": "sid@example.ru",
+                                               "password": "sid-pass-123", "consent_accepted": False})
+        dbc = _sql.connect(cfg["db_path"])
+        crow = dbc.execute("SELECT consent_accepted, consent_at, consent_hash FROM trainers WHERE email = 'coach@example.ru'").fetchone()
+        nsid = dbc.execute("SELECT COUNT(*) FROM trainers WHERE email = 'sid@example.ru'").fetchone()[0]
+        dbc.close()
+        check("5.0.1: без согласия (consent_accepted) тренер не регистрируется; согласие записано с датой и отпечатком редакции политики",
+              cn1 == 400 and "consent" in dn1.get("fields", {}) and nsid == 0 and crow and crow[0] == 1 and crow[1] and len(crow[2] or "") == 16,
+              f"{cn1} {dn1} {crow}")
+        pv1, pvt, pvh = pub("GET", "/privacy")
+        pv2, pvt2, _ = pub("GET", "/privacy", port=p_web)
+        pv3, _, _ = pub("GET", "/r/privacy")
+        _, regt, _ = pub("GET", "/r/trainer")
+        check("5.0.1: Политика конфиденциальности открыта всем по /privacy (панель и публичная часть): оператор, 152-ФЗ, Россия, TLS, cookie",
+              pv1 == 200 and pv2 == 200 and pv3 == 200 and "РОО «Федерация лёгкой атлетики Сахалинской области»" in pvt
+              and "pd@example.ru" in pvt and "152-ФЗ" in pvt and "в Российской Федерации" in pvt and "TLS" in pvt and "HttpOnly" in pvt
+              and "{{" not in pvt and "ЕВСК" in pvt and "СНИЛС" in pvt and pvt == pvt2 and 'href="/privacy"' in regt, f"{pv1} {pv2} {pv3}")
         dbc = _sql.connect(cfg["db_path"])
         trow = dbc.execute("SELECT is_verified, verification_token, password_hash FROM trainers WHERE email = 'coach@example.ru'").fetchone()
         dbc.close()
@@ -1283,7 +1301,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 5.0.0 и дата сборки 13.10.2026", st3["version"] == "5.0.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 5.0.1 и дата сборки 13.10.2026", st3["version"] == "5.0.1" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",

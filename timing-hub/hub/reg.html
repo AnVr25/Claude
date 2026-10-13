@@ -281,7 +281,7 @@ button.lnk:hover{background:none;color:var(--bad)}
 </head>
 <body>
 <div id="root"><header class="band"><div class="in"><div class="logos"><img class="lg-sakh" src="/r/assets/sakhalin-light.png" alt="Сахалинская область" width="60" height="30"><img class="lg-flaso" src="/r/assets/flaso-dark.png" alt="ФЛАСО — Федерация лёгкой атлетики Сахалинской области" width="87" height="28"><img class="lg-ss" src="/r/assets/sakhstart-dark.svg" alt="SakhStart" width="95" height="30"></div></div></header><div class="card muted">Загрузка…</div></div>
-<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО<div class="staff"><a href="/r/trainer">Вход для тренеров</a> · <a href="/login">Вход для организаторов</a></div></footer>
+<footer class="sig">Регистрация · <b>SakhStart</b> · ФЛАСО<div class="staff"><a href="/r/trainer">Вход для тренеров</a> · <a href="/login">Вход для организаторов</a> · <a href="/privacy">Политика конфиденциальности</a></div></footer>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -365,21 +365,25 @@ function tRegister(){
       <div class="full">${field("t_email","Электронная почта",1,'type="email" autocomplete="email" inputmode="email" maxlength="254"',"— на неё придёт код")}</div>
       <div class="full">${field("t_password","Пароль",1,'type="password" autocomplete="new-password" minlength="8" maxlength="200"',"— не короче 8 символов")}</div>
     </div>
-    <label class="consent" id="w_t_consent" style="margin-top:16px"><input type="checkbox" id="t_consent"><span>Даю согласие ФЛАСО на обработку моих персональных данных (ФИО, место работы, электронная почта) для доступа к протоколам соревнований <i class="req">*</i></span></label>
+    <label class="consent" id="w_t_consent" style="margin-top:16px"><input type="checkbox" id="t_consent"><span>Я даю согласие на обработку моих персональных данных (ФИО, спортивная школа или клуб, электронная почта) и соглашаюсь с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
     <div class="err" id="e_t_consent"></div>
     <div class="hp" aria-hidden="true"><input id="t_website" tabindex="-1" autocomplete="off"></div>
-    <button type="submit" id="trGo">Зарегистрироваться и получить код</button><div class="formerr" id="trErr" role="alert"></div>
+    <button type="submit" id="trGo" disabled aria-describedby="trHint">Зарегистрироваться и получить код</button>
+    <div class="tswitch muted" id="trHint" style="font-size:14px;margin-top:8px">Кнопка включится, когда вы отметите согласие.</div><div class="formerr" id="trErr" role="alert"></div>
     <div class="tswitch">Уже зарегистрированы? <button type="button" class="lnk" id="toLogin">Войти</button></div>
   </form>`,1);
   $("toLogin").onclick=()=>tLogin();
+  // без согласия регистрация невозможна: кнопка выключена, пока галочка не стоит
+  const cOn=()=>{ const on=$("t_consent").checked; $("trGo").disabled=!on; $("trHint").classList.toggle("hide",on); if(on) $("e_t_consent").textContent=""; };
+  $("t_consent").onchange=cOn;
   $("tr").onsubmit=async e=>{ e.preventDefault(); $("trErr").textContent="";
-    const body={name:$("t_name").value.trim(),team:$("t_team").value.trim(),email:$("t_email").value.trim(),password:$("t_password").value,consent:$("t_consent").checked,website:$("t_website").value};
+    if(!$("t_consent").checked){ cOn(); return; }
+    const body={name:$("t_name").value.trim(),team:$("t_team").value.trim(),email:$("t_email").value.trim(),password:$("t_password").value,consent_accepted:$("t_consent").checked,website:$("t_website").value};
     const errs={};
     if(body.name.split(/\s+/).length<2) errs.name="Укажите фамилию и имя";
     if(body.team.length<2) errs.team="Укажите спортивную школу или клуб";
     if(!/^\S+@\S+\.\S{2,}$/.test(body.email)) errs.email="Проверьте адрес почты: например, coach@mail.ru";
     if(body.password.length<8) errs.password="Пароль — не короче 8 символов";
-    if(!body.consent) errs.consent="Нужно согласие на обработку персональных данных";
     tErr(errs); if(Object.keys(errs).length){ $("trErr").textContent="Проверьте отмеченные поля"; return; }
     $("trGo").disabled=true;
     const {ok,d}=await tpost(TAPI+"register",body).catch(()=>({ok:false,d:{error:"Нет связи с сервером — попробуйте ещё раз"}}));
@@ -599,7 +603,7 @@ function render(keep){
       <div class="hint">Лучший результат нужен, чтобы поставить вас в забег с соперниками вашего уровня.</div>
     </div>
     <div class="card">
-      <label class="consent" id="w_consent"><input type="checkbox" id="consent"><span>Даю согласие на обработку персональных данных<span id="consentWho"></span> <i class="req">*</i></span></label>
+      <label class="consent" id="w_consent"><input type="checkbox" id="consent"><span>Я, как совершеннолетний участник или законный представитель (родитель/опекун) несовершеннолетнего спортсмена, даю согласие на обработку персональных данных (ФИО, год рождения, разряд, команда, результаты попыток) в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> для формирования протоколов соревнований <i class="req">*</i></span></label>
       <div class="err" id="e_consent"></div>
       <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
       <label class="remember"><input type="checkbox" id="remember"${me?" checked":""}><span>Запомнить данные участника на этом устройстве — в следующий раз заполнить в одно касание</span></label>
@@ -658,7 +662,7 @@ function renderRelay(){
     </div>
     <div class="card"><h2>Состав по этапам</h2><div id="legs"></div><div class="err" id="e_r_members"></div></div>
     <div class="card">
-      <label class="consent" id="w_r_consent"><input type="checkbox" id="r_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных <i class="req">*</i></span></label>
+      <label class="consent" id="w_r_consent"><input type="checkbox" id="r_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
       <div class="err" id="e_r_consent"></div>
       <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
     </div>
@@ -730,7 +734,7 @@ function renderTeam(){
       <div id="t_preview"></div>
     </div>
     <div class="card">
-      <label class="consent" id="w_t_consent"><input type="checkbox" id="t_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных <i class="req">*</i></span></label>
+      <label class="consent" id="w_t_consent"><input type="checkbox" id="t_consent"><span>Подтверждаю, что у меня есть согласия всех участников (за несовершеннолетних — их родителей или законных представителей) на обработку персональных данных в соответствии с <a href="/privacy" target="_blank" rel="noopener">Политикой конфиденциальности</a> <i class="req">*</i></span></label>
       <div class="err" id="e_t_consent"></div>
       <details><summary>Текст согласия</summary><p>${esc(d.consent)}</p></details>
     </div>
@@ -811,7 +815,6 @@ function age(bd){
 function minorCheck(){
   const v=$("birth_date").value, minor=v&&age(v)<18;
   $("repBox").classList.toggle("hide",!minor);
-  $("consentWho").textContent=minor?" участника (как его родитель / законный представитель)":"";
 }
 function clearErr(){document.querySelectorAll(".err").forEach(e=>e.textContent="");document.querySelectorAll(".bad").forEach(e=>e.classList.remove("bad"));$("formErr").textContent="";}
 function showErr(fields){

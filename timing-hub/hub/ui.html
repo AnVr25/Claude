@@ -476,6 +476,8 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 .upnew-h{font-size:16px}.upnew-h b{font:600 18px var(--head)}
 .upchg{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .upchg li small{margin-left:8px}
+.appfoot{max-width:1680px;margin:0 auto;padding:14px 18px 28px;font-size:13px;color:var(--muted);text-align:center}
+.appfoot a{color:inherit;text-underline-offset:3px}
 /* соревнование завершено: заметная полоса с одной кнопкой «Возобновить» */
 .finbar{display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;margin:0 0 14px;padding:12px 16px;border-radius:var(--r);
   background:#FFF6E5;border:1px solid #F2C46D;border-left:4px solid #E09A10;color:var(--ink)}
@@ -1220,6 +1222,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 </section>
 
 </main>
+<footer class="appfoot">SakhStart · ФЛАСО · <a href="/privacy" target="_blank" rel="noopener">Политика конфиденциальности</a> · персональные данные спортсменов — только для работы на соревнованиях</footer>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
 "use strict";
@@ -3244,7 +3247,7 @@ async function loadTrainers(){
   $("trCount").textContent = d.trainers.length ? `всего ${d.trainers.length}` + (wait ? ` · ждут подтверждения: ${wait}` : "") : "";
   $("trBody").innerHTML = d.trainers.map(t => `<tr data-tid="${t.id}" class="${t.active ? "" : "off"}">
     <td><b>${esc(t.name)}</b></td><td>${esc(t.team)}</td><td class="small">${esc(t.email)}</td>
-    <td class="small">${!t.active ? '<span class="muted">заблокирован</span>' : t.is_verified ? `<span style="color:var(--ok)">✓ подтверждён</span><div class="muted">${esc(t.verified_by || "")}</div>` : '<span style="color:var(--start)">ждёт кода</span>'}</td>
+    <td class="small">${!t.active ? '<span class="muted">заблокирован</span>' : t.is_verified ? `<span style="color:var(--ok)">✓ подтверждён</span><div class="muted">${esc(t.verified_by || "")}${t.consent_at ? " · согласие ПДн " + esc(t.consent_at.slice(0,10).split("-").reverse().join(".")) : ""}</div>` : '<span style="color:var(--start)">ждёт кода</span>'}</td>
     <td class="small muted">${esc((t.last_login || "не входил").slice(0,16))}</td>
     <td class="uact">${t.is_verified ? "" : '<button class="sm" data-tact="verify">Подтвердить</button> '}<button class="sm" data-tact="${t.active ? "block" : "unblock"}">${t.active ? "Заблокировать" : "Разблокировать"}</button> <button class="sm danger" data-tact="delete">Удалить</button></td></tr>`).join("")
     || '<tr><td colspan="6" class="empty">Тренеров пока нет — отправьте им ссылку на страницу входа.</td></tr>';

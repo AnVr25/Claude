@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "5.0.0"
+VERSION = "5.0.1"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -877,7 +877,9 @@ class Store:
             created_at TEXT NOT NULL)""")
         add("trainers", (("token_expires", "TEXT"), ("token_attempts", "INTEGER NOT NULL DEFAULT 0"),
                          ("token_sent_at", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1"), ("last_login", "TEXT"),
-                         ("verified_at", "TEXT"), ("verified_by", "TEXT")))
+                         ("verified_at", "TEXT"), ("verified_by", "TEXT"),
+                         # 5.0.1: согласие на обработку ПДн — флаг, когда дано и с какой редакцией политики
+                         ("consent_accepted", "INTEGER NOT NULL DEFAULT 0"), ("consent_at", "TEXT"), ("consent_hash", "TEXT")))
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
 
@@ -947,7 +949,8 @@ class Store:
     # ---- тренеры (личный кабинет): вход в сеанс — login «trainer:<id>», чтобы не путать с логинами судей
     def trainers(self) -> list:
         return self._rows(self.con.execute(
-            "SELECT id, name, team, email, is_verified, active, created_at, last_login, verified_at, verified_by "
+            "SELECT id, name, team, email, is_verified, active, created_at, last_login, verified_at, verified_by, "
+            "consent_accepted, consent_at "
             "FROM trainers ORDER BY is_verified, created_at DESC"))
 
     def trainer_by_email(self, email: str) -> Optional[dict]:
@@ -965,7 +968,8 @@ class Store:
 
     def update_trainer(self, tid: int, **f) -> None:
         for k in ("name", "team", "password_hash", "is_verified", "verification_token", "token_expires", "token_attempts",
-                  "token_sent_at", "active", "last_login", "verified_at", "verified_by"):
+                  "token_sent_at", "active", "last_login", "verified_at", "verified_by", "consent_accepted", "consent_at",
+                  "consent_hash"):
             if k in f:
                 self.con.execute(f"UPDATE trainers SET {k} = ? WHERE id = ?", (f[k], tid))
         if "password_hash" in f or f.get("active") == 0 or f.get("is_verified") == 0:
@@ -3874,7 +3878,9 @@ class Hub:
                 f"регистрации, проведения соревнований «{ev['name']}» и подготовки стартовых и итоговых "
                 f"протоколов, включая размещение в протоколах фамилии, имени, года рождения, команды и результата. "
                 f"Согласие действует до достижения целей обработки и может быть отозвано письменным заявлением. "
-                f"Если участнику нет 18 лет, согласие даёт его родитель (законный представитель).")
+                f"Если участнику нет 18 лет, согласие даёт его родитель (законный представитель). "
+                f"Порядок обработки и защиты данных — в Политике конфиденциальности: "
+                f"{(self.public_base() or '') + '/privacy'}.")
 
     def reg_state(self, ev: dict) -> tuple:
         """(открыта ли регистрация, причина)"""
@@ -6033,6 +6039,28 @@ class Hub:
             "Если вы не регистрировались — просто удалите это письмо, без кода учётная запись не откроется.\n\n"
             "Федерация лёгкой атлетики Сахалинской области · SakhStart")
 
+    OPERATOR_DEFAULT = "Региональная общественная организация «Федерация лёгкой атлетики Сахалинской области» (ФЛАСО)"
+
+    def privacy_page(self) -> str:
+        """Политика конфиденциальности: hub/privacy.html + реквизиты оператора из config.json → "operator"."""
+        tpl = self._ui_file("privacy.html") or "нет privacy.html"
+        op = self.cfg.get("operator") or {}
+        e = html.escape
+        rows = [("ИНН", op.get("inn")), ("ОГРН", op.get("ogrn")), ("Адрес", op.get("address")),
+                ("Электронная почта", op.get("email")), ("Телефон", op.get("phone"))]
+        contacts = "".join(f"<li><b>{k}:</b> {e(str(v))}</li>" for k, v in rows if v)
+        if not op.get("email"):
+            contacts += ("<li>Обращения принимаются письменно по адресу Оператора или через раздел «Контакты» "
+                         "на сайте <a href=\"https://fla65.ru\">fla65.ru</a>.</li>")
+        base = self.public_base() or ""
+        return (tpl.replace("{{OPERATOR}}", e(op.get("name") or self.OPERATOR_DEFAULT))
+                .replace("{{CONTACTS}}", contacts)
+                .replace("{{SITE}}", e(base.replace("https://", "").replace("http://", "") or "reg.fla65.ru")))
+
+    def privacy_hash(self) -> str:
+        """Отпечаток редакции политики — записывается вместе с согласием, чтобы знать, с какой редакцией согласились."""
+        return hashlib.sha256(self.privacy_page().encode("utf-8")).hexdigest()[:16]
+
     def protocol_viewer(self, headers: dict) -> Optional[dict]:
         """Кто может смотреть протоколы: администратор, судья или тренер с подтверждённой почтой."""
         u = self.session_user(headers)
@@ -6110,8 +6138,8 @@ class Hub:
                 errs["email"] = "Проверьте адрес почты: например, coach@mail.ru"
             if len(pwd) < 8:
                 errs["password"] = "Пароль — не короче 8 символов"
-            if not d.get("consent"):
-                errs["consent"] = "Нужно согласие на обработку персональных данных"
+            if not (d.get("consent_accepted") is True or d.get("consent") is True):
+                errs["consent"] = "Нужно согласие на обработку персональных данных и с Политикой конфиденциальности"
             if errs:
                 return 400, {"error": "Проверьте поля формы", "fields": errs}, None
             t = self.store.trainer_by_email(email)
@@ -6124,6 +6152,8 @@ class Hub:
             else:
                 self.store.add_trainer(name, team, email, self.hash_password(pwd))
             t = self.store.trainer_by_email(email)
+            self.store.update_trainer(t["id"], consent_accepted=1, consent_at=fmt_db(now_local()),
+                                      consent_hash=self.privacy_hash())
             sent = self._issue_code(t)
             self.store.audit(f"тренер {email}@{ip}", None, "Тренер: регистрация",
                              f"{name} · {team}" + ("" if sent else " · почта не настроена, нужно подтверждение администратора"))
@@ -6328,6 +6358,10 @@ class Hub:
             secure = proxied and headers.get("x-forwarded-proto") == "https"
             J = "application/json; charset=utf-8"
             # без входа: страница входа, вход/выход, шрифты и логотипы, публичная часть
+            if path == "/privacy" and method == "GET":     # политика конфиденциальности — без входа
+                await self._send(writer, 200, "text/html; charset=utf-8", self.privacy_page(),
+                                 extra={**self.PUBLIC_HEADERS, "Cache-Control": "public, max-age=300"})
+                return
             if path == "/login" and method == "GET":
                 await self._send(writer, 200, "text/html; charset=utf-8", self._ui_file("login.html") or "нет login.html")
                 return
@@ -6532,6 +6566,8 @@ class Hub:
         def js(obj, code=200):
             return code, J, json.dumps(obj, ensure_ascii=False), None
 
+        if method == "GET" and path in ("/r/privacy", "/privacy"):
+            return 200, "text/html; charset=utf-8", self.privacy_page(), {"Cache-Control": "public, max-age=300"}
         if method == "GET" and path in ("/r", "/r/", "/r/trainer", "/r/trainer/"):
             page = self._ui_file("reg.html")
             return 200, "text/html; charset=utf-8", page or "нет reg.html", None
