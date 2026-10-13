@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.7.0"
+VERSION = "3.8.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2263,6 +2263,7 @@ class Hub:
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 
     # ---- выполненные разряды по нормам ЕВСК (seed/rank_norms.json, из приложения к приказу Минспорта)
+    NO_RANK = "—"                         # ручная отметка «разряд не выполнен»
     RANK_ORDER = ("МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн.")
     RANK_MIN_AGE = {"МСМК": 16, "МС": 15, "КМС": 14}          # остальные разряды — с 10 лет
     # статус соревнований (поле «уровень» события) → высший разряд, который на них можно выполнить
@@ -2617,8 +2618,9 @@ class Hub:
                 val, hand = sec, (chip, fin_dev) in manual_set
             auto_rk = self.rank_for(ev, r["distance"], r["sex"], r["birth_year"], val, hand) if not r.get("members") else ""
             r["done_rank_auto"] = auto_rk
+            # «—» — секретарь вручную отметил «разряд не выполнен»: расчёт системы не подставляется
             r["done_rank_src"] = "manual" if r["done_rank"] else ("auto" if auto_rk else "")
-            r["done_rank"] = r["done_rank"] or auto_rk
+            r["done_rank"] = "" if r["done_rank"] == self.NO_RANK else (r["done_rank"] or auto_rk)
             res["finished"].append(r)
         # общий рейтинг: все забеги одной категории и дистанции вместе
         groups: dict = {}
@@ -3234,8 +3236,13 @@ class Hub:
                         bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
                 if "done_rank" in rw:
-                    self.store.update_entry(eid, bib, done_rank=self.norm_rank(rw.get("done_rank")) or None)
-                    n += 0 if set_detail or txt or st else 1
+                    # пусто — разряд считает система по ЕВСК; «—» — вручную «не выполнен»; иначе — разряд секретаря
+                    dr = str(rw.get("done_rank") or "").strip()
+                    dr = self.NO_RANK if dr in ("—", "-", "–", "нет") else self.norm_rank(dr)
+                    self.store.update_entry(eid, bib, done_rank=dr or None)
+                    if not (set(rw) - {"bib", "done_rank", "auto"}):
+                        n += 1             # прислан только разряд — результат и отметку не трогаем
+                        continue
                 if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None, detail or None, set_detail):
                     n += 1
             if n:

@@ -221,6 +221,7 @@ button.bigprint:hover{filter:brightness(1.08)}
 .wzp-grid input{width:100%;min-width:54px;padding:5px 6px;font:14px var(--mono)}.wzp-grid td{padding:3px 4px}
 .wzp-grid td.out{font:700 14px var(--mono);white-space:nowrap}.wzp-grid tr.dirty{background:#FFF9E5}
 .wzp-grid input.err{border-color:var(--track)}
+.wzp-grid select.dr{min-width:118px;width:100%;padding:5px 6px}.wzp-grid select.dr.man{border-color:var(--track);font-weight:700}
 .wzp-grid tr.wzp-cat td{background:var(--line);font:700 14px var(--body);padding:6px 8px}
 .wzp-ctl{align-items:center}.wzp-ctl button{white-space:normal}
 .wzp-goto{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:12px 14px;margin:0 0 12px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
@@ -2133,6 +2134,11 @@ const wzp = (() => {
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
       <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>${nav(true, "")}`;
   }
+  // «Вып. разряд»: пусто — считает система по нормам ЕВСК (видно в подписи); «—» — вручную «не выполнен»; иначе — разряд секретаря
+  const DONE_RANKS = ["МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн."];
+  const drSel = (r) => { const cur = r.done_rank || "", auto = (W.auto || {})[r.bib] || "";
+    const opts = [["", auto ? `Авто: ${auto}` : "Авто: нет"], ["—", "Не выполнен"], ...[...new Set([...DONE_RANKS, ...(cur && cur !== "—" ? [cur] : [])])].map(x => [x, x])];
+    return `<select class="dr${cur ? " man" : ""}" aria-label="Выполненный разряд ${esc(r.bib)}" title="Авто — по нормам ЕВСК с учётом пола, возраста, хронометража и статуса соревнований. Выберите разряд, чтобы задать его вручную — он главнее расчёта.">${opts.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`; };
   /* шаг 4: экранная сетка ввода */
   function step4(body, k){
     const tech = k === "tech", es = entriesIn(), pts = isPoints(W.disc);
@@ -2143,7 +2149,7 @@ const wzp = (() => {
       const inp = (c, i, v, ph) => `<td><input class="${c}" data-i="${i}" value="${esc(v || "")}" placeholder="${ph || "—"}" inputmode="decimal" aria-label="${esc(c === "sw" ? "Секундомер " + (i + 1) : "Попытка " + (i + 1))}, ${esc(r.bib)}"></td>`;
       const main = tech ? [0,1,2,3,4,5].map(i => inp("att", i, (d.a || [])[i])).join("") : pts ? `<td><input class="one" value="${esc(r.result || "")}" inputmode="numeric" aria-label="Очки ${esc(r.bib)}"></td>` : [0,1,2].map(i => inp("sw", i, (d.t || [])[i])).join("");
       return `<tr data-bib="${esc(r.bib)}">${tech || pts ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td><td><b>${esc(r.name || "")}</b><div class="small muted">${esc(r.birth_year || "")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank || "")}</td>${main}
-        ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td><input class="dr" value="${esc(r.done_rank || "")}" list="wzpRanks" placeholder="${esc((W.auto || {})[r.bib] || "—")}" title="${(W.auto || {})[r.bib] ? "По нормам ЕВСК: " + esc(W.auto[r.bib]) + ". Впишите, только если нужно иначе." : "По нормам разряд не выполнен (или нормы для дисциплины нет)"}" aria-label="Выполненный разряд ${esc(r.bib)}" style="min-width:64px"></td>
+        ${pts ? "" : `<td class="out" data-out>${esc(r.result || "")}</td>`}<td>${drSel(r)}</td>
         <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([c, t]) => `<option value="${c}" ${r.status === c ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>`; };
     const sorted = es.slice().sort((a, b) => String(a.category || "").localeCompare(String(b.category || ""), "ru") || String(a._heat).localeCompare(String(b._heat), "ru", {numeric: true})
       || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
@@ -2151,14 +2157,13 @@ const wzp = (() => {
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
     body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите три времени с ручных секундомеров (12.84 или 1:05.3). Сервер сам вычислит официальный результат: среднее из трёх, из двух — худшее, округление вверх до 0,1 с."}
-        Выполненный разряд система считает сама по нормам ЕВСК и показывает серым после сохранения; вписывайте его только если нужно иначе.</p>
-      <datalist id="wzpRanks">${RANKS.map(r => `<option value="${esc(r)}">`).join("")}</datalist>
-      <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
+        «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
+            <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 2.</td></tr>`}</tbody></table></div>
       <div class="row"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button><span class="small muted">Enter — к следующему полю. Изменённые строки подсвечены.</span></div>${nav(true, "К итоговому протоколу")}`;
   }
   async function saveRows(){
     const rows = [...document.querySelectorAll("#wzpRows tr.dirty")].map(tr => {
-      const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("input.dr").value.trim()};
+      const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
       const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
       if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
       return row; });

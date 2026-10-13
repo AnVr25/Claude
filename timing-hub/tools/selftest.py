@@ -1149,7 +1149,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.7.0 и дата сборки 13.10.2026", st3["version"] == "3.7.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.8.0 и дата сборки 13.10.2026", st3["version"] == "3.8.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1336,6 +1336,16 @@ def main() -> int:
               fin9[grm]["done_rank"] == "1 р.", str(fin9[grm])[:200])
         check("3.6: вписанный секретарём разряд главнее расчётного", fin9[j_bib]["done_rank"] == "2 р." and fin9[j_bib]["done_rank_src"] == "manual"
               and fin9[j_bib]["done_rank_auto"] == "1 р.", str(fin9[j_bib])[:300])
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "done_rank": "—"}, {"bib": beg, "done_rank": "кмс"}]}).encode(), J)
+        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        check("3.8: секретарь вручную ставит «Не выполнен» (—) и свой разряд — они главнее расчёта ЕВСК, результат не стёрт",
+              fin9[vas]["done_rank"] == "" and fin9[vas]["done_rank_src"] == "manual" and fin9[vas]["done_rank_auto"] == "1 юн."
+              and fin9[beg]["done_rank"] == "КМС" and fin9[beg]["done_rank_src"] == "manual" and fin9[beg]["result"] == "6.10"
+              and fin9[vas]["result"] == "9.2", str({k: (v["result"], v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "done_rank": ""}, {"bib": beg, "done_rank": ""}]}).encode(), J)
+        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+        check("3.8: «Авто» возвращает расчёт по нормам", fin9[vas]["done_rank"] == "1 юн." and fin9[beg]["done_rank"] == "2 р."
+              and fin9[vas]["done_rank_src"] == "auto", str({k: (v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
         http("POST", f"/api/events/{e9}", json.dumps({"level": "interregion"}).encode(), J)
         fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
         check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm]["done_rank"] == "КМС", str(fin9[grm])[:200])

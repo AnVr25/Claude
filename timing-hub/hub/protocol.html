@@ -40,25 +40,25 @@ body{font:12.5px/1.38 var(--body);-webkit-font-smoothing:antialiased}
   -webkit-print-color-adjust:exact;print-color-adjust:exact}
 
 /* Шапка: Сахалин → ФЛАСО → SakhStart */
-.brandrow{position:relative;display:flex;align-items:center;gap:14px;padding-bottom:4mm;border-bottom:1.5px solid var(--pr-navy)}
+.brandrow{position:relative;display:flex;align-items:center;gap:14px;padding-bottom:3mm;border-bottom:1.5px solid var(--pr-navy)}
 .brandrow::after{content:"";position:absolute;left:0;bottom:-1.5px;width:30mm;height:3px;background:var(--track)}
 .brandrow .logos{gap:14px}
-.brandrow .lg-sakh{height:48px}
-.brandrow .lg-flaso{height:40px}
-.brandrow .lg-sep{background:var(--pr-line);height:34px}
-.brandrow .lg-ss{display:block;margin-left:auto;height:40px;width:auto}
-.org{margin-top:5mm;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--pr-muted)}
-h1{margin:3mm 0 1mm;text-align:center;font:600 22px/1.15 var(--head);letter-spacing:.09em;color:var(--pr-navy)}
+.brandrow .lg-sakh{height:40px}
+.brandrow .lg-flaso{height:34px}
+.brandrow .lg-sep{background:var(--pr-line);height:30px}
+.brandrow .lg-ss{display:block;margin-left:auto;height:34px;width:auto}
+.org{margin-top:3mm;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--pr-muted)}
+h1{margin:2mm 0 .5mm;text-align:center;font:600 22px/1.15 var(--head);letter-spacing:.09em;color:var(--pr-navy)}
 .org+h1{margin-top:1.5mm}
-.ev{text-align:center;font:500 17px/1.25 var(--head);margin:0 0 4mm;color:var(--pr-ink)}
-.meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;border-top:1px solid var(--pr-line-2);border-bottom:1px solid var(--pr-line-2);padding:2mm 0;margin-bottom:3mm;font-size:12px;color:var(--pr-muted)}
+.ev{text-align:center;font:500 17px/1.25 var(--head);margin:0 0 2.5mm;color:var(--pr-ink)}
+.meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;border-top:1px solid var(--pr-line-2);border-bottom:1px solid var(--pr-line-2);padding:1.5mm 0;margin-bottom:2mm;font-size:12px;color:var(--pr-muted)}
 .meta b{color:var(--pr-ink);font-weight:700}
 
 /* Группы и таблицы */
-h2{margin:6mm 0 2mm;padding-left:8px;border-left:3px solid var(--track);font:600 15px/1.2 var(--head);letter-spacing:.01em;color:var(--pr-navy);break-after:avoid;page-break-after:avoid}
+h2{margin:4mm 0 1.5mm;padding-left:8px;border-left:3px solid var(--track);font:600 15px/1.2 var(--head);letter-spacing:.01em;color:var(--pr-navy);break-after:avoid;page-break-after:avoid}
 h2 small{font:400 12px var(--body);color:var(--pr-muted);letter-spacing:0}
 table{width:100%;border-collapse:collapse;margin-bottom:2mm}
-th,td{border:1px solid var(--pr-line);padding:3px 5px;text-align:left;vertical-align:baseline}
+th,td{border:1px solid var(--pr-line);padding:2px 4px;text-align:left;vertical-align:baseline}
 th{font:500 11px/1.2 var(--head);letter-spacing:.02em;text-align:center;vertical-align:bottom;background:var(--pr-th);color:var(--pr-navy);border-color:var(--pr-line-2);border-bottom:1.5px solid var(--pr-navy)}
 /* стартовый протокол: шире колонка «Фамилия, имя» (ширины команды/тренера заданы в разметке) */
 th[style="width:26%"]{width:21%!important}
@@ -77,13 +77,15 @@ tr.pl2>td:first-child b{background:#8E99A830;box-shadow:inset 0 0 0 1px var(--si
 tr.pl3>td:first-child b{background:#B873332E;box-shadow:inset 0 0 0 1px var(--bronze);color:#5B3613}
 tr{break-inside:avoid;page-break-inside:avoid}
 thead{display:table-header-group}
-.note{margin-top:3mm;font-size:11px;color:var(--pr-muted)}
+.note{margin-top:2mm;font-size:11px;color:var(--pr-muted)}
+/* хвост листа: примечание, подписи и колонтитул не отрываются от таблицы и друг от друга */
+.tail{break-inside:avoid;page-break-inside:avoid}
 
 /* Подписи */
-.sign{margin-top:10mm;display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:9mm;align-items:end;font-size:12.5px;break-inside:avoid;page-break-inside:avoid;max-width:150mm}
+.sign{margin-top:6mm;display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:7mm;align-items:end;font-size:12.5px;break-inside:avoid;page-break-inside:avoid;max-width:150mm}
 .sign .u{border-bottom:1px solid var(--pr-ink);height:1px;min-width:120px}
 .sign .nm{min-width:150px}
-.foot{margin-top:8mm;padding-top:2mm;border-top:1px solid var(--pr-line);font-size:10px;color:var(--pr-muted);display:flex;justify-content:space-between;gap:12px}
+.foot{margin-top:4mm;padding-top:1.5mm;border-top:1px solid var(--pr-line);font-size:10px;color:var(--pr-muted);display:flex;justify-content:space-between;gap:12px}
 .empty{padding:30px;text-align:center;color:var(--pr-muted)}
 .empty b{display:block;font:600 18px/1.25 var(--head);color:var(--pr-navy);margin-bottom:4px}
 .empty a{color:var(--pr-navy)}
@@ -120,13 +122,20 @@ thead{display:table-header-group}
 .cp{margin:0}.cp+.cp{margin-top:18mm;border-top:2px dashed var(--pr-line-2);padding-top:10mm}
 @media print{.cp+.cp{margin-top:0;border-top:0;padding-top:0}}
 .att th,.att td,.swt th.swh{padding:3px 2px}
-.swt td.sw{height:10mm;border-left:1px solid var(--pr-line-2)}
+.swt td.sw{height:8mm;border-left:1px solid var(--pr-line-2)}
 .att th.sub{white-space:normal;line-height:1.1}
 table.att,table.swt{table-layout:auto}
-.att td.cell{height:9mm;min-width:10mm;border-left:1px solid var(--pr-line-2)}
+.att td.cell{height:8mm;min-width:10mm;border-left:1px solid var(--pr-line-2)}
 .att th.sub{font-weight:600;font-size:10px;padding:2px 0;text-align:center}
-.att td.big{height:9mm}
+.att td.big{height:8mm}
+/* альбомный лист: подписи главного судьи и секретаря в одну строку */
+.cp.land .sign,.sheet.land .sign{grid-template-columns:auto 1fr auto auto 1fr auto;max-width:none;column-gap:10px}
 @media print{
+  html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cp.fit{zoom:var(--z,1)}
+  .sign,.tail,table{page-break-inside:auto}
+  .sign,.tail{break-inside:avoid;page-break-inside:avoid}
+  h2{margin-top:3mm}
   :root{--pr-ink:#000;--pr-muted:#3B4452;--pr-line:#B9C3D0;--pr-line-2:#9AA7B8}
   html,body{background:#fff;color:#000}
   .bar{display:none}
@@ -379,8 +388,8 @@ function startSheet(o){
   const empty=!body;
   if(empty) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Сетки пока нет — сформируйте её в «Протоколы → Мастер», шаг 2.</div>';
   const html=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ")+body+
-    `<div class="note">${list?"Участники записаны одним сквозным списком в порядке нагрудных номеров. ":"Забеги сформированы по заявленным результатам. "}${tech?"Графы «Попытка 1–6» и «Лучший результат» — для записи судьями от руки.":"Графы «Сек. 1–3» — для записи судьями показаний трёх ручных секундомеров."}</div>`+signs(ev)+
-    `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`;
+    `<div class="tail"><div class="note">${list?"Участники записаны одним сквозным списком в порядке нагрудных номеров. ":"Забеги сформированы по заявленным результатам. "}${tech?"Графы «Попытка 1–6» и «Лучший результат» — для записи судьями от руки.":"Графы «Сек. 1–3» — для записи судьями показаний трёх ручных секундомеров."}</div>`+signs(ev)+
+    `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div></div>`;
   return {html,land,tech,empty};
 }
 // ---- группы протокола: дистанция × категория. Каждая группа — отдельный судейский лист (своя нумерация и места)
@@ -422,7 +431,7 @@ function sheetsFor(it){
 }
 // листы на экран и в печать: каждый — с новой страницы; альбомные и книжные листы в одном документе
 function showSheets(secs){
-  if(secs.length===1){ setPage(secs[0].land); $("sheet").innerHTML=secs[0].html; return; }
+  if(secs.length===1){ setPage(secs[0].land); $("sheet").innerHTML=`<section class="cp ${secs[0].land?"land":"port"}">${secs[0].html}</section>`; fitPages(); return; }
   let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
   const first=secs[0].land;
   st.textContent=`@page{size:A4 ${first?"landscape":"portrait"};margin:${first?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`
@@ -430,6 +439,19 @@ function showSheets(secs){
     +`.cp{page-break-after:always;break-after:page}.cp:last-child{page-break-after:auto;break-after:auto}.cp.land{page:cpl}.cp.port{page:cpp}`;
   $("sheet").classList.toggle("land",secs.some(r=>r.land));
   $("sheet").innerHTML=secs.map(r=>`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`).join("");
+  fitPages();
+}
+// «Один лист — одна страница»: если лист вылезает за страницу не больше чем на четверть (обычно — подписи и колонтитул),
+// при печати он чуть уменьшается целиком. Ширина листа на экране равна ширине печатной области, поэтому замер честный.
+// Длинные списки (больше 1,25 страницы) не сжимаются — переносятся, шапка таблицы повторяется, подписи не отрываются.
+const PAGE_MM={land:210-10-12, port:297-12-14};
+function fitPages(){
+  const mm=96/25.4;
+  document.querySelectorAll("#sheet > section.cp").forEach(s=>{
+    s.classList.remove("fit"); s.style.removeProperty("--z");
+    const page=(s.classList.contains("land")?PAGE_MM.land:PAGE_MM.port)*mm, h=s.scrollHeight;
+    if(h>page&&h<=page*1.25){ s.style.setProperty("--z",String(Math.floor(page/h*100)/100-0.01)); s.classList.add("fit"); }
+  });
 }
 function drawTabs(tabs){
   const box=$("ptabs");
@@ -587,12 +609,12 @@ function buildFinal(o={}){
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>
     ${stampHtml()}${body}
-    ${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}
+    <div class="tail">${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}
     <div class="sign">
       <span>Главный судья</span><span class="u"></span><span class="nm">${esc(ev.chief_judge||"/____________________/")}</span>
       <span>Главный секретарь</span><span class="u"></span><span class="nm">${esc(ev.chief_secretary||"/____________________/")}</span>
     </div>
-    <div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`};
+    <div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div></div>`};
 }
 load();
 </script>
