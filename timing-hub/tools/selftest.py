@@ -659,7 +659,7 @@ def main() -> int:
 
         def reg(last, first, bd, sex, dists, **kw):
             body = {"last_name": last, "first_name": first, "birth_date": bd, "sex": sex, "team": "СШОР",
-                    "consent": True, "representative": "Родитель", "distances": dists, **kw}
+                    "consent": True, "representative": "Родитель", "distances": dists, "rank": "1р", **kw}
             c, t, _ = pub("POST", f"/r/{slug}", json.dumps(body).encode())
             return c, json.loads(t)
 
@@ -746,8 +746,8 @@ def main() -> int:
               and b"300" in zipfile.ZipFile(io.BytesIO(tpl)).read("xl/worksheets/sheet2.xml"), str(tab[:3]))
         head = tab[2]
         filled = [["Заявка"], ["подсказка"], head,
-                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "", "", ""],
-                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "", "", ""],
+                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "", "", "", "кмс"],
+                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "", "", "", "б/р"],
                   ["Ошибкин", "", "", "31.02.2011", "X", "42 км", "", "", "", ""]]
         xb = hubmod.xlsx_build([("Заявка", filled)], header_row=3, title_row=1)
 
@@ -783,11 +783,12 @@ def main() -> int:
         check("повторная отправка той же команды — повторы пропущены", code == 201 and out["added"] == 0 and len(out["duplicates"]) == 2, str(out))
         _, txt = http("GET", f"/api/events/{e4}/regs")
         kr = [r for r in json.loads(txt)["regs"] if r["team"] == "Корсаков"]
+        check("3.2: разряд из файла команды нормализован («кмс» → КМС, «б/р» → Б/р)", sorted(r["rank"] for r in kr) == ["Б/р", "КМС"], str(kr)[:200])
         check("заявки команды: статус «на рассмотрении», тренер и категория", len(kr) == 2 and all(
             r["status"] == "pending" and r["coach"] == "Тренеров Т.Т." for r in kr) and {r["category"] for r in kr} == {"Юноши", "Девушки"},
               str(kr)[:300])
         # секретарь: импорт файла в админке — сразу подтверждено
-        csvb = "Фамилия;Имя;Дата рождения;Пол;Дистанция;Лучший результат;Команда\nИмпортов;Иван;01.01.2010;М;60 м;7,9;Анива\n".encode("cp1251")
+        csvb = "Фамилия;Имя;Дата рождения;Пол;Дистанция;Лучший результат;Команда;Разряд\nИмпортов;Иван;01.01.2010;М;60 м;7,9;Анива;2 разряд\n".encode("cp1251")
         r = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e4}/import?team=", data=csvb, method="POST",
                                    headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(),
                                             "X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
@@ -796,6 +797,18 @@ def main() -> int:
         _, txt = http("GET", f"/api/events/{e4}/regs")
         imp = [x for x in json.loads(txt)["regs"] if x["last_name"] == "Импортов"]
         check("импорт CSV (windows-1251) секретарём — сразу подтверждено", out["added"] == 1 and imp and imp[0]["status"] == "approved", str(out))
+        check("3.2: разряд «2 разряд» в импорте приведён к «2 р.»", imp and imp[0]["rank"] == "2 р.", str(imp)[:200])
+        code, out = reg("Безразрядов", "Иван", "2010-09-09", "М", ["60 м"], rank="")
+        check("3.2: без разряда заявка не принимается, ошибка у поля «rank»", code == 400 and "rank" in out.get("fields", {}), str(out))
+        code, out = reg("Звёздов", "Иван", "2010-09-10", "М", ["60 м"], rank="мс")
+        _, txt3 = http("GET", f"/api/events/{e4}/regs")
+        zr = [x for x in json.loads(txt3)["regs"] if x["last_name"] == "Звёздов"]
+        check("3.2: разряд «мс» записан как МС", code == 201 and zr and zr[0]["rank"] == "МС", str(out))
+        rid_z = zr[0]["id"]
+        code, txt3 = http("POST", f"/api/events/{e4}/regs/{rid_z}", json.dumps({"rank": "", "team": "Новая"}).encode(), J)
+        check("3.2: карточку без разряда сохранить нельзя", code == 400 and "разряд" in txt3, txt3[:200])
+        code, txt3 = http("POST", f"/api/events/{e4}/regs/{rid_z}", json.dumps({"rank": "1 р.", "team": "Новая"}).encode(), J)
+        check("3.2: с разрядом карточка сохраняется", code == 200 and json.loads(txt3)["reg"]["rank"] == "1 р.", txt3[:200])
         r = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e4}/template.xlsx",
                                    headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode()})
         with urllib.request.urlopen(r, timeout=5) as resp:
@@ -1014,7 +1027,7 @@ def main() -> int:
 
         def reg8(last, bd, dist, sex="М"):
             c, t, _ = pub("POST", f"/r/{s8}", json.dumps({"last_name": last, "first_name": "Тест", "birth_date": bd, "sex": sex,
-                          "team": "СШОР", "consent": True, "representative": "Родитель", "distances": [dist]}).encode())
+                          "team": "СШОР", "consent": True, "representative": "Родитель", "distances": [dist], "rank": "Б/р"}).encode())
             return c, json.loads(t)
         r1, r2 = reg8("Первый", "2010-01-01", "5 км"), reg8("Второй", "2010-02-02", "5 км")
         r3 = reg8("Третий", "2010-03-03", "5 км")
@@ -1026,7 +1039,7 @@ def main() -> int:
         r5 = reg8("Эстафетный", "2009-05-05", "4×100 м")
         check("2.8: эстафету нельзя заявить как личную дистанцию",
               r4[0] == 201 and r5[0] == 400 and "эстафета" in r5[1]["fields"]["distances"], str(r5))
-        legs = [{"last_name": f"Бегун{c}", "first_name": "Этап", "birth_date": f"2010-0{i + 1}-10", "sex": "М"}
+        legs = [{"last_name": f"Бегун{c}", "first_name": "Этап", "birth_date": f"2010-0{i + 1}-10", "sex": "М", "rank": "2 юн."}
                 for i, c in enumerate("АБВГ")]
         relay = {"distance": "4×100 м", "team": "СШОР", "relay": "СШОР-1", "coach": "Тренеров", "contact": "+79240000000",
                  "consent": True, "members": legs}
@@ -1101,7 +1114,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 3.1.0 и дата сборки 13.10.2026", st3["version"] == "3.1.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 3.2.0 и дата сборки 13.10.2026", st3["version"] == "3.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1158,6 +1171,51 @@ def main() -> int:
               grp_.get(("Юноши", "Прыжок в длину")) == 2, str(grp_))
         code, txt = http("POST", f"/api/events/{et}/results", json.dumps({"rows": [{"bib": "6", "result": "13:20"}]}).encode(), J)
         check("3.1: время в дисциплине с очками не принимается", json.loads(txt)["saved"] == 0 and len(json.loads(txt)["errors"]) == 1, txt[:200])
+        # 3.2: три секундомера и попытки
+        code, txt = http("POST", "/api/events", json.dumps({"name": "Секундомеры и попытки", "kind": "stadium", "timing": "manual"}).encode(), J)
+        e5 = json.loads(txt)["id"]
+        http("POST", f"/api/events/{e5}/entries", json.dumps({"text": "Номер;Забег;ФИО;Разряд\n11;Бег;Один;1р\n12;Бег;Два;кмс\n13;Бег;Три\n14;Бег;Четыре\n15;Бег;Пять\n"
+                                                                    "21;Длина;Шесть;мс\n22;Длина;Семь\n23;Длина;Восемь\n31;Высота;Девять\n32;Высота;Десять"}).encode(), J)
+        for wn, dist in (("Бег", "100 м"), ("Длина", "Прыжок в длину"), ("Высота", "Прыжок в высоту")):
+            http("POST", f"/api/events/{e5}/waves", json.dumps({"name": wn, "category": "Юноши", "distance": dist}).encode(), J)
+        code, txt = http("POST", f"/api/events/{e5}/results", json.dumps({"rows": [
+            {"bib": "11", "t": ["12.31", "12.40", "12.33"], "auto": True},
+            {"bib": "12", "t": ["13.0", "13.2", ""], "auto": True},
+            {"bib": "13", "t": ["14.52", "", ""], "auto": True},
+            {"bib": "14", "t": ["12.0", "12.0", "12.3"], "auto": True},
+            {"bib": "15", "t": ["12.31", "abc", ""], "auto": True},
+            {"bib": "21", "a": ["7.10", "X", "7.85", "-", "7,60"], "auto": True},
+            {"bib": "22", "a": ["7.2", "x", "7.2"], "auto": True},
+            {"bib": "23", "a": ["abc"], "auto": True},
+            {"bib": "31", "a": ["1.80", "1.85", "X"], "auto": True},
+            {"bib": "32", "a": ["X", "X", "X"], "auto": True}]}).encode(), J)
+        rr = json.loads(txt)
+        check("3.2: секундомеры и попытки сохранены, непонятные ячейки названы",
+              rr["saved"] == 8 and len(rr["errors"]) == 2 and any("секундомер 2" in e for e in rr["errors"])
+              and any("попытка 1" in e for e in rr["errors"]), txt[:400])
+        _, txt = http("GET", f"/api/events/{e5}/results")
+        fin = {x["bib"]: x for x in json.loads(txt)["finished"]}
+        res_ = {b: fin[b]["result"] for b in fin}
+        check("3.2: три секундомера — среднее (12.33 → 12.4), два — худшее (13.2), один — он сам, округление вверх до 0,1; два совпали — их время",
+              res_.get("11") == "12.4" and res_.get("12") == "13.2" and res_.get("13") == "14.6" and res_.get("14") == "12.0", str(res_))
+        check("3.2: показания секундомеров доходят до протокола", fin["11"]["sw"] == ["12.31", "12.40", "12.33"] and fin["11"]["rank"] == "1 р."
+              and fin["12"]["rank"] == "КМС", str({k: (v.get("sw"), v.get("rank")) for k, v in fin.items()}))
+        check("3.2: лучший результат из попыток (7.85), отметки X и «-» не мешают; высота — лучшая покорённая",
+              res_.get("21") == "7.85" and res_.get("22") == "7.20" and res_.get("31") == "1.85" and "32" not in fin
+              and fin["21"]["attempts"] == ["7.10", "X", "7.85", "-", "7.60"] and fin["21"]["rank"] == "МС", str(res_) + str(fin.get("21", {}).get("attempts")))
+        check("3.2: места: бег 12.0 лучше 12.4, прыжок 7.85 лучше 7.20", fin["14"]["place"] == 1 and fin["11"]["place"] == 2
+              and fin["21"]["place"] == 1 and fin["22"]["place"] == 2, str({k: v["place"] for k, v in fin.items()}))
+        code, txt = http("POST", f"/api/events/{e5}/results", json.dumps({"rows": [{"bib": "11", "t": ["12.31", "12.40", "12.33"], "result": "12.9"}]}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e5}/results")
+        f11 = [x for x in json.loads(txt)["finished"] if x["bib"] == "11"][0]
+        check("3.2: ручной ввод главного результата сильнее автоматического, показания сохраняются",
+              f11["result"] == "12.9" and f11["sw"] == ["12.31", "12.40", "12.33"], str(f11)[:200])
+        code, txt = http("POST", f"/api/events/{e5}/results", json.dumps({"rows": [{"bib": "11", "t": ["", "", ""], "auto": True}]}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e5}/results")
+        check("3.2: стёртые секундомеры снимают результат", all(x["bib"] != "11" for x in json.loads(txt)["finished"]), txt[:100])
+        _, txt = http("GET", f"/api/events/{e5}/startlist")
+        sl5 = [e for h in json.loads(txt)["heats"] for e in h["entries"]]
+        check("3.2: разряд в стартовом списке", {e["bib"]: e["rank"] for e in sl5}.get("21") == "МС", str(sl5)[:200])
         # календарь: перенесённый старт обновляет прежнюю запись
         code, txt = http("POST", "/api/events", json.dumps({"name": "«Ночной забег»", "date": "2026-10-16"}).encode(), J)
         en = json.loads(txt)["id"]

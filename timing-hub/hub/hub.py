@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -726,6 +726,7 @@ class Store:
         # 2.8: обложка, программа, контакты, серия; выдача номеров; эстафеты
         add("events", (("cover", "TEXT"), ("program", "TEXT"), ("contacts", "TEXT"), ("series", "TEXT")))
         add("entries", (("picked_at", "TEXT"), ("members", "TEXT")))
+        add("entries", (("rank", "TEXT"), ("detail", "TEXT")))       # 3.2: разряд; показания секундомеров и попытки (JSON)
         add("entries", (("wave", "TEXT"), ("name", "TEXT"), ("birth_year", "TEXT"), ("team", "TEXT"),
                         ("category", "TEXT")))
         self.con.executescript(
@@ -858,7 +859,7 @@ class Store:
                 ip TEXT
             );
             """)
-        add("registrations", (("relay", "TEXT"), ("leg", "INTEGER")))
+        add("registrations", (("relay", "TEXT"), ("leg", "INTEGER"), ("rank", "TEXT")))
 
     # ---- пользователи и сессии (вход через браузер)
     def users(self) -> list:
@@ -1052,22 +1053,26 @@ class Store:
         self.con.execute("DELETE FROM events WHERE id = ?", (eid,))
 
     # участники: номер, чип, забег, ФИО, год, команда, категория
+    _KEEP = ("picked_at", "members", "detail", "rank")      # поля, которые не теряются, если в новых строках их нет
+
     def set_entries(self, eid: int, rows: list) -> None:
-        # отметка «номер выдан» и состав эстафеты сохраняются по номеру, если в новых строках их нет
-        keep = {b: (p, m) for b, p, m in self.con.execute(
-            "SELECT bib, picked_at, members FROM entries WHERE event_id = ?", (eid,))}
+        keep = {r[0]: dict(zip(self._KEEP, r[1:])) for r in self.con.execute(
+            "SELECT bib, picked_at, members, detail, rank FROM entries WHERE event_id = ?", (eid,))}
         self.con.execute("BEGIN")
         try:
             self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
+
+            def val(r, k):
+                v = r[k] if k in r else keep.get(r["bib"], {}).get(k)
+                return json.dumps(v, ensure_ascii=False) if k == "detail" and isinstance(v, dict) else v
             self.con.executemany(
                 "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members, detail, rank)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
                   r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
                   r.get("result"), r.get("status"), r.get("points"),
-                  r["picked_at"] if "picked_at" in r else keep.get(r["bib"], (None, None))[0],
-                  r["members"] if "members" in r else keep.get(r["bib"], (None, None))[1])
+                  val(r, "picked_at"), val(r, "members"), val(r, "detail"), val(r, "rank"))
                  for r in rows])
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
                 self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
@@ -1082,14 +1087,27 @@ class Store:
             (eid,)).fetchall()
 
     def entries_rows(self, eid: int) -> list:
-        return self._rows(self.con.execute(
+        rows = self._rows(self.con.execute(
             "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
-            " picked_at, members FROM entries"
+            " picked_at, members, rank, detail FROM entries"
             " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
+        for r in rows:
+            try:
+                r["detail"] = json.loads(r["detail"]) if r.get("detail") else None
+            except ValueError:
+                r["detail"] = None
+        return rows
 
-    def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str]) -> int:
-        cur = self.con.execute("UPDATE entries SET result = ?, status = ? WHERE event_id = ? AND bib = ?",
-                               (result or None, status or None, eid, bib))
+    def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str],
+                         detail: Optional[dict] = None, set_detail: bool = False) -> int:
+        """Итог участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
+        if set_detail:
+            dj = json.dumps(detail, ensure_ascii=False) if detail else None
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ? WHERE event_id = ? AND bib = ?",
+                                   (result or None, status or None, dj, eid, bib))
+        else:
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ? WHERE event_id = ? AND bib = ?",
+                                   (result or None, status or None, eid, bib))
         return cur.rowcount
 
     def set_picked(self, eid: int, bib: str, ts: Optional[str]) -> int:
@@ -1102,7 +1120,7 @@ class Store:
     def update_entry(self, eid: int, bib: str, **kw) -> int:
         sets, args = [], []
         for k, v in kw.items():
-            if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed"):
+            if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed", "rank"):
                 raise ValueError(k)
             sets.append(f"{k} = ?")
             args.append(v)
@@ -1133,17 +1151,17 @@ class Store:
 
         self.con.execute(
             "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-            " reg_id, sex, members) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
-             r.get("members")))
+             r.get("members"), r.get("rank")))
 
     def delete_entry(self, eid: int, bib: str) -> None:
         self.con.execute("DELETE FROM entries WHERE event_id = ? AND bib = ?", (eid, bib))
 
     # заявки с публичной формы
     REG_FIELDS = ("last_name", "first_name", "middle_name", "birth_date", "sex", "team", "coach", "distance",
-                  "best", "best_sec", "category", "representative", "contact", "status", "note", "bib", "relay", "leg")
+                  "best", "best_sec", "category", "representative", "contact", "status", "note", "bib", "relay", "leg", "rank")
 
     def add_registration(self, eid: int, d: dict) -> int:
         cols = [k for k in self.REG_FIELDS if k in d] + ["consent_at", "consent_hash", "created_at", "event_id"]
@@ -2008,7 +2026,7 @@ class Hub:
 
     @staticmethod
     def _no_chips(rows: list) -> list:
-        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "picked_at")} for r in rows]
+        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "picked_at", "detail")} for r in rows]
 
     def public_results(self, ev: dict) -> dict:
         r = self.compute(ev)
@@ -2092,6 +2110,72 @@ class Hub:
         if m:
             return f"{m}:{s:02d}.{t}"
         return f"{s}.{t}"
+
+    # ---- разряд / звание (обязательное поле карточки участника)
+    RANKS = ("Б/р", "3 юн.", "2 юн.", "1 юн.", "3 р.", "2 р.", "1 р.", "КМС", "МС", "МСМК", "ЗМС")
+    _RANK_ALIAS = {"бр": "Б/р", "безразряда": "Б/р", "нет": "Б/р", "кмс": "КМС", "мс": "МС", "мсмк": "МСМК", "змс": "ЗМС",
+                   "3юн": "3 юн.", "2юн": "2 юн.", "1юн": "1 юн.", "3р": "3 р.", "2р": "2 р.", "1р": "1 р.",
+                   "3юношеский": "3 юн.", "2юношеский": "2 юн.", "1юношеский": "1 юн.",
+                   "3разряд": "3 р.", "2разряд": "2 р.", "1разряд": "1 р.", "iii": "3 р.", "ii": "2 р.", "i": "1 р.",
+                   "3спортивный": "3 р.", "2спортивный": "2 р.", "1спортивный": "1 р."}
+
+    @classmethod
+    def norm_rank(cls, v) -> str:
+        """Разряд как в протоколах: «1р», «1 разряд», «кмс» → «1 р.», «КМС». Пустое — пустая строка."""
+        t = re.sub(r"\s+", " ", str(v or "")).strip()[:20]
+        key = re.sub(r"[\s./]+", "", t.lower()).replace("первый", "1").replace("второй", "2").replace("третий", "3")
+        return cls._RANK_ALIAS.get(key) or cls._RANK_ALIAS.get(key.rstrip("."), "") or t
+
+    # ---- ручной хронометраж: три секундомера; попытки в прыжках и метаниях
+    @staticmethod
+    def round_up_tenth(x: float) -> float:
+        return math.ceil(round(x * 10, 6)) / 10.0
+
+    @classmethod
+    def stopwatch_main(cls, secs: list) -> Optional[float]:
+        """Главный результат по показаниям секундомеров (правила ручного хронометража):
+        три — среднее по величине (если два совпали, это их время), два — худшее, один — он сам.
+        Округление вверх до десятой доли секунды."""
+        v = sorted(x for x in secs if x is not None)
+        if not v:
+            return None
+        main = v[1] if len(v) >= 3 else v[-1]
+        return cls.round_up_tenth(main)
+
+    ATTEMPT_MARKS = {"X": "X", "Х": "X", "x": "X", "х": "X", "-": "-", "–": "-", "—": "-", "R": "r", "r": "r", "Р": "r"}
+
+    @classmethod
+    def attempt_slots(cls, name) -> int:
+        """Сколько ячеек попыток: 6 в прыжках и метаниях; в высоте и шесте — до 12 покорённых высот."""
+        d = cls.discipline(name)
+        if not d or not d.get("attempts"):
+            return 0
+        return 12 if d.get("result") == "height" else 6
+
+    @classmethod
+    def parse_attempts(cls, rtype: str, cells: list, name=None) -> tuple:
+        """Ячейки попыток → (чистый список, лучший результат (ключ, текст) или None, ошибки [(номер, текст)]).
+        Значения — по типу дисциплины (7.85), отметки: X — неудачная, «-» — пропуск, r — отказ от попытки."""
+        clean, best, errs = [], None, []
+        for i, raw in enumerate(cells, 1):
+            t = re.sub(r"\s+", "", str(raw or ""))
+            if not t:
+                clean.append("")
+                continue
+            if t in cls.ATTEMPT_MARKS:
+                clean.append(cls.ATTEMPT_MARKS[t])
+                continue
+            pr = cls.parse_typed(rtype, t, name)
+            if not pr:
+                errs.append((i, f"попытка {i}: не понял «{t[:10]}» — пример: {cls.result_hint(rtype)}, X — неудачная, «-» — пропуск"))
+                clean.append("")
+                continue
+            clean.append(pr[1])
+            if best is None or pr[0] < best[0]:
+                best = pr
+        while clean and not clean[-1]:
+            clean.pop()
+        return clean, best, errs
 
     RESULT_RE = re.compile(r"(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?")
     STATUSES = ("DNS", "DNF", "DQ", "NM")
@@ -2331,7 +2415,8 @@ class Hub:
                     "distance": meta.get("distance") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
-                    "points": inf.get("points"), "members": inf.get("members") or "",
+                    "points": inf.get("points"), "members": inf.get("members") or "", "rank": inf.get("rank") or "",
+                    "sw": (inf.get("detail") or {}).get("t"), "attempts": (inf.get("detail") or {}).get("a"),
                     "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
                     "manual": sorted(d for d in per if (chip, d) in manual_set)}
 
@@ -2392,6 +2477,7 @@ class Hub:
         res["not_seen"] = [{"bib": r["bib"], "chip": "" if r["chip"].startswith("#") else r["chip"],
                             "wave": r["wave"] or "", "name": r["name"] or "", "birth_year": r["birth_year"] or "",
                             "team": r["team"] or "", "coach": r.get("coach") or "", "members": r.get("members") or "",
+                            "rank": r.get("rank") or "", "sw": (r.get("detail") or {}).get("t"), "attempts": (r.get("detail") or {}).get("a"),
                             "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
                             "distance": wmeta.get(r["wave"] or "", {}).get("distance") or "",
                             **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
@@ -2512,7 +2598,7 @@ class Hub:
         return self._event_view(self.store.get_event(ev["id"]))
 
     ENTRY_COLS = ("bib", "chip", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed",
-                  "result", "points")
+                  "result", "points", "rank")
     _HEAD = (("bib", ("номер", "нагрудн", "№", "bib", "ст.н", "старт.ном")),
              ("chip", ("чип", "chip", "транспонд", "метка")),
              ("wave", ("забег", "волна", "heat", "старт")),
@@ -2525,6 +2611,7 @@ class Hub:
              ("seed", ("заявл", "лучш", "seed")),
              ("result", ("результат", "итог", "result")),
              ("points", ("очк", "балл", "points")),
+             ("rank", ("разряд", "звани", "rank")),
              ("distance", ("дистанц", "distance")))
 
     @classmethod
@@ -2572,6 +2659,8 @@ class Hub:
                          "coach": rec.get("coach", "")[:80] or None, "seed": rec.get("seed", "")[:12] or None})
             if rec.get("distance"):
                 rows[-1]["distance"] = rec["distance"][:20]
+            if "rank" in rec:
+                rows[-1]["rank"] = cls.norm_rank(rec["rank"]) or None
             if "result" in rec:         # колонка есть: итог уже проведённого старта (протокол из другой системы)
                 val = rec["result"].strip()
                 st = val.upper().rstrip(".")
@@ -2785,7 +2874,8 @@ class Hub:
                             r["name"] or "", r["birth_year"] or "", r["team"] or "", r["category"] or "",
                             str(r["lane"] or ""), r["coach"] or "", r["seed"] or "",
                             r.get("status") or r.get("result") or "",
-                            "" if pts is None else (str(int(pts)) if float(pts).is_integer() else str(pts))]
+                            "" if pts is None else (str(int(pts)) if float(pts).is_integer() else str(pts)),
+                            r.get("rank") or ""]
                     while len(vals) > 2 and not vals[-1]:
                         vals.pop()
                     lines.append(";".join(vals))
@@ -2906,7 +2996,8 @@ class Hub:
         if action == "results" and isinstance(data.get("rows"), list):
             bad, n = [], 0
             wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
-            dn_of = {e["bib"]: wd.get(e["wave"] or "") for e in self.store.entries_rows(eid)}
+            old = {e["bib"]: e for e in self.store.entries_rows(eid)}
+            dn_of = {b_: wd.get(e["wave"] or "") for b_, e in old.items()}
             for rw in data["rows"][:2000]:
                 if not isinstance(rw, dict):
                     continue
@@ -2916,17 +3007,59 @@ class Hub:
                 if st and st not in self.STATUSES:
                     bad.append(f"{bib}: неизвестная отметка {st}")
                     continue
+                if bib not in old:
+                    bad.append(f"{bib}: нет такого номера")
+                    continue
+                dn = dn_of.get(bib)
+                rt = self.result_type(dn)
+                detail, set_detail, auto_txt = {}, False, None
+                # показания трёх ручных секундомеров → главный результат по правилам
+                if "t" in rw and isinstance(rw["t"], list):
+                    set_detail = True
+                    secs, tclean, terr = [], [], False
+                    for i, raw in enumerate(rw["t"][:3], 1):
+                        t = str(raw or "").strip()
+                        if not t:
+                            tclean.append("")
+                            continue
+                        pr = self.parse_result(t) if rt == "time" else None
+                        if not pr:
+                            bad.append(f"{bib}: секундомер {i}: не понял «{t[:12]}» — пример: 12.84 или 1:05.3")
+                            terr = True
+                            tclean.append("")
+                            continue
+                        secs.append(pr[0])
+                        tclean.append(pr[1])
+                    if terr:
+                        continue
+                    while tclean and not tclean[-1]:
+                        tclean.pop()
+                    if tclean:
+                        detail["t"] = tclean
+                    m = self.stopwatch_main(secs)
+                    auto_txt = self.fmt_result(m) if m is not None else None
+                # попытки в прыжках и метаниях → лучший результат
+                if "a" in rw and isinstance(rw["a"], list):
+                    set_detail = True
+                    slots = self.attempt_slots(dn) or 6
+                    aclean, best, aerr = self.parse_attempts(rt, rw["a"][:slots], dn)
+                    if aerr:
+                        bad.extend(f"{bib}: {m_}" for _, m_ in aerr)
+                        continue
+                    if aclean:
+                        detail["a"] = aclean
+                    auto_txt = best[1] if best else None
+                # auto — главный результат считает система; иначе значение секретаря остаётся как есть
+                if set_detail and (rw.get("auto") or not txt):
+                    txt = auto_txt or ""
                 pr = None
                 if txt and not st:
-                    rt = self.result_type(dn_of.get(bib))
-                    pr = self.parse_typed(rt, txt, dn_of.get(bib))
+                    pr = self.parse_typed(rt, txt, dn)
                     if not pr:
                         bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
-                if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None):
+                if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None, detail or None, set_detail):
                     n += 1
-                else:
-                    bad.append(f"{bib}: нет такого номера")
             if n:
                 self.store.audit(who, eid, "Введены результаты", f"строк: {n}")
             return ok({"saved": n, "errors": bad})
@@ -3073,6 +3206,11 @@ class Hub:
                       "representative", "contact"):
                 if k in data:
                     upd[k] = str(data[k] or "").strip()[:80] or None
+            if "rank" in data:
+                upd["rank"] = self.norm_rank(data["rank"]) or None
+            # карточка участника не сохраняется без разряда (смена одного статуса заявки — не правка карточки)
+            if set(data) - {"status", "note"} and not (upd["rank"] if "rank" in upd else r.get("rank")):
+                return err("Укажите разряд или звание участника; если разряда нет — «Б/р»")
             if "best" in data:
                 b = str(data["best"] or "").strip()[:12]
                 if b and self.parse_best(b) is None:
@@ -3098,7 +3236,7 @@ class Hub:
                 e = {"name": " ".join(x for x in (upd.get("last_name", r["last_name"]), upd.get("first_name", r["first_name"])) if x),
                      "team": upd.get("team", r["team"]), "coach": upd.get("coach", r["coach"]),
                      "category": upd.get("category", r["category"]), "seed": upd.get("best", r["best"]),
-                     "birth_year": upd.get("birth_date", r["birth_date"])[:4]}
+                     "birth_year": upd.get("birth_date", r["birth_date"])[:4], "rank": upd.get("rank", r.get("rank"))}
                 self.store.update_entry(eid, r["bib"], **e)
                 if upd.get("status") == "rejected":
                     self.store.delete_entry(eid, r["bib"])
@@ -3152,7 +3290,7 @@ class Hub:
                                            "birth_year": r["birth_date"][:4].strip(),
                                            "team": r["team"], "category": r["category"], "lane": lane,
                                            "coach": r["coach"], "seed": r["best"], "reg_id": r["id"], "sex": r["sex"],
-                                           "members": r.get("members")})
+                                           "members": r.get("members"), "rank": r.get("rank")})
                 for rid in ids:
                     self.store.update_registration(rid, bib=bib)
                 self.store.audit(who, eid, "Участник добавлен в забег", f"№{bib} {r['last_name']} → {wave or 'без забега'}")
@@ -3466,6 +3604,9 @@ class Hub:
         team, coach, contact = c(d.get("team"), 80), c(d.get("coach"), 80), c(d.get("contact"), 80)
         if not team:
             errs["team"] = "обязательное поле"
+        rank = self.norm_rank(d.get("rank"))
+        if not rank:
+            errs["rank"] = "укажите разряд или звание; если разряда нет — «Б/р»"
         allowed = self.reg_distances(ev) if relay else self.solo_distances(ev)
         relays = [x for x in self.reg_distances(ev) if x not in allowed]
         low = {a.lower().replace(" ", ""): a for a in allowed}
@@ -3509,7 +3650,7 @@ class Hub:
             minor = age < 18
             if minor and not rep and not team_mode:
                 errs["representative"] = "участнику нет 18 лет — укажите ФИО родителя (законного представителя)"
-        clean = {"last_name": last, "first_name": first, "middle_name": middle or None,
+        clean = {"last_name": last, "first_name": first, "middle_name": middle or None, "rank": rank or None,
                  "birth_date": bdate.isoformat() if bdate else "", "sex": sex, "team": team, "coach": coach or None,
                  "contact": contact or None, "representative": (rep or None) if minor else None,
                  "category": (self.category_for(ev.get("reg_rules") or "", sex, bdate.year) or None) if bdate else None}
@@ -3566,19 +3707,21 @@ class Hub:
                  ("best", "Лучший результат", ("лучш", "результ", "заявл")),
                  ("team", "Команда", ("команд", "клуб", "школ", "организ")),
                  ("coach", "Тренер", ("тренер",)),
-                 ("representative", "Родитель / представитель (до 18 лет)", ("родит", "представ")))
+                 ("representative", "Родитель / представитель (до 18 лет)", ("родит", "представ")),
+                 ("rank", "Разряд / звание*", ("разряд", "звани")))
 
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
-                          "Обязательны поля со звёздочкой. Команду и тренера можно не заполнять, если они указаны в форме."],
+                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера можно не заполнять, если они указаны в форме."],
                 [h for _, h, _ in self.TEAM_COLS]]
         rows += [[""] * len(self.TEAM_COLS) for _ in range(60)]
         return xlsx_build(
             sheets=[("Заявка", rows), ("Справочник", [["Дистанции"]] + [[d] for d in dists] + [[""], ["Пол"], ["М"], ["Ж"]])],
-            widths=[18, 14, 16, 15, 10, 12, 14, 24, 22, 30], header_row=3, title_row=1,
-            validations=[("E4:E63", "\"М,Ж\""), ("F4:F63", f"Справочник!$A$2:$A${len(dists) + 1}")],
+            widths=[18, 14, 16, 15, 10, 12, 14, 24, 22, 30, 16], header_row=3, title_row=1,
+            validations=[("E4:E63", "\"М,Ж\""), ("F4:F63", f"Справочник!$A$2:$A${len(dists) + 1}"),
+                         ("K4:K63", "\"" + ",".join(self.RANKS) + "\"")],
             date_cols=[3], hidden_sheets=[1])
 
     def parse_team_file(self, ev: dict, blob: bytes, name: str = "") -> tuple:
@@ -3644,6 +3787,7 @@ class Hub:
                 ev["_left"][picks[0][0]] -= 1
             res.append({"row": r.get("_row"), "name": f"{clean['last_name']} {clean['first_name']}".strip(),
                         "birth_date": clean["birth_date"], "sex": clean["sex"], "category": clean["category"] or "",
+                        "rank": clean.get("rank") or "",
                         "distance": picks[0][0] if picks else self._clean(r.get("distance"), 20),
                         "best": picks[0][1] if picks else self._clean(r.get("best"), 12),
                         "team": clean["team"], "coach": clean["coach"] or "", "minor": bool(clean.get("representative")) or (
@@ -3850,7 +3994,7 @@ class Hub:
                     rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
                                  "team": r.get("team"), "category": r.get("category"), "lane": order[i],
                                  "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
-                                 "members": r.get("members"), "_ids": r.get("_ids") or [r["id"]]})
+                                 "members": r.get("members"), "rank": r.get("rank"), "_ids": r.get("_ids") or [r["id"]]})
         self.store.con.execute("BEGIN")
         try:
             self.store.con.execute("DELETE FROM waves WHERE event_id = ?", (eid,))
@@ -3873,6 +4017,7 @@ class Hub:
             lst = sorted([r for r in rows if r["wave"] == w["name"]], key=lambda r: (r["lane"] is None, r["lane"] or 0,
                                                                                       int(r["bib"]) if r["bib"].isdigit() else 0))
             heats.append({"name": w["name"], "category": w.get("category") or "", "distance": w.get("distance") or "",
+                          "rtype": self.result_type(w.get("distance")), "slots": self.attempt_slots(w.get("distance")),
                           "start_time": w.get("start_time"), "state": "finished" if w.get("finished_at") else
                           ("running" if w.get("start_time") else "planned"), "entries": lst})
         loose = [r for r in rows if not r["wave"]]
@@ -4428,12 +4573,12 @@ class Hub:
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
         w.writerow(["№ заявки", "Статус", "Фамилия", "Имя", "Отчество", "Дата рождения", "Пол", "Категория",
-                    "Дистанция", "Лучший результат", "Команда", "Тренер", "Представитель", "Контакт", "Нагр. №",
+                    "Дистанция", "Лучший результат", "Разряд", "Команда", "Тренер", "Представитель", "Контакт", "Нагр. №",
                     "Подана"])
         st = {"pending": "на рассмотрении", "approved": "подтверждена", "rejected": "отклонена"}
         for r in self.store.registrations(ev["id"]):
             w.writerow([r["id"], st.get(r["status"], r["status"]), r["last_name"], r["first_name"], r["middle_name"] or "",
-                        r["birth_date"], r["sex"], r["category"] or "", r["distance"], r["best"] or "", r["team"] or "",
+                        r["birth_date"], r["sex"], r["category"] or "", r["distance"], r["best"] or "", r.get("rank") or "", r["team"] or "",
                         r["coach"] or "", r["representative"] or "", r["contact"] or "", r["bib"] or "", r["created_at"]])
         from urllib.parse import quote
         return 200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(), {

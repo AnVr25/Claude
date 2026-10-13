@@ -425,6 +425,11 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 body[data-view=timing][data-mode=entry]{background:var(--ice)}
 body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 70px}
 .entry td input.res{width:110px;font:600 18px var(--head);padding:5px 8px;text-align:right}
+.entry td input.sw,.entry td input.att{width:84px;font:500 16px var(--head);padding:5px 6px;text-align:right;min-height:40px}
+.entry td input.att{width:72px}
+.entry td input.res[data-man="1"]{border-color:var(--start)}
+.entry .mtag{display:block;font-size:11px;color:var(--start);text-align:right;cursor:pointer;text-decoration:underline}
+.entry th.grp{text-align:center}
 .entry td select{width:auto;padding:5px 6px}
 .entry tr.dirty td{background:#F3481D0d}
 .entry tr.st-out td{opacity:.6}
@@ -709,6 +714,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
           <input id="nTeam" placeholder="Команда" aria-label="Команда">
           <input id="nChip" placeholder="Чип (если есть)" aria-label="Чип">
           <select id="nWave" aria-label="Забег"></select>
+          <select id="nRank" aria-label="Разряд или звание (обязательно)" title="Разряд или звание — обязательно; нет разряда — Б/р"></select>
           <button class="primary" id="nAdd">Добавить</button>
         </div>
         <p class="small muted" style="margin:6px 0 12px">Или списком: вставьте строки ниже, перетащите Excel / CSV, загрузите файл Wiclax.</p>
@@ -740,7 +746,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
       <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
       <div class="tbl scroll" style="max-height:620px"><table>
-        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
+        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
         <tbody id="gBody"></tbody>
       </table></div>
       <datalist id="gCats"></datalist>
@@ -756,6 +762,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
         <div class="regform">
           <input id="mLast" placeholder="Фамилия"><input id="mFirst" placeholder="Имя"><input id="mBirth" type="date" aria-label="Дата рождения">
           <select id="mSex" aria-label="Пол"><option value="">пол</option><option>М</option><option>Ж</option></select>
+          <select id="mRank" aria-label="Разряд или звание (обязательно)"></select>
           <input id="mTeam" placeholder="Команда"><input id="mCoach" placeholder="Тренер"><select id="mDist" aria-label="Дистанция"></select>
           <input id="mBest" placeholder="лучший, 12.8"><input id="mRep" placeholder="представитель (до 18 лет)">
           <button class="primary" id="mAdd">Добавить</button>
@@ -838,7 +845,7 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
   <div class="tabs" id="eHeats"></div>
   <p class="small muted" id="eHint" style="margin:6px 0"></p>
   <div class="tbl entry"><table>
-    <thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Команда</th><th>Результат</th><th>Отметка</th><th>Место</th></tr></thead>
+    <thead id="eHead"></thead>
     <tbody id="eBody"></tbody>
   </table></div>
   <div class="row" style="margin-top:12px"><span class="small muted" id="eInfo">Enter — к следующему участнику. Несохранённые строки подсвечены.</span><span class="spacer"></span><button id="eFinish">Завершить соревнование</button></div>
@@ -1648,11 +1655,12 @@ $("nAdd").onclick = async () => {
   const lines = $("dEntries").value.split("\n").filter(l => l.trim());
   if (lines.some(l => l.split(";")[0].trim() === bib) && !confirm(`Номер ${bib} уже есть в списке. Добавить ещё одного с этим номером?`)) return;
   const clean = (v) => v.trim().replace(/;/g, " ");
-  lines.push([bib, clean($("nChip").value), $("nWave").value, name, clean($("nYear").value), clean($("nTeam").value)].join(";").replace(/;+$/, ""));
+  if (!$("nRank").value) { $("nRank").focus(); return toast("Укажите разряд или звание; если разряда нет — «Б/р»"); }
+  lines.push([bib, clean($("nChip").value), $("nWave").value, name, clean($("nYear").value), clean($("nTeam").value), "", "", "", "", "", "", $("nRank").value].join(";").replace(/;+$/, ""));
   try{
     const r = await api(`/api/events/${curId}/entries`, {text: lines.join("\n")});
     $("dEntriesInfo").textContent = `в списке: ${r.count}`;
-    ["nBib", "nName", "nYear", "nChip"].forEach(i => $(i).value = "");
+    ["nBib", "nName", "nYear", "nChip"].forEach(i => $(i).value = ""); $("nRank").value = "";
     await loadEntries(); loadEvents._sig = null; await loadEvents(); $("nBib").focus(); toast(`${name} добавлен(а)`);
   }catch(e){ toast("Ошибка: " + e.message); }
 };
@@ -1699,6 +1707,9 @@ function distNames(ev, solo){
 }
 let regData = null, regLoaded = null, regDefaults = "";
 const stName = {pending:"на рассмотрении", approved:"подтверждена", rejected:"отклонена"};
+// разряд / звание — обязательное поле карточки участника
+const RANKS = ["Б/р","3 юн.","2 юн.","1 юн.","3 р.","2 р.","1 р.","КМС","МС","МСМК","ЗМС"];
+const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
 function regBusy(){ const a = document.activeElement; return a && $("tab-reg").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName); }
 function renderRegHead(force){
   const ev = curEvent();
@@ -1752,7 +1763,7 @@ $("gSave").onclick = async () => {
   catch(e){ toast("Ошибка: "+e.message); }
 };
 async function loadRegs(){
-  const ev = curEvent(); if (!ev) { $("gBody").innerHTML = '<tr><td colspan="10" class="empty">Выберите соревнование</td></tr>'; return; }
+  const ev = curEvent(); if (!ev) { $("gBody").innerHTML = '<tr><td colspan="11" class="empty">Выберите соревнование</td></tr>'; return; }
   if (regBusy() && regLoaded === ev.id) return;
   try{
     const [r, sl] = await Promise.all([api(`/api/events/${ev.id}/regs`), api(`/api/events/${ev.id}/startlist`)]);
@@ -1779,6 +1790,7 @@ function renderRegs(){
       <div class="small muted">${esc(x.birth_date.split("-").reverse().join("."))}${x.representative?" · предст.: "+esc(x.representative):""}${x.contact?" · "+esc(x.contact):""}</div>
       ${x.dup_of?`<div class="dupe">повтор заявки №${x.dup_of}</div>`:""}${x.note?`<div class="small muted">${esc(x.note)}</div>`:""}</td>
     <td>${esc(x.sex)}</td>
+    <td><select class="cell" data-f="rank" aria-label="Разряд"${x.rank ? "" : ' style="border-color:var(--warn)"'}>${rankOpts(x.rank, "укажите")}</select></td>
     <td><input class="cell" data-f="category" list="gCats" value="${esc(x.category||"")}" style="width:110px;${x.category?"":"border-color:var(--warn)"}"></td>
     <td><select class="cell" data-f="distance">${[...new Set(dists.concat([x.distance]))].map(d => `<option ${d===x.distance?"selected":""}>${esc(d)}</option>`).join("")}</select></td>
     <td><input class="cell mono" data-f="best" value="${esc(x.best||"")}" style="width:72px"></td>
@@ -1786,7 +1798,7 @@ function renderRegs(){
     <td><span class="st-pill ${x.status}">${stName[x.status]}</span></td>
     <td style="white-space:nowrap">${x.status!=="approved"?'<button class="sm ok" data-st="approved" title="Подтвердить">✓ Подтвердить</button>':""}${x.status!=="rejected"?' <button class="sm danger" data-st="rejected" title="Отклонить">✕</button>':""}${x.status!=="pending"?' <button class="sm" data-st="pending" title="Вернуть на рассмотрение">↺</button>':""}</td>
     <td class="small">${x.entry_bib?`<b>${esc(x.entry_bib)}</b><div class="muted">${esc(x.entry_wave||"")}${x.entry_lane?" · дор. "+x.entry_lane:""}</div>`:"—"}</td>
-  </tr>`).join("") || `<tr><td colspan="10" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
+  </tr>`).join("") || `<tr><td colspan="11" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
 }
 $("gFilter").onchange = renderRegs; $("gSearch").oninput = renderRegs;
 $("gTabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (!b) return; $("gFilter").value = b.dataset.f; renderRegs(); });
@@ -1812,9 +1824,10 @@ $("gRecat").onclick = async () => {
   try{ await api(`/api/events/${curId}/regs`, {recategorize:true}); await loadRegs(); toast("Категории пересчитаны"); }catch(err){ toast("Ошибка: "+err.message); }
 };
 $("mAdd").onclick = async () => {
-  const body = {last_name:$("mLast").value, first_name:$("mFirst").value, birth_date:$("mBirth").value, sex:$("mSex").value,
+  if (!$("mRank").value) { $("mRank").focus(); return toast("Укажите разряд или звание; если разряда нет — «Б/р»"); }
+  const body = {last_name:$("mLast").value, first_name:$("mFirst").value, birth_date:$("mBirth").value, sex:$("mSex").value, rank:$("mRank").value,
     team:$("mTeam").value, coach:$("mCoach").value, representative:$("mRep").value, distances:[{distance:$("mDist").value, best:$("mBest").value}]};
-  try{ const r = await api(`/api/events/${curId}/regs`, body); ["mLast","mFirst","mBirth","mBest","mRep"].forEach(i => $(i).value=""); $("mLast").focus();
+  try{ const r = await api(`/api/events/${curId}/regs`, body); ["mLast","mFirst","mBirth","mBest","mRep"].forEach(i => $(i).value=""); $("mRank").value = ""; $("mLast").focus();
     toast(`${r.name} добавлен(а)${r.category?" · "+r.category:""}`); regLoaded = null; await loadRegs(); }
   catch(err){ toast("Ошибка: "+err.message); }
 };
@@ -2603,37 +2616,99 @@ async function loadEntry(){
     renderEntry();
   }catch(e){ console.warn(e); }
 }
+/* показания трёх секундомеров и попытки: главный результат считается сам, как на сервере */
+const T_RE = /^(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?$/;
+function parseT(t){
+  t = String(t || "").replace(/\s+/g, ""); const m = T_RE.exec(t); if (!m || !t) return null;
+  const [, a, b, c, f] = m, h = b != null ? +a : 0, mi = b != null ? +b : (a != null ? +a : 0), sec = +c;
+  if ((a != null || b != null) && sec >= 60) return null;
+  const tot = h * 3600 + mi * 60 + sec + (f ? +f / Math.pow(10, f.length) : 0); return tot > 0 ? tot : null;
+}
+function fmtT(sec){
+  const tn = Math.round(sec * 10), h = Math.floor(tn / 36000), m = Math.floor(tn % 36000 / 600), s = Math.floor(tn % 600 / 10), t = tn % 10;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${t}` : m ? `${m}:${String(s).padStart(2, "0")}.${t}` : `${s}.${t}`;
+}
+function swMain(vals){
+  const v = vals.map(parseT).filter(x => x != null).sort((a, b) => a - b); if (!v.length) return "";
+  const main = v.length >= 3 ? v[1] : v[v.length - 1];
+  return fmtT(Math.ceil(+(main * 10).toFixed(6)) / 10);
+}
+function attBest(vals, hi){
+  let best = null; vals.forEach(x => { const m = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(String(x || "").replace(/\s+/g, "")); if (m) { const v = +(m[1] + "." + (m[2] || "0")); if (v > 0 && (best == null || v > best)) best = v; } });
+  return best == null ? "" : best.toFixed(2);
+}
+// что вводить в забеге: «time» — три секундомера, «att» — попытки (6 или 12 для высоты), «one» — одно поле (очки и т.п.)
+function entryMode(g){
+  const dd = g && g.sub ? discBy(g.sub.split(" · ").pop()) : null;
+  if (!dd || dd.result === "time") return {kind: "sw", rt: "time", dd};
+  if (dd.attempts) return {kind: "att", rt: dd.result, n: dd.result === "height" ? 12 : 6, dd};
+  return {kind: "one", rt: dd.result, dd};
+}
+const RT_HINT = {
+  sw: "Три ручных секундомера: главный результат считается сам — среднее из трёх (если два совпали, это их время), из двух — худшее. Округление вверх до 0,1 с. Можно вписать главный результат вручную: он станет главным.",
+  distance: "Попытки: расстояние в метрах (7.85 или 7,85), X — неудачная, «-» — пропуск. Лучший результат определяется сам; его можно поправить вручную.",
+  height: "Покорённые высоты в метрах по порядку (1.80, 1.85 …), X — неудачная попытка. Лучшая высота определяется сама; детальные попытки по высотам ведутся в протоколе судей.",
+  points: "Результат — сумма очков многоборья по таблице: целое число, например 7250."};
 function renderEntry(){
   if (!eData) return;
   $("eHeats").innerHTML = eData.groups.map(g => `<button data-h="${esc(g.name)}" class="${g.name===eHeat?"on":""}">${esc(g.name)}${g.sub?` <span class="small muted" style="font-family:var(--body)">${esc(g.sub)}</span>`:""}<i>${g.entries.length}</i></button>`).join("");
-  const g = eData.groups.find(x => x.name === eHeat);
-  const dd = g && g.sub ? discBy(g.sub.split(" · ").pop()) : null, rt = dd ? dd.result : "time";
-  const RT_HINT = {time: "", distance: "Результат — расстояние в метрах, лучшее из попыток: 7.85 или 7,85.", height: "Результат — лучшая взятая высота в метрах: 1.95 или 1,95.", points: "Результат — сумма очков многоборья по таблице: целое число, например 7250."};
-  $("eHint").textContent = RT_HINT[rt] || "";
+  const g = eData.groups.find(x => x.name === eHeat), md = entryMode(g);
+  $("eHint").textContent = md.kind === "sw" ? RT_HINT.sw : md.kind === "att" ? RT_HINT[md.rt] : RT_HINT[md.rt] || "";
+  const head = md.kind === "sw" ? ["Дор.", "№", "Участник", "Разряд", "Секундомер 1", "Секундомер 2", "Секундомер 3", "Результат", "Отметка", "Место"]
+    : md.kind === "att" ? ["№", "Участник", "Разряд", ...Array.from({length: md.n}, (_, i) => "П" + (i + 1)), "Лучший", "Отметка", "Место"]
+    : ["Дор.", "№", "Участник", "Разряд", "Результат", "Отметка", "Место"];
+  $("eHead").innerHTML = "<tr>" + head.map(h => `<th>${esc(h)}</th>`).join("") + "</tr>";
+  const cells = (r) => {
+    const d = r.detail || {}, ph = md.rt === "points" ? "очки" : md.rt === "time" ? "—" : "м";
+    const main = `<td><input class="res" value="${esc(r.result||"")}" inputmode="decimal" placeholder="${ph}" aria-label="Результат ${esc(r.bib)}"><span class="mtag hide" title="Считать результат автоматически">вручную · авто</span></td>`;
+    if (md.kind === "sw") return [0, 1, 2].map(i => `<td><input class="sw" data-i="${i}" value="${esc((d.t || [])[i] || "")}" inputmode="decimal" placeholder="—" aria-label="Секундомер ${i + 1}, ${esc(r.bib)}"></td>`).join("") + main;
+    if (md.kind === "att") return Array.from({length: md.n}, (_, i) => `<td><input class="att" data-i="${i}" value="${esc((d.a || [])[i] || "")}" placeholder="—" aria-label="Попытка ${i + 1}, ${esc(r.bib)}"></td>`).join("") + main;
+    return main;
+  };
   $("eBody").innerHTML = g ? g.entries.map(r => `<tr data-bib="${esc(r.bib)}" class="${r.status?"st-out":""}">
-      <td>${r.lane ?? ""}</td><td class="bib">${esc(r.bib)}</td>
-      <td><b>${esc(r.name||"")}</b><div class="small muted">${esc(r.birth_year||"")}</div></td><td class="small">${esc(r.team||"")}</td>
-      <td><input class="res" value="${esc(r.result||"")}" inputmode="decimal" placeholder="${rt === "time" ? "—" : rt === "points" ? "очки" : "м"}" aria-label="Результат ${esc(r.bib)}"></td>
+      ${md.kind === "att" ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td>
+      <td><b>${esc(r.name||"")}</b><div class="small muted">${esc(r.birth_year||"")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank||"")}</td>
+      ${cells(r)}
       <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([k,t]) => `<option value="${k}" ${r.status===k?"selected":""}>${t}</option>`).join("")}</select></td>
       <td class="pl p${eData.place[r.bib]||""}">${eData.place[r.bib] ?? ""}</td></tr>`).join("")
-    : '<tr><td colspan="7" class="empty">Участников нет. Загрузите стартовый список на этапе «Подготовка» или сформируйте забеги из заявок.</td></tr>';
+    : `<tr><td colspan="${head.length}" class="empty">Участников нет. Загрузите стартовый список на этапе «Подготовка» или сформируйте забеги из заявок.</td></tr>`;
+  // главный результат введён вручную, если он не совпадает с автоматическим
+  if (g) g.entries.forEach(r => { const d = r.detail || {}; const tr = $("eBody").querySelector(`tr[data-bib="${CSS.escape(String(r.bib))}"]`); if (!tr) return;
+    const calc = md.kind === "sw" ? swMain(d.t || []) : md.kind === "att" ? attBest(d.a || []) : null;
+    if (calc != null && r.result && (d.t || d.a) && calc !== r.result) setManual(tr, true); });
+}
+function setManual(tr, on){ const res = tr.querySelector("input.res"); res.dataset.man = on ? "1" : ""; const t = tr.querySelector(".mtag"); if (t) t.classList.toggle("hide", !on); }
+function recalcRow(tr){
+  const res = tr.querySelector("input.res"); if (res.dataset.man === "1") return;
+  const sw = [...tr.querySelectorAll("input.sw")].map(i => i.value), at = [...tr.querySelectorAll("input.att")].map(i => i.value);
+  if (sw.length) res.value = swMain(sw); else if (at.length) res.value = attBest(at);
 }
 $("eHeats").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-h]"); if (!b) return;
   if (document.querySelector("#eBody tr.dirty") && !confirm("Есть несохранённые результаты в этом забеге. Перейти без сохранения?")) return;
   eHeat = b.dataset.h; renderEntry();
 });
-$("eBody").addEventListener("input", (e) => { const tr = e.target.closest("tr"); if (tr) tr.classList.add("dirty"); });
+$("eBody").addEventListener("input", (e) => { const tr = e.target.closest("tr"); if (!tr) return; tr.classList.add("dirty");
+  if (e.target.classList.contains("res")) setManual(tr, !!e.target.value.trim() && (tr.querySelector("input.sw,input.att") != null));
+  else if (e.target.matches("input.sw,input.att")) recalcRow(tr); });
+$("eBody").addEventListener("click", (e) => { const t = e.target.closest(".mtag"); if (!t) return; const tr = t.closest("tr"); setManual(tr, false); recalcRow(tr); tr.classList.add("dirty"); });
 $("eBody").addEventListener("change", (e) => { const tr = e.target.closest("tr"); if (tr) tr.classList.add("dirty"); });
 $("eBody").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || !e.target.classList.contains("res")) return;
+  if (e.key !== "Enter" || !e.target.matches("input.res,input.sw,input.att")) return;
   e.preventDefault();
-  const all = [...document.querySelectorAll("#eBody input.res")], i = all.indexOf(e.target);
+  // в строке с секундомерами или попытками главный результат пропускаем, пока он считается сам
+  const all = [...document.querySelectorAll("#eBody input.res,#eBody input.sw,#eBody input.att")].filter(i => !(i.classList.contains("res")
+    && i.closest("tr").querySelector("input.sw,input.att") && i.dataset.man !== "1" && i !== e.target)), i = all.indexOf(e.target);
   if (all[i+1]) { all[i+1].focus(); all[i+1].select(); } else $("eSave").click();
 });
 $("eSave").onclick = async () => {
-  const rows = [...document.querySelectorAll("#eBody tr.dirty")].map(tr => ({bib: tr.dataset.bib,
-    result: tr.querySelector("input.res").value.trim(), status: tr.querySelector("select.stsel").value}));
+  const rows = [...document.querySelectorAll("#eBody tr.dirty")].map(tr => {
+    const row = {bib: tr.dataset.bib, result: tr.querySelector("input.res").value.trim(), status: tr.querySelector("select.stsel").value,
+      auto: tr.querySelector("input.res").dataset.man !== "1"};
+    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")];
+    if (sw.length) row.t = sw.map(i => i.value.trim());
+    if (at.length) row.a = at.map(i => i.value.trim());
+    return row; });
   if (!rows.length) return toast("Нет изменений");
   try{
     const r = await api(`/api/events/${curId}/results`, {rows});
@@ -2717,6 +2792,7 @@ $("uSave").onclick = async () => {
 /* ---------- запуск ---------- */
 (async function init(){
   loadDisc();
+  ["nRank", "mRank"].forEach(i => $(i).innerHTML = rankOpts("", "Разряд *"));
   await loadMe(); await loadStatus(); await loadDevices();
   try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
   showTab();

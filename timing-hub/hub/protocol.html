@@ -99,6 +99,12 @@ thead{display:table-header-group}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(231,30,37,.6)}70%{box-shadow:0 0 0 7px rgba(231,30,37,0)}100%{box-shadow:0 0 0 0 rgba(231,30,37,0)}}
 @media (prefers-reduced-motion:reduce){.stamp.live::before{animation:none}}
 
+.sheet.land{width:297mm;min-height:210mm}
+.hide{display:none!important}
+.att th,.att td{padding:3px 2px}
+.att td.cell{height:9mm;min-width:10mm;border-left:1px solid var(--pr-line-2)}
+.att th.sub{font-weight:600;font-size:10px;padding:2px 0;text-align:center}
+.att td.big{height:9mm}
 @media print{
   :root{--pr-ink:#000;--pr-muted:#3B4452;--pr-line:#B9C3D0;--pr-line-2:#9AA7B8}
   html,body{background:#fff;color:#000}
@@ -123,6 +129,14 @@ thead{display:table-header-group}
     <option value="teams">Командный зачёт</option>
     <option value="start">Стартовый протокол</option>
   </select>
+  <select id="smode" class="hide" title="Как построить стартовый протокол" aria-label="Режим стартового протокола">
+    <option value="heats">По забегам / группам</option>
+    <option value="list">Общим списком</option>
+  </select>
+  <select id="orient" class="hide" title="Ориентация печатной формы" aria-label="Ориентация листа">
+    <option value="portrait">Вертикальный лист</option>
+    <option value="landscape">Горизонтальный лист</option>
+  </select>
   <select id="grp"><option value="">все дистанции и категории</option></select>
   <select id="team" title="Показать только участников одной команды — например, своей школы"><option value="">все команды</option></select>
   <label id="chipBox"><input type="checkbox" id="showChip"> чипы</label>
@@ -144,11 +158,12 @@ const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.par
 let R=null, SL=null;
 const kind=new URLSearchParams(location.search).get("kind");
 const QTEAM=new URLSearchParams(location.search).get("team")||"";
-["mode","grp","team","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
+["mode","smode","orient","grp","team","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
   const el=$(id), saved=LS.get("protocol."+id,null);
   if(saved!==null){ if(el.type==="checkbox") el.checked=saved; else if(id!=="grp"&&id!=="team") el.value=saved; }
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
 });
+{const q=new URLSearchParams(location.search); ["smode","orient"].forEach(k=>{const v=q.get(k); if(v&&[...$(k).options].some(o=>o.value===v)) $(k).value=v;});}
 const dateRu=d=>{ if(!d) return ""; const [y,m,dd]=d.split("-"); return `${dd}.${m}.${y}`; };
 const PUB=window.PUB, SLUG=PUB?PUB[1]:"", A=window.ASSETS||"/assets/";
 $("barLogo").src=A+"sakhstart-dark.svg";
@@ -257,31 +272,67 @@ function headHtml(ev,title){
     <div class="ev">${esc(ev.name)}</div>
     <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div>`;
 }
+function setPage(land){
+  let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
+  st.textContent=`@page{size:A4 ${land?"landscape":"portrait"};margin:${land?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`;
+  $("sheet").classList.toggle("land",!!land);
+}
 function renderStart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
   const ev=(R||SL).event, gf=$("grp").value, coach=$("showCoach").checked;
+  const list=$("smode").value==="list", land=list&&$("orient").value==="landscape";
+  setPage(land);
   const anyCoach=SL.heats.some(h=>h.entries.some(e=>e.coach)), anySeed=SL.heats.some(h=>h.entries.some(e=>e.seed));
-  const anyLane=SL.heats.some(h=>h.entries.some(e=>e.lane));
+  const anyLane=SL.heats.some(h=>h.entries.some(e=>e.lane)), anyRank=SL.heats.concat([{entries:SL.no_heat||[]}]).some(h=>h.entries.some(e=>e.rank));
   let body="";
-  SL.heats.forEach(h=>{
+  if(!list) SL.heats.forEach(h=>{
     if(gf&&gkey(h)!==gf) return;
     if(!h.entries.length) return;
     body+=`<h2>${esc(h.name)} <small>— ${esc(gtitle(h.distance,h.category))} · ${h.entries.length} уч.</small></h2>
-      <table><thead><tr>${anyLane?'<th style="width:42px">Дор.</th>':""}<th style="width:52px">Нагр. №</th><th>Фамилия, имя</th><th style="width:46px">Год рожд.</th><th style="width:26%">Команда</th>
+      <table><thead><tr>${anyLane?'<th style="width:42px">Дор.</th>':""}<th style="width:52px">Нагр. №</th><th>Фамилия, имя</th><th style="width:46px">Год рожд.</th>${anyRank?'<th style="width:52px">Разряд</th>':""}<th style="width:26%">Команда</th>
       ${coach&&anyCoach?'<th style="width:20%">Тренер</th>':""}${anySeed?'<th style="width:70px">Заявл. рез.</th>':""}<th style="width:70px">Результат</th></tr></thead><tbody>
-      ${h.entries.map(e=>`<tr>${anyLane?`<td class="c"><b>${e.lane??""}</b></td>`:""}<td class="c">${esc(e.bib)}</td><td>${esc(e.name||"")}${mem(e)}</td><td class="c">${esc(e.birth_year||"")}</td><td>${esc(e.team||"")}</td>
+      ${h.entries.map(e=>`<tr>${anyLane?`<td class="c"><b>${e.lane??""}</b></td>`:""}<td class="c">${esc(e.bib)}</td><td>${esc(e.name||"")}${mem(e)}</td><td class="c">${esc(e.birth_year||"")}</td>${anyRank?`<td class="c">${esc(e.rank||"")}</td>`:""}<td>${esc(e.team||"")}</td>
         ${coach&&anyCoach?`<td>${esc(e.coach||"")}</td>`:""}${anySeed?`<td class="r">${esc(e.seed||"")}</td>`:""}<td></td></tr>`).join("")}</tbody></table>`;
   });
+  else{
+    // «Общим списком»: все участники дисциплины и категории одной таблицей, без разбивки на забеги;
+    // для прыжков и метаний — сетка попыток (на горизонтальном листе помещаются все)
+    const groups={};
+    SL.heats.concat(SL.no_heat&&SL.no_heat.length?[{name:"",category:"",distance:"",entries:SL.no_heat,rtype:"time",slots:0}]:[]).forEach(h=>{
+      if(gf&&gkey(h)!==gf) return;
+      const k=gkey(h), g=groups[k]||(groups[k]={dist:h.distance,cat:h.category,slots:h.slots||0,rtype:h.rtype||"time",entries:[]});
+      h.entries.forEach(e=>g.entries.push(e));
+    });
+    Object.values(groups).forEach(g=>{
+      if(!g.entries.length) return;
+      g.entries.sort((a,b)=>(parseInt(a.bib)||0)-(parseInt(b.bib)||0));
+      const n=g.slots, grid=n>0;
+      const cols=(land?7:4)+0; void cols;
+      body+=`<h2>${esc(gtitle(g.dist,g.cat))} <small>— общий список · ${g.entries.length} уч.</small></h2>
+        <table class="${grid?"att":""}"><thead><tr><th rowspan="${grid?2:1}" style="width:30px">№ п/п</th><th rowspan="${grid?2:1}" style="width:46px">Нагр. №</th><th rowspan="${grid?2:1}">Фамилия, имя</th><th rowspan="${grid?2:1}" style="width:44px">Год рожд.</th>${anyRank?`<th rowspan="${grid?2:1}" style="width:50px">Разряд</th>`:""}<th rowspan="${grid?2:1}" style="width:${land?"18%":"22%"}">Команда</th>
+        ${coach&&anyCoach?`<th rowspan="${grid?2:1}" style="width:${land?"13%":"16%"}">Тренер</th>`:""}${anySeed?`<th rowspan="${grid?2:1}" style="width:58px">Заявл. рез.</th>`:""}
+        ${grid?`<th colspan="${n}" class="sub" style="text-align:center">${g.rtype==="height"?"Высоты и попытки":"Попытки"}</th>`:""}<th rowspan="${grid?2:1}" style="width:${land?"66px":"60px"}">${grid?"Лучший":"Результат"}</th><th rowspan="${grid?2:1}" style="width:40px">Место</th></tr>
+        ${grid?`<tr>${Array.from({length:n},(_,i)=>`<th class="sub">${g.rtype==="height"?"":i+1}</th>`).join("")}</tr>`:""}</thead><tbody>
+        ${g.entries.map((e,i)=>`<tr><td class="c">${i+1}</td><td class="c">${esc(e.bib)}</td><td>${esc(e.name||"")}${mem(e)}</td><td class="c">${esc(e.birth_year||"")}</td>${anyRank?`<td class="c">${esc(e.rank||"")}</td>`:""}<td>${esc(e.team||"")}</td>
+          ${coach&&anyCoach?`<td>${esc(e.coach||"")}</td>`:""}${anySeed?`<td class="r">${esc(e.seed||"")}</td>`:""}${grid?Array.from({length:n},()=>'<td class="cell"></td>').join(""):""}<td${grid?' class="big"':""}></td><td></td></tr>`).join("")}</tbody></table>`;
+    });
+  }
   if(!body) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Забегов пока нет — сформируйте их во вкладке «Регистрация».</div>';
   $("sheet").innerHTML=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ")+body+
-    `<div class="note">Забеги сформированы по заявленным результатам. Колонка «Результат» — для записи судьями.</div>`+signs(ev)+
+    `<div class="note">${list?"Участники дисциплины записаны одним списком в порядке нагрудных номеров. Колонки попыток и результата — для записи судьями.":"Забеги сформированы по заявленным результатам. Колонка «Результат» — для записи судьями."}</div>`+signs(ev)+
     `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div>`;
+}
+function syncStartCtl(){
+  const isStart=!R&&PUB&&SL||$("mode").value==="start"; const list=$("smode").value==="list";
+  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
 }
 
 function render(){
+  syncStartCtl();
   if(!R){ if(PUB&&SL) renderStart(); return; }
   const ev=R.event, mode=$("mode").value, gf=$("grp").value, tf=$("team").hidden?"":$("team").value;
   if(mode==="start") return renderStart();
+  setPage(false);
   const byTeam=x=>!tf||x.team===tf;
   const anyPts=R.finished.some(x=>x.points!=null);
   const fmtPts=v=>v==null?"":String(v).replace(".",",");
@@ -290,20 +341,23 @@ function render(){
   const fin=ev.finish_device, splitDevs=(R.devices||[]).filter(d=>d!==fin);
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
   const anyTeam=!tf&&(R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team)), hasHeats=ev.waves.length>0;
+  const anyRank=R.finished.some(x=>x.rank)||R.not_seen.some(x=>x.rank);
+  const anySw=R.finished.some(x=>x.sw&&x.sw.length), anyAtt=R.finished.some(x=>x.attempts&&x.attempts.length);
+  const attTxt=x=>(x.attempts||[]).map(v=>v||"–").join(" · "), swTxt=x=>(x.sw||[]).map(v=>v||"–").join(" / ");
   const man=x=>(x.manual||[]).includes(fin);
   const allManual=R.finished.length&&R.finished.every(man), someManual=R.finished.some(man);
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
   const startTxt=ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
 
   const head=(placeLbl,withHeat)=>`<thead><tr><th style="width:42px">${placeLbl}</th><th style="width:52px">Нагр. №</th>
-    ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
+    ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyRank?'<th style="width:46px">Разряд</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
     ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
-    <th style="width:78px">Результат</th>${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
   const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
-    ${anyName?`<td>${esc(x.name)}${mem(x)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
+    ${anyName?`<td>${esc(x.name)}${mem(x)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
     ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
-    <td class="r"><b>${esc(res)}</b></td>${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
+    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
   const handNote=x=>man(x)&&!allManual?"р":"";
   // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
   const outCode=x=>x.status||(x.last_point?"DNF":"DNS");
