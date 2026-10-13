@@ -202,6 +202,10 @@ tr.rej td{opacity:.55}
 button.bigprint{background:var(--track);border-color:var(--track);color:#fff;font-size:17px;padding:14px 22px;white-space:normal}
 button.bigprint:hover{filter:brightness(1.08)}
 .cartbox .ci label{flex:1;min-width:0}
+body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
+.wzp-head{display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.wzp-title{display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap;min-width:0}
+.wzp-title h1{margin:0;font-size:26px}
 .wzp-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}
 .wzp-disc{display:grid;gap:4px}.wzp-disc select{min-width:240px}
 .wzp-kind{font:700 14px var(--body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
@@ -218,7 +222,8 @@ button.bigprint:hover{filter:brightness(1.08)}
 .wzp-lock{padding:10px 14px;border-radius:var(--r);background:#FFF4E0;border:1px solid #E5B25D;color:#5B3A00}
 .wzp-frame{width:100%;height:68vh;border:1px solid var(--line);border-radius:var(--r);background:#fff}
 .wzp-nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.wzp-grid input{width:100%;min-width:54px;padding:5px 6px;font:14px var(--mono)}.wzp-grid td{padding:3px 4px}
+.wzp-grid{width:100%}.wzp-grid td > b{white-space:nowrap}
+.wzp-grid input{width:100%;min-width:58px;padding:5px 6px;font:14px var(--mono)}.wzp-grid td{padding:3px 4px}
 .wzp-grid td.out{font:700 14px var(--mono);white-space:nowrap}.wzp-grid tr.dirty{background:#FFF9E5}
 .wzp-grid input.err{border-color:var(--track)}
 .wzp-grid select.dr{min-width:118px;width:100%;padding:5px 6px}.wzp-grid select.dr.man{border-color:var(--track);font-weight:700}
@@ -956,8 +961,9 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <!-- МАСТЕР ПРОТОКОЛОВ -->
 <section id="tab-wizard" class="hide">
-  <div class="pagehead">
-    <div><h1>Мастер протоколов</h1><p class="lead">Выберите дисциплину — мастер сам поймёт, бег это или техника, и проведёт по пяти шагам: фильтр, сетка, стартовый протокол, ввод результатов, итоговый протокол.</p></div>
+  <div class="wzp-head">
+    <a class="btn" id="wzpBack" href="#reg">← К этапам соревнования</a>
+    <div class="wzp-title"><h1>Мастер протоколов</h1><span class="small muted" id="wzpEv"></span></div>
   </div>
   <div class="wzp-top">
     <label class="wzp-disc"><span class="small muted">Дисциплина</span><select id="wzpDisc" aria-label="Дисциплина"></select></label>
@@ -1186,7 +1192,7 @@ const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">
 
 /* ---------- навигация: главная, этапы соревнования, система ---------- */
 const STEPS = ["prep","reg","wizard","check","timing","results","files"];
-const ALIAS = {overview:"home", events:"home", archive:"home", "":"welcome"};
+const ALIAS = {overview:"home", events:"home", archive:"home", "":"welcome", "protocol-master":"wizard"};
 function tabName(){ const t = (location.hash||"#welcome").slice(1); return ALIAS[t] ?? t; }
 /* Направление работы (3.0): «ipico» — массовый забег с чипами, «stadium» — стадион. Запоминается в браузере. */
 let DIR = store.get("ss.dir"); if (DIR !== "ipico" && DIR !== "stadium") DIR = null;
@@ -1224,7 +1230,9 @@ function showTab(){
   document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === tab));
   const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
   if (onStep && lane.scrollWidth > lane.clientWidth) lane.scrollLeft = onStep.offsetLeft - (lane.clientWidth - onStep.offsetWidth) / 2;
-  $("lane").classList.toggle("hide", !STEPS.includes(tab));
+  // в мастере протоколов своя навигация (шаги 1–5) — общая панель этапов скрыта, чтобы шаги не задваивались
+  $("lane").classList.toggle("hide", !STEPS.includes(tab) || tab === "wizard");
+  if (STEPS.includes(tab) && tab !== "wizard") store.set("ss.lastStep", tab);
   $("gear").classList.toggle("on", tab === "hw" || tab === "log" || tab === "users");
   closeMenus();
   if (tab === "home") { renderEvents(); }
@@ -2036,15 +2044,17 @@ const wzp = (() => {
   }
   async function open(){
     const e0 = ev(); if (!e0) return;
+    const back = store.get("ss.lastStep"); $("wzpBack").href = "#" + (back && back !== "wizard" ? back : "reg");
+    $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
-    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1}); }catch(x){} }
+    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }
     await load();
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
     if (!names.includes(W.disc)) W.disc = names[0] || "";
     $("wzpDisc").value = W.disc; render();
   }
-  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step})); }catch(x){} }
+  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step, sex: W.sex, ages: W.ages})); }catch(x){} }
   function go(n){ W.step = Math.max(1, Math.min(5, n)); save(); render(); }
   function render(){
     const k = kind(), t = STEP_T[k];
@@ -2187,8 +2197,8 @@ const wzp = (() => {
     if (e.target.id === "wzpSave") return saveRows();
   });
   root.addEventListener("change", (e) => {
-    if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); return render(); }
-    if (e.target.name === "wzpSex") { W.sex = e.target.value; return render(); }
+    if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); save(); return render(); }
+    if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
     if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
     const tr = e.target.closest("#wzpRows tr"); if (tr) tr.classList.add("dirty");

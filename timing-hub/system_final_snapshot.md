@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `3.8.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `3.9.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-13`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `66fb854`
-- **Дамп сформирован:** 2026-10-13 07:44 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `98d2695`
+- **Дамп сформирован:** 2026-10-13 07:51 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
 - **Автопроверки:** Итого: 253 из 253 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 6487 строк, `hub/ui.html` 3138, `hub/protocol.html` 622
+- **Объём исходников:** `hub/hub.py` 6487 строк, `hub/ui.html` 3148, `hub/protocol.html` 622
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -2056,7 +2056,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1957–2005
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1965–2013
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -2111,7 +2111,7 @@ window.addEventListener("storage", (e) => { if (curId != null && e.key === cartK
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 2007–2209
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 2015–2219
 
 ```js
 const wzp = (() => {
@@ -2146,15 +2146,17 @@ const wzp = (() => {
   }
   async function open(){
     const e0 = ev(); if (!e0) return;
+    const back = store.get("ss.lastStep"); $("wzpBack").href = "#" + (back && back !== "wizard" ? back : "reg");
+    $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
-    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1}); }catch(x){} }
+    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }
     await load();
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
     if (!names.includes(W.disc)) W.disc = names[0] || "";
     $("wzpDisc").value = W.disc; render();
   }
-  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step})); }catch(x){} }
+  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step, sex: W.sex, ages: W.ages})); }catch(x){} }
   function go(n){ W.step = Math.max(1, Math.min(5, n)); save(); render(); }
   function render(){
     const k = kind(), t = STEP_T[k];
@@ -2297,8 +2299,8 @@ const wzp = (() => {
     if (e.target.id === "wzpSave") return saveRows();
   });
   root.addEventListener("change", (e) => {
-    if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); return render(); }
-    if (e.target.name === "wzpSex") { W.sex = e.target.value; return render(); }
+    if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); save(); return render(); }
+    if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
     if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
     const tr = e.target.closest("#wzpRows tr"); if (tr) tr.classList.add("dirty");
@@ -2321,7 +2323,7 @@ const wzp = (() => {
 
 ### 4.5 Расчёт официального результата на клиенте (зеркало серверного) — `hub/ui.html`
 
-#### `parseT` — `hub/ui.html` строки 2947–2952
+#### `parseT` — `hub/ui.html` строки 2957–2962
 
 ```js
 function parseT(t){
@@ -2332,7 +2334,7 @@ function parseT(t){
 }
 ```
 
-#### `fmtT` — `hub/ui.html` строки 2953–2956
+#### `fmtT` — `hub/ui.html` строки 2963–2966
 
 ```js
 function fmtT(sec){
@@ -2341,7 +2343,7 @@ function fmtT(sec){
 }
 ```
 
-#### `swMain` — `hub/ui.html` строки 2957–2961
+#### `swMain` — `hub/ui.html` строки 2967–2971
 
 ```js
 function swMain(vals){
@@ -2351,7 +2353,7 @@ function swMain(vals){
 }
 ```
 
-#### `attBest` — `hub/ui.html` строки 2962–2965
+#### `attBest` — `hub/ui.html` строки 2972–2975
 
 ```js
 function attBest(vals, hi){
@@ -2364,7 +2366,7 @@ function attBest(vals, hi){
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1769–1769
+#### `rankOpts` — `hub/ui.html` строки 1777–1777
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2537,6 +2539,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+98d2695 2026-10-13 major: оптимизирована компактность печати на один лист и добавлен ручной ввод выполненных разрядов v3.8.0
 66fb854 2026-10-13 major: упорядочен интерфейс Мастера, внедрено автоматическое разделение протоколов по вкладкам пола и категорий v3.7.0
 1a87b16 2026-10-13 release: глобальный дамп архитектуры Мастера протоколов v3.6
 72977c5 2026-10-13 chore: версия 3.6.1 (справочник: метание мяча/снаряда) для установки через кнопку обновления
@@ -2550,6 +2553,5 @@ ccc81bc 2026-10-13 feat: выполненные разряды по нормам
 406692f 2026-10-13 feat: расширен модуль секретаря - разряды, альбомные протоколы и многопопыточный ввод результатов
 a668bf4 2026-10-13 Справочник дисциплин лёгкой атлетики для стадиона, типы результата, выбор дисциплин v3.1.0
 31037a6 2026-10-13 Слияние origin/claude/greeting-d2g8ji в v3.0.0: версия 3.0.0 от 13.10.2026, тесты ручного подтверждения обновления
-4aaaf55 2026-10-13 major: полностью переработан стартовый экран, запущен Мастер подбора соревнования v3.0.0
 ```
 
