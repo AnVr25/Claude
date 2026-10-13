@@ -1111,11 +1111,30 @@ class Store:
         return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND bib = ?",
                                 (*args, eid, bib)).rowcount
 
+    def get_next_bib(self, eid: int) -> str:
+        """Получить следующий свободный номер участника (максимальный + 1)."""
+        result = self.con.execute(
+            "SELECT MAX(CAST(bib AS INTEGER)) FROM entries WHERE event_id = ? AND bib GLOB '[0-9]*'",
+            (eid,)
+        ).fetchone()
+        max_bib = result[0] if result and result[0] is not None else 0
+        return str(max_bib + 1)
+
     def add_entry(self, eid: int, r: dict) -> None:
+        # Если номер не указан, присваиваем следующий свободный
+        bib = r.get("bib")
+        if not bib or str(bib).strip() == "":
+            bib = self.get_next_bib(eid)
+
+        # Если чип не указан, используем номер с префиксом #
+        chip = r.get("chip")
+        if not chip or str(chip).strip() == "":
+            chip = "#" + str(bib)
+
         self.con.execute(
             "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
             " reg_id, sex, members) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+            (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
              r.get("members")))
 
@@ -2610,6 +2629,9 @@ class Hub:
             return ok(self.system_view())
         if path == "/api/system/update":
             return ok(self.update_state())
+        if path == "/api/system/update/install" and method == "POST":
+            code, out = self.confirm_update_install(actor)
+            return code, J, json.dumps(out, ensure_ascii=False), None
         if path == "/api/log":
             return ok({"log": self.store.audit_list(None)})
         if path == "/api/live":
@@ -4078,8 +4100,28 @@ class Hub:
             log_tail = open(os.path.join(d, "last.log"), encoding="utf-8", errors="replace").read()[-4000:]
         except OSError:
             pass
-        return {"version": VERSION, "build_date": BUILD_DATE, "pending": os.path.exists(os.path.join(d, "incoming.zip")),
-                "helper": os.path.isdir(d), "status": st, "log": log_tail}
+
+        # Проверяем наличие готового обновления (не pending, а ready для установки)
+        ready_zip = os.path.join(d, "ready.zip")
+        ready_info = {}
+        if os.path.exists(ready_zip):
+            try:
+                info_file = os.path.join(d, "ready-info.json")
+                if os.path.exists(info_file):
+                    ready_info = json.load(open(info_file, encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+
+        return {
+            "version": VERSION,
+            "build_date": BUILD_DATE,
+            "pending": os.path.exists(os.path.join(d, "incoming.zip")),
+            "ready": os.path.exists(ready_zip),
+            "ready_info": ready_info,
+            "helper": os.path.isdir(d),
+            "status": st,
+            "log": log_tail
+        }
 
     def receive_update(self, body: bytes, actor: str) -> tuple:
         import hashlib
@@ -4103,13 +4145,74 @@ class Hub:
         src = z.read("timing-hub/hub/hub.py").decode("utf-8", "replace")
         m = re.search(r'VERSION = "([^"]+)"', src)
         newv = m.group(1) if m else "?"
+
+        # Извлекаем BUILD_DATE если есть
+        build_date_match = re.search(r'BUILD_DATE = "([^"]+)"', src)
+        build_date = build_date_match.group(1) if build_date_match else "unknown"
+
         sha = hashlib.sha256(body).hexdigest()
-        part = os.path.join(self.update_dir, "incoming.part")
+
+        # Сохраняем как ready.zip (НЕ incoming.zip) - установка только по команде пользователя
+        ready_path = os.path.join(self.update_dir, "ready.zip")
+        part = os.path.join(self.update_dir, "ready.part")
         with open(part, "wb") as fh:
             fh.write(body)
-        os.replace(part, os.path.join(self.update_dir, "incoming.zip"))   # появление файла запускает установку
-        self.store.audit(actor, None, "Обновление сервера загружено", f"{VERSION} → {newv}, sha256 {sha[:16]}…")
-        return 200, {"ok": True, "from": VERSION, "to": newv, "sha256": sha}
+        os.replace(part, ready_path)
+
+        # Сохраняем метаданные обновления
+        info = {
+            "version": newv,
+            "build_date": build_date,
+            "uploaded_at": fmt_db(now_local()),
+            "sha256": sha,
+            "size": len(body)
+        }
+        with open(os.path.join(self.update_dir, "ready-info.json"), "w", encoding="utf-8") as f:
+            json.dump(info, f, ensure_ascii=False, indent=2)
+
+        self.store.audit(actor, None, "Обновление загружено и готово к установке",
+                        f"{VERSION} → {newv} (дата сборки: {build_date}), sha256 {sha[:16]}…")
+        return 200, {"ok": True, "from": VERSION, "to": newv, "build_date": build_date, "sha256": sha,
+                    "message": "Обновление загружено. Для установки нажмите кнопку в интерфейсе."}
+
+    def confirm_update_install(self, actor: str) -> tuple:
+        """Подтверждение установки: переносит ready.zip -> incoming.zip, запуская установку."""
+        d = self.update_dir
+        ready_zip = os.path.join(d, "ready.zip")
+        ready_info_file = os.path.join(d, "ready-info.json")
+
+        if not os.path.exists(ready_zip):
+            return 404, {"error": "Нет загруженного обновления. Сначала загрузите архив."}
+
+        if os.path.exists(os.path.join(d, "incoming.zip")):
+            return 409, {"error": "Обновление уже устанавливается — подождите минуту"}
+
+        # Читаем информацию об обновлении
+        info = {}
+        try:
+            if os.path.exists(ready_info_file):
+                info = json.load(open(ready_info_file, encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+
+        # Переносим ready.zip -> incoming.zip (это запускает timing-update.path)
+        try:
+            import shutil
+            shutil.copy2(ready_zip, os.path.join(d, "incoming.zip"))
+        except OSError as e:
+            return 500, {"error": f"Не удалось запустить установку: {e}"}
+
+        new_version = info.get("version", "?")
+        self.store.audit(actor, None, "Запущена установка обновления",
+                        f"{VERSION} → {new_version} (пользователь подтвердил установку)")
+
+        return 200, {
+            "ok": True,
+            "message": "Установка запущена. Сервер перезапустится через ~1 минуту.",
+            "from": VERSION,
+            "to": new_version,
+            "info": info
+        }
 
     # ---- обновление с GitHub: сервер сам скачивает официальную версию и отдаёт её
     # в ту же цепочку, что и загрузку архива (receive_update → timing-update с автооткатом).

@@ -858,12 +858,16 @@ def main() -> int:
             zf.writestr("timing-hub/install.sh", "echo ok")
             zf.writestr("timing-hub/hub/hub.py", 'VERSION = "9.9.9"')
         code, txt = http("POST", "/api/system/update", zb.getvalue(), {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
-        check("обновление: архив принят и передан на установку", code == 200 and json.loads(txt).get("to") == "9.9.9"
-              and os.path.exists(os.path.join(upd, "incoming.zip")), txt)
-        code, txt = http("POST", "/api/system/update", zb.getvalue(), {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
-        check("обновление: второе, пока идёт первое — отказ", code == 409, txt)
+        check("обновление: архив принят и ждёт подтверждения (установка не запущена)", code == 200 and json.loads(txt).get("to") == "9.9.9"
+              and os.path.exists(os.path.join(upd, "ready.zip")) and not os.path.exists(os.path.join(upd, "incoming.zip")), txt)
         _, txt = http("GET", "/api/system/update")
-        check("обновление: статус для страницы", json.loads(txt).get("pending") is True, txt[:200])
+        ust = json.loads(txt)
+        check("обновление: статус для страницы — готово к установке, версия и дата сборки",
+              ust.get("ready") is True and ust["ready_info"]["version"] == "9.9.9" and ust["build_date"] == "2026-10-13", txt[:300])
+        code, txt = http("POST", "/api/system/update/install", b"{}", J)
+        check("обновление: после подтверждения установка передана службе", code == 200 and os.path.exists(os.path.join(upd, "incoming.zip")), txt)
+        code, txt = http("POST", "/api/system/update/install", b"{}", J)
+        check("обновление: повторное подтверждение, пока идёт установка — отказ", code == 409, txt)
         os.remove(os.path.join(upd, "incoming.zip"))
 
         # файлы по папкам: стартовый список сам попал в «Для судей», загрузка в папку, перенос
