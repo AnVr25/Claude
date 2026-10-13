@@ -225,6 +225,22 @@ def main() -> int:
             except urllib.error.HTTPError as e:
                 return e.code, e.read().decode("utf-8", "replace")
 
+        def give_bibs(eid, start=None):
+            """Имитация шага 2: секретарь вписывает номера тем, у кого их ещё нет (сервер сам их не выдаёт)."""
+            v = json.loads(http("GET", f"/api/events/{eid}/bibs")[1])
+            have = [int(r["bib"]) for r in v["rows"] if str(r["bib"]).isdigit()]
+            n = start or (max(have) + 1 if have else 1)
+            rows = []
+            for r in v["rows"]:
+                if not r["bib"]:
+                    rows.append({"ids": r["ids"], "bib": str(n)})
+                    n += 1
+            if rows:
+                c_, t_ = http("POST", f"/api/events/{eid}/bibs", json.dumps({"rows": rows}).encode(),
+                              {"Content-Type": "application/json", "X-Requested-With": "timing-hub"})
+                assert c_ == 200, t_
+            return len(rows)
+
         x = ts(12, 500)
         body = json.dumps([{"chip": "AA05", "time": f"{x:%Y-%m-%d %H:%M:%S}.500", "antenna": 1},
                            {"chip": "AA06", "time": x.timestamp()},
@@ -871,6 +887,23 @@ def main() -> int:
         http("POST", f"/api/events/{e4}/regs/{rid_bad}", json.dumps({"status": "rejected"}).encode(), J)
         code, txt = http("POST", f"/api/events/{e4}/regs", json.dumps({"approve_all": True}).encode(), J)
         check("подтверждение заявок", json.loads(txt)["counts"] == {"pending": 0, "approved": 7, "rejected": 1}, txt[-200:])
+        # 5.2: номера только вручную — без них сетка не строится
+        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
+        _, txt_sl = http("GET", f"/api/events/{e4}/startlist")
+        check("5.2: без вписанных вручную номеров забеги не формируются, автоматической выдачи номеров нет",
+              code == 400 and "нет нагрудных номеров у 7 участников" in txt and not json.loads(txt_sl)["heats"]
+              and not json.loads(txt_sl)["no_heat"], txt[:200])
+        bv = json.loads(http("GET", f"/api/events/{e4}/bibs?distance=" + urllib.parse.quote("60 м") + "&sex=" + urllib.parse.quote("М"))[1])
+        check("5.2: шаг 2 видит подтверждённых участников дисциплины по фильтру, номеров ещё нет",
+              bv["total"] == 5 and bv["with_bib"] == 0 and all(not r["bib"] and r["ids"] for r in bv["rows"]), str(bv)[:300])
+        ids5 = [r["ids"] for r in bv["rows"]]
+        cd1, td1 = http("POST", f"/api/events/{e4}/bibs", json.dumps({"rows": [{"ids": ids5[0], "bib": "7"}, {"ids": ids5[1], "bib": "7"}]}).encode(), J)
+        cd2, td2 = http("POST", f"/api/events/{e4}/bibs", json.dumps({"rows": [{"ids": ids5[0], "bib": "с пробелом"}]}).encode(), J)
+        bv2 = json.loads(http("GET", f"/api/events/{e4}/bibs")[1])
+        check("5.2: повтор номера и неверный номер отклоняются целиком — в базу ничего не записано",
+              cd1 == 400 and "уже у другого участника" in td1 and cd2 == 400 and bv2["with_bib"] == 0, f"{cd1} {td1[:150]} {cd2}")
+        check("5.2: секретарь вписал номера 1–7 и нажал «Сохранить нагрудные номера»", give_bibs(e4, 1) == 7
+              and json.loads(http("GET", f"/api/events/{e4}/bibs")[1])["with_bib"] == 7)
         code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
         hs = json.loads(txt)
         check("забеги сформированы: 60 м Юноши ×2, 60 м Девушки, 300 м Девушки",
@@ -883,7 +916,7 @@ def main() -> int:
         check("посев: сильнейшие в последнем забеге, лучший — на центральной дорожке",
               h2 == {"Быстров": 2, "Шагов": 3, "Скоров": 1} and sorted(h1) == ["Ветров", "Лётов"], f"{h1} {h2}")
         bibs = sorted(int(e["bib"]) for h in sl["heats"] for e in h["entries"])
-        check("стартовые номера присвоены по порядку", bibs == list(range(1, 8)), str(bibs))
+        check("5.2: в сетке — ровно те номера, что вписал секретарь", bibs == list(range(1, 8)), str(bibs))
         anna = [e for e in sl["heats"][2]["entries"]][0]
         code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": [e["bib"] for e in sl["heats"][0]["entries"]
                          if e["name"].startswith("Лётов")][0], "wave": "Забег 2"}).encode(), J)
@@ -928,8 +961,10 @@ def main() -> int:
         code, out = reg("Поздняков", "Яков", "2010-09-09", "М", [{"distance": "60 м", "best": "8.0"}])
         late = out["ids"][0]
         http("POST", f"/api/events/{e4}/regs/{late}", json.dumps({"status": "approved"}).encode(), J)
-        code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"reg_id": late, "wave": "Забег 1"}).encode(), J)
-        check("поздняя заявка добавлена в забег с новым номером", code == 200 and json.loads(txt)["bib"] == "8", txt)
+        cl0, tl0 = http("POST", f"/api/events/{e4}/entry", json.dumps({"reg_id": late, "wave": "Забег 1"}).encode(), J)
+        code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"reg_id": late, "wave": "Забег 1", "set_bib": "8"}).encode(), J)
+        check("5.2: поздняя заявка без номера в забег не встаёт; с номером, вписанным вручную, — добавлена",
+              cl0 == 400 and "нагрудный номер" in tl0 and code == 200 and json.loads(txt)["bib"] == "8", f"{tl0[:120]} {txt}")
         # судья ведёт забег по стартовому списку — протокол с ФИО и тренером
         b_fast = [e["bib"] for e in sl["heats"][1]["entries"] if e["name"].startswith("Быстров")][0]
         base = int(time.time() * 1000) - 60000
@@ -1279,12 +1314,19 @@ def main() -> int:
             {**m, "last_name": m["last_name"] + "ов"} for m in legs]}).encode())
         check("2.8: лимит эстафеты — вторая команда не влезла", c == 409, t[:200])
         http("POST", f"/api/events/{e8}/regs", json.dumps({"approve_all": True}).encode(), J)
+        # секретарь вписывает номера сам, по диапазонам дистанций из положения: 5 км — с 1, 10 км — с 500, эстафета — 501
+        bv8 = {r["name"]: r["ids"] for r in json.loads(http("GET", f"/api/events/{e8}/bibs")[1])["rows"]}
+        want8 = {"Первый Тест": "1", "Второй Тест": "2", "Длинный Тест": "500", "СШОР-1": "501"}
+        c8b, t8b = http("POST", f"/api/events/{e8}/bibs", json.dumps({"rows": [{"ids": bv8[k], "bib": v} for k, v in want8.items()
+                                                                                   if k in bv8]}).encode(), J)
+        check("5.2: эстафета на шаге 2 — одна строка на команду, номер вписывается один раз",
+              c8b == 200 and "СШОР-1" in bv8 and len(bv8["СШОР-1"]) == 4, t8b[:200])
         code, txt = http("POST", f"/api/events/{e8}/heats", json.dumps({"lanes": 8}).encode(), J)
         _, txt = http("GET", f"/api/events/{e8}/startlist")
         ents = [e for h in json.loads(txt)["heats"] for e in h["entries"]]
         bibs = {e["name"]: e["bib"] for e in ents}
         rel = [e for e in ents if e["name"] == "СШОР-1"]
-        check("2.8: номера по диапазонам дистанций, эстафета — одна запись с составом",
+        check("2.8: номера, вписанные по диапазонам дистанций, — в сетке; эстафета — одна запись с составом",
               bibs.get("Первый Тест") == "1" and bibs.get("Второй Тест") == "2" and bibs.get("Длинный Тест") == "500"
               and rel and rel[0]["bib"] == "501" and rel[0]["members"].startswith("1. БегунА Этап (2010)") and len(ents) == 4,
               str(bibs) + str(rel)[:200])
@@ -1342,7 +1384,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 5.1.0 и дата сборки 13.10.2026", st3["version"] == "5.1.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 5.2.0 и дата сборки 13.10.2026", st3["version"] == "5.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1472,6 +1514,7 @@ def main() -> int:
                  reg9("Васильева", "Ж", [{"distance": "60 м"}, {"distance": "Прыжок в длину"}]),
                  reg9("Громова", "Ж", [{"distance": "Прыжок в длину"}])]
         http("POST", f"/api/events/{e9}/regs", json.dumps({"approve_all": True}).encode(), J)
+        give_bibs(e9)
         code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "Прыжок в длину", "sex": "Ж", "lanes": 8}).encode(), J)
         g1 = json.loads(txt)
         check("3.5: техника — только «Общий список», дорожки заблокированы, участницы не потеряны",
@@ -1513,6 +1556,54 @@ def main() -> int:
               and fj["done_rank"] == "2 р.", str(fj)[:300])
         check("3.5: бег — официальный результат по трём секундомерам (среднее 8.33 → 8.4 вверх), разряд сохранён",
               fr["result"] == "8.4" and fr["sw"] == ["8.31", "8.40", "8.33"] and fr["done_rank"] == "3 юн." and fr["rt"] == "time", str(fr)[:300])
+        # 5.2: один секундомер — официальный результат
+        r_one = next(e["bib"] for h in run for e in h["entries"] if e["bib"] != r_bib)
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": r_one, "t": ["8.27", "", ""], "auto": True}]}).encode(), J)
+        f1 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["bib"] == r_one)
+        check("5.2: заполнен один секундомер — он и есть официальный результат (8.27 → 8.3 вверх до 0,1)", f1["result"] == "8.3", str(f1)[:200])
+        # 5.2: правка номера после сетки и результатов — результат переезжает вместе с участником
+        bvj = {r["name"]: r for r in json.loads(http("GET", f"/api/events/{e9}/bibs?distance=" + urllib.parse.quote("Прыжок в длину"))[1])["rows"]}
+        arg = next(r for n_, r in bvj.items() if n_.startswith("Аргунов"))
+        oth = next(r for n_, r in bvj.items() if not n_.startswith("Аргунов") and r["bib"])
+        cs_, ts_ = http("POST", f"/api/events/{e9}/bibs", json.dumps({"rows": [{"ids": arg["ids"], "bib": oth["bib"]},
+                                                                             {"ids": oth["ids"], "bib": arg["bib"]}]}).encode(), J)
+        fj2 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["name"].startswith("Аргунов") and x["rt"] == "distance")
+        cclr, tclr = http("POST", f"/api/events/{e9}/bibs", json.dumps({"rows": [{"ids": arg["ids"], "bib": ""}]}).encode(), J)
+        _, lg9 = http("GET", f"/api/events/{e9}/log")
+        check("5.2: номера двух участников меняются местами — попытки и результат остаются у своего спортсмена; стереть номер участника сетки нельзя; запись в журнале",
+              cs_ == 200 and fj2["bib"] == oth["bib"] and fj2["result"] == "7.85" and cclr == 400 and "нельзя стереть" in tclr
+              and "Нагрудные номера сохранены" in lg9, f"{ts_[:150]} {fj2.get('bib')} {tclr[:100]}")
+        http("POST", f"/api/events/{e9}/bibs", json.dumps({"rows": [{"ids": arg["ids"], "bib": arg["bib"]},
+                                                                    {"ids": oth["ids"], "bib": oth["bib"]}]}).encode(), J)
+        # 5.2: стартовый протокол в Excel для судей с ручкой
+        import zipfile as _zf
+
+        def xl(dist):
+            req = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e9}/startlist.xlsx?distance=" + urllib.parse.quote(dist),
+                                         headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode()})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                blob, ct, cd = resp.read(), resp.headers.get("Content-Type", ""), resp.headers.get("Content-Disposition", "")
+            z = _zf.ZipFile(io.BytesIO(blob))
+            return z.read("xl/worksheets/sheet1.xml").decode("utf-8"), z.read("xl/workbook.xml").decode("utf-8"), ct, cd
+        xr, wr, ctr, cdr = xl("60 м")
+        xt, wt, _, _ = xl("Прыжок в длину")
+        check("5.2: Excel бега — № п/п, номер, ФИО, год, разряд, команда, забег, дорожка и три пустые графы секундомеров; книжный лист",
+              "spreadsheetml" in ctr and ".xlsx" in urllib.parse.unquote(cdr) and all(h in xr for h in ("№ п/п", "Забег №", "Дорожка", "Нагрудный номер",
+              "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город", "Секундомер 1", "Секундомер 2", "Секундомер 3"))
+              and "Аргунов" in xr and 'orientation="portrait"' in xr and "Print_Titles" in wr and "Попытка 1" not in xr, xr[:200])
+        check("5.2: Excel техники — порядок выполнения, шесть пустых попыток и «Лучший результат»; альбомный лист",
+              all(h in xt for h in ("Порядок выполнения", "Попытка 1", "Попытка 6", "Лучший результат", "Нагрудный номер"))
+              and 'orientation="landscape"' in xt and "Секундомер" not in xt and "Общий список" in xt, xt[:200])
+        # 5.2: экстренная отмена старта — время старта обнуляется, сетку снова можно пересобрать
+        w60 = run[0]["name"]
+        http("POST", f"/api/events/{e9}/start", json.dumps({"wave": w60}).encode(), J)
+        cg1, _ = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "lanes": 2}).encode(), J)
+        http("POST", f"/api/events/{e9}/reset", json.dumps({"wave": w60}).encode(), J)
+        wv = next(w for w in json.loads(http("GET", f"/api/events/{e9}")[1])["waves"] if w["name"] == w60)
+        cg2, tg2 = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "lanes": 2}).encode(), J)
+        fr2 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["bib"] == r_bib)
+        check("5.2: после старта пересобрать нельзя; «Отменить старт» обнуляет время — сетка пересобирается, введённые результаты целы",
+              cg1 == 400 and not wv.get("start_time") and cg2 == 200 and fr2["result"] == "8.4", f"{cg1} {wv} {cg2} {tg2[:150]}")
         # 4.0: судья на секторе / секретарь вида — только ввод результатов
         def spost(path, obj, cookie=None):
             h = {"Content-Type": "application/json", "X-Requested-With": "timing-hub", "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}
@@ -1710,6 +1801,7 @@ def main() -> int:
             pub("POST", f"/r/{sl10}", json.dumps({"last_name": ln, "first_name": "Тест", "birth_date": "2010-01-01", "sex": "М", "team": "К", "consent": True, "policy": True,
                  "representative": "Р", "distances": [{"distance": dd}], "rank": "Б/р"}).encode())
         http("POST", f"/api/events/{e10}/regs", json.dumps({"approve_all": True}).encode(), J)
+        give_bibs(e10)
         http("POST", f"/api/events/{e10}/heats", json.dumps({"mode": "list"}).encode(), J)
         sl = json.loads(http("GET", f"/api/events/{e10}/startlist")[1])
         jb = next(e["bib"] for e in sl["heats"][0]["entries"] if e["name"].startswith("Прыгунов"))

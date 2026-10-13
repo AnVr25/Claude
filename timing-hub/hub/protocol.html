@@ -539,7 +539,8 @@ function buildFinal(o={}){
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
   const anyTeam=!tf&&(R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team)), hasHeats=ev.waves.length>0;
   const anyRank=R.finished.some(x=>x.rank)||R.not_seen.some(x=>x.rank);
-  const anySw=R.finished.some(x=>x.sw&&x.sw.length), anyAtt=R.finished.some(x=>x.attempts&&x.attempts.length);
+  // 5.2: в итоговом протоколе — только официальный результат; показания секундомеров остаются в базе и на шаге 4
+  const anySw=false, anyAtt=R.finished.some(x=>x.attempts&&x.attempts.length);
   const attTxt=x=>(x.attempts||[]).map(v=>v||"–").join(" · "), swTxt=x=>(x.sw||[]).map(v=>v||"–").join(" / ");
   const man=x=>(x.manual||[]).includes(fin);
   const allManual=R.finished.length&&R.finished.every(man), someManual=R.finished.some(man);

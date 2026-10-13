@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "5.1.0"
+VERSION = "5.2.0"
 BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -86,8 +86,10 @@ def _col(n: int) -> str:
 
 
 def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, validations=(), date_cols=(),
-               hidden_sheets=()) -> bytes:
-    """sheets = [(имя, [[ячейки]])]. Оформление (ширины, заголовок, проверки) — только у первого листа."""
+               hidden_sheets=(), group_rows=(), orientation="landscape", data_height=None, repeat_header=False) -> bytes:
+    """sheets = [(имя, [[ячейки]])]. Оформление (ширины, заголовок, проверки) — только у первого листа.
+    group_rows — номера строк-заголовков групп (забег, список) жирным на заливке; data_height — высота строк
+    данных (место для записи ручкой); repeat_header — шапка таблицы на каждой печатной странице."""
     import zipfile
     from xml.sax.saxutils import escape
 
@@ -114,6 +116,8 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
                 attrs = ' ht="48" customHeight="1"'
             if first and header_row and ri == header_row:
                 attrs = ' ht="32" customHeight="1"'
+            elif first and data_height and header_row and ri > header_row and ri not in group_rows:
+                attrs = f' ht="{data_height}" customHeight="1"'
             cells = []
             for ci in range(ncol if first else len(row)):
                 v = row[ci] if ci < len(row) else ""
@@ -124,6 +128,8 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
                     st = 4
                 elif first and header_row and ri == header_row:
                     st = 1
+                elif first and ri in group_rows:
+                    st = 6
                 elif first and header_row and ri > header_row:
                     st = 3 if ci in date_cols else 5
                 ref = f"{_col(ci)}{ri}"
@@ -149,7 +155,7 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
             out.append("</dataValidations>")
         if first:
             out.append('<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'
-                       '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>')
+                       f'<pageSetup paperSize="9" orientation="{orientation}" fitToWidth="1" fitToHeight="0"/>')
         out.append("</worksheet>")
         return "".join(out)
 
@@ -160,19 +166,21 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
               '<font><b/><sz val="11"/><name val="Calibri"/></font>'
               '<font><b/><sz val="14"/><name val="Calibri"/></font>'
               '<font><i/><sz val="10"/><color rgb="FF666666"/><name val="Calibri"/></font></fonts>'
-              '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
-              '<fill><patternFill patternType="solid"><fgColor rgb="FFF4E3DD"/><bgColor indexed="64"/></patternFill></fill></fills>'
+              '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+              '<fill><patternFill patternType="solid"><fgColor rgb="FFF4E3DD"/><bgColor indexed="64"/></patternFill></fill>'
+              '<fill><patternFill patternType="solid"><fgColor rgb="FFE6ECF4"/><bgColor indexed="64"/></patternFill></fill></fills>'
               '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
               '<border><left style="thin"><color rgb="FFBBBBBB"/></left><right style="thin"><color rgb="FFBBBBBB"/></right>'
               '<top style="thin"><color rgb="FFBBBBBB"/></top><bottom style="thin"><color rgb="FFBBBBBB"/></bottom><diagonal/></border></borders>'
               '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-              '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+              '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
               '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'
               '<alignment wrapText="1" vertical="center"/></xf>'
               '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
               '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
               '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
-              '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/></cellXfs>'
+              '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+              '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs>'
               '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -199,7 +207,10 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
                    + "".join('<sheet name="%s" sheetId="%d"%s r:id="rId%d"/>'
                              % (esc(nm), i + 1, ' state="hidden"' if i in hidden_sheets else "", i + 1)
                              for i, (nm, _) in enumerate(sheets))
-                   + "</sheets></workbook>")
+                   + "</sheets>"
+                   + (f'<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\'{esc(sheets[0][0])}\'!${header_row}:${header_row}</definedName></definedNames>'
+                      if repeat_header and header_row else "")
+                   + "</workbook>")
         z.writestr("xl/_rels/workbook.xml.rels",
                    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -1243,20 +1254,11 @@ class Store:
         return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND bib = ?",
                                 (*args, eid, bib)).rowcount
 
-    def get_next_bib(self, eid: int) -> str:
-        """Получить следующий свободный номер участника (максимальный + 1)."""
-        result = self.con.execute(
-            "SELECT MAX(CAST(bib AS INTEGER)) FROM entries WHERE event_id = ? AND bib GLOB '[0-9]*'",
-            (eid,)
-        ).fetchone()
-        max_bib = result[0] if result and result[0] is not None else 0
-        return str(max_bib + 1)
-
     def add_entry(self, eid: int, r: dict) -> None:
-        # Если номер не указан, присваиваем следующий свободный
-        bib = r.get("bib")
-        if not bib or str(bib).strip() == "":
-            bib = self.get_next_bib(eid)
+        # 5.2: нагрудный номер вписывает только судья/секретарь — автоматической выдачи номеров нет
+        bib = str(r.get("bib") or "").strip()
+        if not bib:
+            raise ValueError("нет нагрудного номера — впишите его на шаге 2 «Регистрация номеров»")
 
         # Если чип не указан, используем номер с префиксом #
         chip = r.get("chip")
@@ -3203,6 +3205,11 @@ class Hub:
                 return self._regs_csv(ev)
             if action == "startlist":
                 return ok(self.startlist(ev))
+            if action == "bibs":            # 5.2: шаг 2 Мастера — ручные нагрудные номера
+                ages = [a for a in str(qs.get("ages") or "").split(",") if a]
+                return ok(self.bibs_view(ev, {"distance": qs.get("distance"), "sex": qs.get("sex"), "ages": ages}))
+            if action == "startlist.xlsx":  # 5.2: стартовый протокол для судей с ручкой
+                return self.startlist_xlsx(ev, qs)
             if action == "pickup":
                 return ok(self.pickup_view(ev))
             if action == "template.xlsx":
@@ -3608,6 +3615,9 @@ class Hub:
                 return err(str(e))
             self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}")
             return ok(out)
+        if action == "bibs":
+            code, out = self.save_bibs(ev, data.get("rows") if isinstance(data.get("rows"), list) else [], who)
+            return code, J, json.dumps(out, ensure_ascii=False), None
         if action == "heats":
             try:
                 if str(data.get("distance") or "").strip():       # мастер протоколов: одна дисциплина
@@ -3655,12 +3665,12 @@ class Hub:
                 ids = r.get("_ids") or [r["id"]]
                 if any(x.get("reg_id") in ids for x in rows) or (r.get("bib") and any(e["bib"] == r["bib"] for e in rows)):
                     return err("участник уже в стартовом списке")
-                if str(data.get("set_bib") or "").strip():          # номер, который секретарь вписал сам
-                    bib, e_ = clean_bib(data["set_bib"], {e["bib"] for e in rows})
-                    if e_:
-                        return err(e_)
-                else:
-                    bib = self.next_bib(ev, {e["bib"] for e in rows}, r["distance"])
+                # 5.2: номер только ручной — из поля рядом с заявкой или вписанный на шаге 2 «Регистрация номеров»
+                bib, e_ = clean_bib(data.get("set_bib") or r.get("bib"), {e["bib"] for e in rows})
+                if not str(data.get("set_bib") or r.get("bib") or "").strip():
+                    return err("впишите нагрудный номер участника (шаг 2 Мастера «Регистрация номеров»)")
+                if e_:
+                    return err(e_)
                 if lane is None and wave:
                     taken = {e["lane"] for e in rows if e["wave"] == wave}
                     lane = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
@@ -3875,16 +3885,131 @@ class Hub:
             out.append({**d, "taken": n, "left": max(0, d["limit"] - n) if d["limit"] else None})
         return out
 
-    def next_bib(self, ev: dict, used, distance: str) -> str:
-        """Следующий свободный номер: в диапазоне дистанции («номера с 500») или после самого большого."""
-        specs = self.dist_specs(ev)
-        nums = {int(b) for b in used if str(b).isdigit()}
-        lo = next((d["bib_from"] for d in specs if d["name"] == distance and d["bib_from"]), None)
-        if lo is None:
-            return str(max(nums | {0}) + 1)
-        hi = min([d["bib_from"] for d in specs if d["bib_from"] and d["bib_from"] > lo] or [10 ** 9])
-        inside = [n for n in nums if lo <= n < hi]
-        return str(max(inside) + 1 if inside else lo)
+    # ---- 5.2: нагрудные номера — только вручную (шаг 2 Мастера «Регистрация номеров»)
+    BIB_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё\-]{1,10}")
+
+    @staticmethod
+    def _reg_bib(r: dict, old_entry: Optional[dict]) -> str:
+        """Номер участника для сетки: вписанный секретарём в заявку, иначе — уже стоящий в стартовом списке."""
+        return str(r.get("bib") or (old_entry or {}).get("bib") or "").strip()
+
+    def _need_bibs(self, regs: list, old: dict) -> None:
+        """Сетка строится только когда у всех участников есть номера, вписанные вручную, и номера не повторяются."""
+        missing = [r for r in regs if not self._reg_bib(r, old.get(r["id"]))]
+        if missing:
+            names = ", ".join(" ".join(x for x in (m["last_name"], m["first_name"]) if x) for m in missing[:5])
+            raise ValueError(f"нет нагрудных номеров у {len(missing)} участников ({names}{'…' if len(missing) > 5 else ''}) — "
+                             f"впишите их на шаге 2 «Регистрация номеров» и нажмите «Сохранить нагрудные номера»")
+        seen: dict = {}
+        for r in regs:
+            b = self._reg_bib(r, old.get(r["id"]))
+            if b in seen:
+                raise ValueError(f"номер {b} стоит у двух участников — исправьте на шаге 2")
+            seen[b] = r
+
+    def bibs_view(self, ev: dict, scope: dict) -> dict:
+        """Шаг 2: подтверждённые участники дисциплины (с фильтром шага 1) и их нагрудные номера."""
+        eid, dist = ev["id"], str(scope.get("distance") or "").strip()
+        sex = str(scope.get("sex") or "").strip().upper()[:1]
+        ages = [a for a in (scope.get("ages") or []) if a in self.AGE_LIMITS]
+        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+
+        def ok_(r):
+            if r["status"] != "approved" or (dist and r["distance"] != dist):
+                return False
+            if sex in ("М", "Ж") and str(r.get("sex") or "").upper() != sex:
+                return False
+            if ages:
+                try:
+                    age = year - int(str(r["birth_date"])[:4])
+                except ValueError:
+                    return False
+                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
+            return True
+        regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if ok_(r)])
+        ent = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
+        cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
+        rows = []
+        for r in sorted(regs, key=lambda r: (cat_order.get(r.get("category") or "", 99), r.get("category") or "",
+                                             r["last_name"].lower(), r["first_name"].lower())):
+            e = ent.get(r["id"])
+            rows.append({"ids": r.get("_ids") or [r["id"]], "bib": self._reg_bib(r, e),
+                         "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
+                         "birth_year": str(r["birth_date"])[:4].strip(), "sex": r.get("sex") or "",
+                         "category": r.get("category") or "", "team": r.get("team") or "", "rank": r.get("rank") or "",
+                         "members": r.get("members") or "", "in_grid": bool(e and e.get("wave")),
+                         "has_result": bool(e and (e.get("result") or e.get("detail") or e.get("status")))})
+        return {"distance": dist, "rows": rows, "total": len(rows), "with_bib": sum(1 for x in rows if x["bib"])}
+
+    def save_bibs(self, ev: dict, items: list, who: str) -> tuple:
+        """Сохранить номера, вписанные вручную. Ничего не пишется, пока весь набор не прошёл проверку."""
+        eid = ev["id"]
+        regs = {r["id"]: r for r in self.store.registrations(eid)}
+        entries = self.store.entries_rows(eid)
+        ent_by_reg = {e["reg_id"]: e for e in entries if e.get("reg_id")}
+        errors, plan = [], []          # plan: (ids, старый номер, новый номер)
+        for it in items[:3000]:
+            if not isinstance(it, dict):
+                continue
+            ids = [int(x) for x in (it.get("ids") or []) if str(x).isdigit() and int(x) in regs]
+            if not ids:
+                continue
+            r0 = regs[ids[0]]
+            who_ = " ".join(x for x in (r0.get("relay") or r0["last_name"], "" if r0.get("relay") else r0["first_name"]) if x)
+            new = str(it.get("bib") or "").strip()
+            old = self._reg_bib(r0, ent_by_reg.get(ids[0]))
+            if new and not self.BIB_RE.fullmatch(new):
+                errors.append({"ids": ids, "error": f"{who_}: номер — до 10 цифр или букв, без пробелов"})
+                continue
+            if not new and ent_by_reg.get(ids[0]):
+                errors.append({"ids": ids, "error": f"{who_}: уже в стартовом списке — номер нельзя стереть, только заменить"})
+                continue
+            if new != old:
+                plan.append((ids, old, new, who_))
+        # итоговая раскладка номеров по всему соревнованию: повторов быть не должно
+        final: dict = {}
+        changing = {i for p in plan for i in p[0]}
+        for rid, r in regs.items():
+            if rid in changing:
+                continue
+            b = self._reg_bib(r, ent_by_reg.get(rid))
+            if b:
+                final.setdefault(b, set()).add((r.get("relay") or "").lower() or f"r{rid}")
+        for e in entries:
+            if not e.get("reg_id") or e["reg_id"] not in regs:
+                final.setdefault(e["bib"], set()).add(f"e{e['bib']}")
+        for ids, old, new, who_ in plan:
+            if new:
+                key = (regs[ids[0]].get("relay") or "").lower() or f"r{ids[0]}"
+                if final.get(new, set()) - {key}:
+                    errors.append({"ids": ids, "error": f"{who_}: номер {new} уже у другого участника"})
+                final.setdefault(new, set()).add(key)
+        if errors:
+            return 400, {"error": "Номера не сохранены — исправьте отмеченные строки", "errors": errors}
+        # запись: сначала временные номера (чтобы обмен номерами двух участников не конфликтовал), потом настоящие
+        self.store.con.execute("BEGIN")
+        try:
+            moves = []
+            for n_, (ids, old, new, _) in enumerate(plan):
+                e = ent_by_reg.get(ids[0])
+                if e and new and e["bib"] != new:
+                    tmp = f"~{n_}~{e['bib']}"
+                    self.store.rename_bib(eid, e["bib"], tmp)
+                    moves.append((tmp, new))
+            for tmp, new in moves:
+                self.store.rename_bib(eid, tmp, new)
+            for ids, old, new, _ in plan:
+                for rid in ids:
+                    self.store.con.execute("UPDATE registrations SET bib = ? WHERE id = ? AND event_id = ?",
+                                           (new or None, rid, eid))
+            self.store.con.execute("COMMIT")
+        except Exception:
+            self.store.con.execute("ROLLBACK")
+            raise
+        if plan:
+            ch = [f"{w}: {o or '—'} → {n or '—'}" for _, o, n, w in plan[:30]]
+            self.store.audit(who, eid, "Нагрудные номера сохранены", f"{len(plan)}: " + "; ".join(ch))
+        return 200, {"ok": True, "saved": len(plan)}
 
     def consent_text(self, ev: dict) -> str:
         if ev.get("reg_consent"):
@@ -4415,7 +4540,11 @@ class Hub:
         mine = {r["id"] for r in regs}
         entries = self.store.entries_rows(eid)
         old = {e["reg_id"]: e for e in entries if e.get("reg_id")}
-        used = {e["bib"] for e in entries}
+        self._need_bibs(regs, old)                      # 5.2: без ручных номеров сетку не строим
+        theirs = {e["bib"] for e in entries if e.get("reg_id") not in mine}
+        clash = [self._reg_bib(r, old.get(r["id"])) for r in regs if self._reg_bib(r, old.get(r["id"])) in theirs]
+        if clash:
+            raise ValueError(f"номер {clash[0]} уже у участника другой дисциплины — исправьте на шаге 2")
         # удаляем только свои забеги: те, где нет участников вне выбранной группы
         by_wave: dict = {}
         for e in entries:
@@ -4470,12 +4599,8 @@ class Hub:
             heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
             for i, r in enumerate(chunk):
                 e = old.get(r["id"])
-                if e:
-                    bib, chip = e["bib"], e["chip"]
-                else:
-                    bib = self.next_bib(ev, used, r["distance"])
-                    used.add(bib)
-                    chip = "#" + bib
+                bib = self._reg_bib(r, e)
+                chip = e["chip"] if e and e["bib"] == bib else "#" + bib
                 rows.append({"bib": bib, "chip": chip, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                              "birth_year": r["birth_date"][:4].strip(), "team": r.get("team"), "category": r.get("category"),
                              "lane": order[i] if use_lanes else None, "coach": r.get("coach"), "seed": r.get("best"),
@@ -4505,15 +4630,12 @@ class Hub:
         for r in regs:
             groups.setdefault((r["distance"], r.get("category") or ""), []).append(r)
         old = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
-        used = {e["bib"] for e in old.values()}
+        self._need_bibs(regs, old)                      # 5.2: номера только ручные
 
         def bib_for(r):
             e = old.get(r["id"])
-            if e:
-                return e["bib"], e["chip"]
-            b = self.next_bib(ev, used, r["distance"])   # диапазон номеров дистанции, если задан
-            used.add(b)
-            return b, "#" + b
+            b = self._reg_bib(r, e)
+            return b, (e["chip"] if e and e["bib"] == b else "#" + b)
 
         heats, rows, n = [], [], 0
         plan = []        # (дистанция, категория, участники, дорожки?)
@@ -5241,6 +5363,64 @@ class Hub:
         fname = re.sub(r'[\\/:*?"<>|]+', " ", ev["name"]) + ".clax"
         return 200, "application/octet-stream", data, {
             "Content-Disposition": f"attachment; filename=\"event.clax\"; filename*=UTF-8''{quote(fname)}"}
+
+    def startlist_xlsx(self, ev: dict, qs: dict):
+        """5.2: стартовый протокол дисциплины в Excel для судей с ручкой. Бег — забег, дорожка и три графы
+        секундомеров; техника — порядок выполнения, шесть попыток и «Лучший результат». Фильтр — как на шаге 1."""
+        from urllib.parse import quote
+        dist = str(qs.get("distance") or qs.get("dist") or "").strip()
+        sex = str(qs.get("sex") or "").strip().upper()[:1]
+        ages = [a for a in str(qs.get("ages") or "").split(",") if a in self.AGE_LIMITS]
+        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+        tech = self.discipline_kind(dist) == "tech"
+
+        def keep(e):
+            if sex in ("М", "Ж") and str(e.get("sex") or "").upper() != sex:
+                return False
+            if ages:
+                try:
+                    age = year - int(str(e.get("birth_year") or "")[:4])
+                except ValueError:
+                    return False
+                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
+            return True
+        sl = self.startlist(ev)
+        groups = []
+        for h in sl["heats"]:
+            es = [e for e in h["entries"] if (e.get("distance") or h.get("distance") or "") == dist and keep(e)]
+            if es:
+                groups.append((h, es))
+        head = (["№ п/п", "Порядок выполнения", "Нагрудный номер", "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город"]
+                + [f"Попытка {i}" for i in range(1, 7)] + ["Лучший результат"]) if tech else \
+               ["№ п/п", "Забег №", "Дорожка", "Нагрудный номер", "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город",
+                "Секундомер 1", "Секундомер 2", "Секундомер 3"]
+        when = ".".join(reversed((ev.get("date") or "").split("-")))
+        sub = " · ".join(x for x in ("Стартовый протокол", dist, {"М": "мальчики / юноши", "Ж": "девочки / девушки"}.get(sex, ""),
+                                       when, ev.get("place") or "") if x)
+        rows = [[ev["name"]], [sub], head]
+        group_rows = []
+        for h, es in groups:
+            label = h["name"] if h["name"].startswith("Общий список") else " · ".join(x for x in (h["name"], h.get("category")) if x)
+            rows.append([label] + [""] * (len(head) - 1))
+            group_rows.append(len(rows))
+            heat_no = (re.fullmatch(r"Забег (\d+)", h["name"]) or [None, ""])[1]
+            es = sorted(es, key=lambda e: (e.get("lane") is None, e.get("lane") or 0)) if not tech else es
+            for i, e in enumerate(es, 1):
+                base = [str(e.get("bib") or ""), e.get("name") or "", str(e.get("birth_year") or ""), e.get("rank") or "",
+                        e.get("team") or ""]
+                if tech:
+                    rows.append([i, ""] + base + [""] * 7)
+                else:
+                    rows.append([i, heat_no or h["name"], e.get("lane") or ""] + base + ["", "", ""])
+        if not groups:
+            rows.append(["Сетки по этой дисциплине ещё нет — сформируйте её на шаге 3 Мастера"] + [""] * (len(head) - 1))
+        widths = ([6, 11, 10, 28, 8, 8, 22] + [10] * 6 + [12]) if tech else [6, 9, 9, 10, 28, 8, 8, 22, 12, 12, 12]
+        blob = xlsx_build([("Стартовый протокол", rows)], widths=widths, header_row=3, title_row=1,
+                          group_rows=tuple(group_rows), orientation="landscape" if tech else "portrait",
+                          data_height=24, repeat_header=True)
+        fname = re.sub(r'[\\/:*?"<>|]+', " ", f"Стартовый протокол — {dist or ev['name']}.xlsx")
+        return 200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", blob, {
+            "Content-Disposition": f"attachment; filename=\"startlist.xlsx\"; filename*=UTF-8''{quote(fname)}"}
 
     def _template_response(self, ev: dict):
         from urllib.parse import quote
