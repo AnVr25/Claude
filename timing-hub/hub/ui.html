@@ -468,6 +468,7 @@ a.btn.xls:hover{background:#E9F5EE}
 .usr{background:var(--night-2);border:1px solid var(--night-line);color:#d5deeb;font:600 14px var(--body);padding:6px 10px}
 .usr:hover{border-color:#4a6491;color:#fff}
 .pubchk{margin:0;font-size:13px}
+.wzp-allout{margin:8px 0;padding:12px 14px;border:1px solid var(--ok);border-radius:var(--r);background:#17905A12}.wzp-allout ul{margin:6px 0 0 18px;padding:0}
 .wzp-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
 .ftab{font:600 14px/1.2 var(--body);min-height:40px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .ftab i{font-style:normal;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--ice);font-size:12px}
@@ -863,7 +864,9 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="wzp-top">
     <label class="wzp-disc"><span class="small muted">Дисциплина</span><select id="wzpDisc" aria-label="Дисциплина"></select></label>
     <span class="wzp-kind" id="wzpKind"></span>
+    <button type="button" class="primary big hide" id="wzpAll" title="Одним проходом сформировать сетки по всем дисциплинам, на которые есть одобренные заявки">⚡ Сформировать ВСЕ стартовые протоколы соревнований</button>
   </div>
+  <div id="wzpAllOut" class="wzp-allout hide" role="status" aria-live="polite"></div>
   <div class="wzp-steps" id="wzpSteps" role="tablist"></div>
   <div class="wzp-body" id="wzpBody"></div>
   <div class="cartbox cartmount"></div>
@@ -1799,6 +1802,8 @@ const wzp = (() => {
   }
   function draw(){
     const k = kind(), t = STEP_T;
+    $("wzpAll").classList.toggle("hide", W.step !== 3);      // кнопка «ВСЕ протоколы» — рядом со списком дисциплин, на шаге 3
+    if (W.step !== 3) $("wzpAllOut").classList.add("hide");
     $("wzpKind").className = "wzp-kind " + k;
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
@@ -1942,6 +1947,25 @@ const wzp = (() => {
       loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
     }catch(err){ toast("Ошибка: " + err.message); }
   }
+  // пакетная генерация: все дисциплины с одобренными заявками — за один клик; вид программы сервер определяет сам
+  async function genAll(){
+    const e0 = ev(); if (!e0) return;
+    const n = W.regs.filter(r => r.status === "approved").length;
+    if (!n) return toast("Нет подтверждённых заявок: сначала одобрите их на этапе «2. Регистрация»");
+    if (!confirm(`Сформировать стартовые протоколы по ВСЕМ дисциплинам соревнования (подтверждённых заявок: ${n})?\n\nУже собранные сетки будут пересобраны с учётом новых участников; введённые результаты и номера сохранятся. Дисциплины, где не хватает нагрудных номеров или уже стоит время старта, будут пропущены — причины покажу ниже.`)) return;
+    const btn = $("wzpAll"); btn.disabled = true; const old = btn.textContent; btn.textContent = "Формирую…";
+    try{
+      W.lanes = +($("wzpLanes") || {}).value || W.lanes;
+      const r = await api(`/api/events/${e0.id}/heats-all`, {lanes: W.lanes});
+      const out = $("wzpAllOut");
+      out.innerHTML = `<b>Готово: сформировано дисциплин ${r.done.length} из ${r.disciplines}, участников ${r.entries}.</b>`
+        + (r.done.length ? `<ul>${r.done.map(x => `<li>${esc(x.distance)} — ${x.mode === "list" ? "общий список (6 попыток)" : "забеги: " + x.heats}, участников ${x.entries}</li>`).join("")}</ul>` : "")
+        + (r.skipped.length ? `<div class="wzp-lock">Пропущено:<ul>${r.skipped.map(x => `<li><b>${esc(x.distance)}</b>: ${esc(x.reason)}</li>`).join("")}</ul>Впишите недостающие номера на шаге 2 нужной дисциплины и нажмите кнопку ещё раз.</div>` : "");
+      out.classList.remove("hide"); toast(`Сформировано: дисциплин ${r.done.length}, участников ${r.entries}`);
+      loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
+    }catch(err){ toast("Ошибка: " + err.message); alert("Протоколы не сформированы:\n" + err.message); }
+    finally{ btn.disabled = false; btn.textContent = old; }
+  }
   async function reset(){
     const e0 = ev();
     if (!confirm(`Сбросить сетку дисциплины «${W.disc}»? Время старта будет обнулено, забеги удалены. Введённые результаты и номера сохранятся. После этого список можно сформировать заново — в него войдут все подтверждённые участники.`)) return;
@@ -2082,6 +2106,7 @@ const wzp = (() => {
     const sf = e.target.closest("[data-sexf]"); if (sf) { W.sex = sf.dataset.sexf; save(); return render(); }
     const af = e.target.closest("[data-agef]"); if (af) { const a = af.dataset.agef; W.ages = W.ages.includes(a) ? W.ages.filter(x => x !== a) : [...W.ages, a]; save(); return render(); }
     if (e.target.id === "wzpGen") return gen();
+    if (e.target.id === "wzpAll") return genAll();
     if (e.target.id === "bibClear") return clearBibsAll();
     if (e.target.id === "bibSave") return saveBibs();
     if (e.target.id === "wzpFinish") return finToggle().then(() => render());

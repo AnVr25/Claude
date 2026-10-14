@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `7.1.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.2.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `658ec56`
-- **Дамп сформирован:** 2026-10-14 08:09 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 313 из 313 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 5696 строк, `hub/ui.html` 2742, `hub/protocol.html` 637
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `a7f6476`
+- **Дамп сформирован:** 2026-10-14 08:34 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 320 из 320 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 5734 строк, `hub/ui.html` 2767, `hub/protocol.html` 637
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -511,7 +511,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 3728–3829
+#### `Hub.generate_scoped` — `hub/hub.py` строки 3747–3848
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -618,7 +618,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 3698–3707
+#### `Hub.lane_order` — `hub/hub.py` строки 3717–3726
 
 ```python
     @staticmethod
@@ -633,7 +633,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 3831–3871
+#### `Hub.reset_heats` — `hub/hub.py` строки 3869–3909
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -679,7 +679,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 3710–3714
+#### `Hub.age_limits` — `hub/hub.py` строки 3729–3733
 
 ```python
     @classmethod
@@ -689,7 +689,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 3716–3726
+#### `Hub.age_ok` — `hub/hub.py` строки 3735–3745
 
 ```python
     @classmethod
@@ -784,7 +784,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 3911–3930
+#### `Hub.startlist` — `hub/hub.py` строки 3949–3968
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -1171,12 +1171,12 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                              ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
             v = self._event_view(self.store.get_event(eid))
             return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "pub_regs": v["pub_regs"], "url": v["page_url"],
-                       "registered_url": f"{self.public_base()}/r/{slug}#registered",
+                       "registered_url": f"{self.public_base()}/r/{slug}#participants",
                        "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
 ```
 
-#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2746–2823
+#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2761–2838
 
 ```python
         if action == "entry":
@@ -1875,7 +1875,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1645–1702
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1648–1705
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1939,7 +1939,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1704–2125
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1707–2150
 
 ```js
 const wzp = (() => {
@@ -2040,6 +2040,8 @@ const wzp = (() => {
   }
   function draw(){
     const k = kind(), t = STEP_T;
+    $("wzpAll").classList.toggle("hide", W.step !== 3);      // кнопка «ВСЕ протоколы» — рядом со списком дисциплин, на шаге 3
+    if (W.step !== 3) $("wzpAllOut").classList.add("hide");
     $("wzpKind").className = "wzp-kind " + k;
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
@@ -2183,6 +2185,25 @@ const wzp = (() => {
       loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
     }catch(err){ toast("Ошибка: " + err.message); }
   }
+  // пакетная генерация: все дисциплины с одобренными заявками — за один клик; вид программы сервер определяет сам
+  async function genAll(){
+    const e0 = ev(); if (!e0) return;
+    const n = W.regs.filter(r => r.status === "approved").length;
+    if (!n) return toast("Нет подтверждённых заявок: сначала одобрите их на этапе «2. Регистрация»");
+    if (!confirm(`Сформировать стартовые протоколы по ВСЕМ дисциплинам соревнования (подтверждённых заявок: ${n})?\n\nУже собранные сетки будут пересобраны с учётом новых участников; введённые результаты и номера сохранятся. Дисциплины, где не хватает нагрудных номеров или уже стоит время старта, будут пропущены — причины покажу ниже.`)) return;
+    const btn = $("wzpAll"); btn.disabled = true; const old = btn.textContent; btn.textContent = "Формирую…";
+    try{
+      W.lanes = +($("wzpLanes") || {}).value || W.lanes;
+      const r = await api(`/api/events/${e0.id}/heats-all`, {lanes: W.lanes});
+      const out = $("wzpAllOut");
+      out.innerHTML = `<b>Готово: сформировано дисциплин ${r.done.length} из ${r.disciplines}, участников ${r.entries}.</b>`
+        + (r.done.length ? `<ul>${r.done.map(x => `<li>${esc(x.distance)} — ${x.mode === "list" ? "общий список (6 попыток)" : "забеги: " + x.heats}, участников ${x.entries}</li>`).join("")}</ul>` : "")
+        + (r.skipped.length ? `<div class="wzp-lock">Пропущено:<ul>${r.skipped.map(x => `<li><b>${esc(x.distance)}</b>: ${esc(x.reason)}</li>`).join("")}</ul>Впишите недостающие номера на шаге 2 нужной дисциплины и нажмите кнопку ещё раз.</div>` : "");
+      out.classList.remove("hide"); toast(`Сформировано: дисциплин ${r.done.length}, участников ${r.entries}`);
+      loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
+    }catch(err){ toast("Ошибка: " + err.message); alert("Протоколы не сформированы:\n" + err.message); }
+    finally{ btn.disabled = false; btn.textContent = old; }
+  }
   async function reset(){
     const e0 = ev();
     if (!confirm(`Сбросить сетку дисциплины «${W.disc}»? Время старта будет обнулено, забеги удалены. Введённые результаты и номера сохранятся. После этого список можно сформировать заново — в него войдут все подтверждённые участники.`)) return;
@@ -2323,6 +2344,7 @@ const wzp = (() => {
     const sf = e.target.closest("[data-sexf]"); if (sf) { W.sex = sf.dataset.sexf; save(); return render(); }
     const af = e.target.closest("[data-agef]"); if (af) { const a = af.dataset.agef; W.ages = W.ages.includes(a) ? W.ages.filter(x => x !== a) : [...W.ages, a]; save(); return render(); }
     if (e.target.id === "wzpGen") return gen();
+    if (e.target.id === "wzpAll") return genAll();
     if (e.target.id === "bibClear") return clearBibsAll();
     if (e.target.id === "bibSave") return saveBibs();
     if (e.target.id === "wzpFinish") return finToggle().then(() => render());
@@ -2432,7 +2454,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1495–1495
+#### `rankOpts` — `hub/ui.html` строки 1498–1498
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2552,7 +2574,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 313 из 313 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 320 из 320 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2605,6 +2627,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+a7f6476 2026-10-14 ui: оптимизирован Шаг 1 Мастера, добавлена кнопка очистки номеров и безопасные публичные списки участников v7.1.0
 658ec56 2026-10-14 chore: убраны остатки разбора ридеров (регулярные выражения, комментарии, имена VPN-доступов)
 3d0a05f 2026-10-14 major: запущен чистый стадионно-манежный монолит SakhStart v7.0.0, вырезан код чипового хронометража
 6233695 2026-10-14 release: глобальная реконструкция платформы, запущен монолитный SakhStart v6.0.0
@@ -2618,6 +2641,5 @@ a579ae1 2026-10-13 major: запущен Личный кабинет трене�
 77e5572 2026-10-13 ui: внедрена судейская сетка попыток и автоскролл участников на табло v4.5.1
 a331a84 2026-10-13 major: упорядочена система ролей (Админ/Судья) и ликвидировано забавление кнопок обновлений v4.5.0
 43ccb4d 2026-10-13 major: зафиксирован единый монолитный интерфейс навигации и внедрен пульт управления табло v4.4.0
-c3e08b9 2026-10-13 major: запущен выделенный мобильный роут /sector для планшетов судей со сквозной трансляцией результатов на Табло v4.3.0
 ```
 

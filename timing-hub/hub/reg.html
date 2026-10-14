@@ -198,6 +198,19 @@ h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
 .tile.hot{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
 .tile .live,.list .run{display:inline-flex;align-items:center;gap:7px;color:var(--bad);font-weight:700}
 .tile .live::before,.list .run::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--track);animation:pulse 1.6s ease-out infinite}
+.pl h2{font-size:22px;margin:0 0 10px}.pl-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;margin-bottom:10px}
+.pl input#pQ{display:block;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:11px 12px;min-height:48px;width:100%;box-sizing:border-box}
+.pl .pl-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.pl .pl-tabs button{width:auto;min-height:40px;margin:0;padding:8px 14px;border-radius:99px;border:1px solid var(--field-line);background:var(--panel);color:var(--ink);font:600 14px/1.2 var(--body)}
+.pl .pl-tabs button:hover{background:var(--soft)}
+.pl .pl-tabs button i{font-style:normal;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--soft);color:var(--ink);font-size:12px}
+.pl .pl-tabs button.on{background:#0B1D37;border-color:#0B1D37;color:#fff}.pl .pl-tabs button.on i{background:#E71E25;color:#fff}
+.pl .pl-tabs.ages button{font-weight:500;min-height:34px;padding:5px 12px}
+.pl-cnt{margin:8px 0 4px;font-size:14px}.pl-list{list-style:none;margin:0;padding:0}.pl-list li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.pl-list .no{min-width:34px;text-align:left;color:var(--muted);font-variant-numeric:tabular-nums}.pl-list .who{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;text-align:left;align-items:flex-start}
+.pl .pl-list .who b{display:block;color:var(--ink);font-weight:700;font-size:17px}.pl-list .sub{color:var(--muted);font-size:14px}
+.pl-list .lockd{margin-left:8px;font-size:12px}.pl-h3{margin:16px 0 6px;font-size:16px}.pl-rel{list-style:none;margin:0;padding:0}.pl-rel li{padding:8px 0;border-top:1px solid var(--line)}
+.pl #plMore{width:auto;padding:10px 18px;min-height:44px;margin-top:10px}
 .docs{margin-top:12px;scroll-margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .docs h2{font-size:20px;line-height:1.2;padding:16px 16px 10px}
 .docs a{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 16px;border-top:1px solid var(--line);color:inherit;text-decoration:none;transition:background-color .15s}
@@ -554,36 +567,56 @@ function layout(){
   else if(c.status==="planned"&&c.ours!==false) reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>Приём заявок пока не открыт</b><div class="muted">Регистрация появится на этой странице — следите за новостями федерации.</div></div></div>`;
   else if(c.reg&&c.status!=="finished") reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`;
   const about=aboutBlock();
+  const part=d.regs_public?'<section class="card pl" id="participants" aria-labelledby="plH"><h2 id="plH">👥 Заявленные участники</h2><div id="plBody" class="muted">Загружаю список…</div></section>':"";
   const empty=!ev&&!reg&&!about&&!d.regs_public?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
   const cov=href(c.cover);
   $("root").innerHTML=headerCard()+(cov?`<div class="cover"><img src="${esc(cov)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>`:"")
-    +(regFirst?reg+ev:ev+reg)+(d.regs_public?'<section class="card" id="registered" aria-labelledby="regH"><h2 id="regH">Списки прохождения регистрации</h2><div class="muted" id="regListBody">Загружаю список…</div></section>':"")+about+empty;
+    +(regFirst?reg+part+ev:part+ev+reg)+about+empty;
   lockHint();
-  if(d.regs_public) loadRegList();
+  if(d.regs_public) loadParticipants();
   if(d.open) render();
 }
-// 7.1: открытый список «прошли регистрацию»: только «Фамилия И.», возрастная группа и дисциплины одобренных заявок
-let REGLIST=null;
-async function loadRegList(){
-  const box=$("regListBody"); if(!box) return;
-  try{ const r=await fetch(`/r/${slug}/registered.json`); if(!r.ok) throw new Error("нет"); REGLIST=await r.json(); drawRegList(""); }
-  catch(e){ const s=$("registered"); if(s) s.remove(); }
+// 7.2: открытый модуль «Заявленные участники» (по образцу списков MyRace): дисциплина → пол → возрастная группа → сквозной список
+let PL=null; const PS={d:"",s:"",g:"",q:"",n:50};
+async function loadParticipants(){
+  const box=$("plBody"); if(!box) return;
+  try{ const r=await fetch(`/r/${slug}/participants.json`); if(!r.ok) throw new Error("нет"); PL=await r.json();
+    PS.d=(PL.disciplines.find(x=>x.count)||PL.disciplines[0]||{}).name||""; drawPl(true); }
+  catch(e){ const s=$("participants"); if(s) s.remove(); }
 }
-function drawRegList(q){
-  const box=$("regListBody"), d=REGLIST; if(!box||!d) return;
-  const t=String(q||"").trim().toLowerCase();
-  const groups=d.groups.map(g=>({group:g.group,athletes:g.athletes.filter(a=>!t||a.name.toLowerCase().includes(t))})).filter(g=>g.athletes.length);
-  const relays=(d.relays||[]).filter(x=>!t||x.team.toLowerCase().includes(t));
-  if(!$("regQ")) box.innerHTML=`<p class="muted" style="margin:0 0 10px">Проверьте, что спортсмен внесён в базу соревнования: показаны только фамилия, первая буква имени, возрастная группа и дисциплины, на которые заявка одобрена. Номера, стартовые протоколы и результаты — в личном кабинете тренера.</p>
-    <label class="f" for="regQ">Найти по фамилии</label><input id="regQ" class="sel" type="search" autocomplete="off" placeholder="например, Иванов" style="max-width:360px">
-    <div class="muted" style="margin:8px 0" id="regCnt"></div><div id="regOut"></div>`;
-  $("regCnt").textContent=`Прошли регистрацию: ${d.total} · обновлено ${d.updated}`;
-  $("regOut").innerHTML=(groups.map(g=>`<h3 style="margin:14px 0 6px;font-size:16px">${esc(g.group)} <span class="muted">· ${g.athletes.length}</span></h3>
-    <ul style="list-style:none;margin:0;padding:0">${g.athletes.map(a=>`<li style="display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 0;border-top:1px solid var(--line)"><b style="min-width:150px">${esc(a.name)}</b><span class="muted">${a.disciplines.map(esc).join(" · ")}</span></li>`).join("")}</ul>`).join("")
-    +(relays.length?`<h3 style="margin:14px 0 6px;font-size:16px">Эстафетные команды</h3><ul style="list-style:none;margin:0;padding:0">${relays.map(x=>`<li style="padding:8px 0;border-top:1px solid var(--line)"><b>${esc(x.team)}</b> <span class="muted">· ${esc(x.discipline)}</span></li>`).join("")}</ul>`:""))
-    ||'<div class="muted">Никого не найдено. Если спортсмена нет в списке, заявка ещё не одобрена секретарём или не подана.</div>';
+function plRows(skip){ // строки с учётом выбора; skip — какой фильтр не применять (для счётчиков вкладок)
+  return PL.rows.filter(x=>x.d===PS.d&&(skip==="s"||!PS.s||x.s===PS.s)&&(skip==="g"||!PS.g||x.g===PS.g)&&(!PS.q||x.n.toLowerCase().includes(PS.q.toLowerCase())));
 }
-document.addEventListener("input",e=>{ if(e.target&&e.target.id==="regQ") drawRegList(e.target.value); });
+function drawPl(full){
+  const box=$("plBody"), d=PL; if(!box||!d) return;
+  if(full||!$("plList")){
+    box.innerHTML=`<div class="pl-ctl"><div><label class="f" for="pDisc">Дисциплина</label>
+        <select id="pDisc" class="sel">${d.disciplines.map(x=>`<option value="${esc(x.name)}"${x.name===PS.d?" selected":""}>${esc(x.name)} · ${x.count}</option>`).join("")}</select></div>
+      <div><label class="f" for="pQ">Найти по фамилии</label><input id="pQ" class="sel" type="search" autocomplete="off" placeholder="например, Иванов" value="${esc(PS.q)}"></div></div>
+      <div class="pl-tabs" role="tablist" aria-label="Пол" id="pSex"></div>
+      <div class="pl-tabs ages" role="group" aria-label="Возрастная группа" id="pAge"></div>
+      <div class="muted pl-cnt" id="plCnt" role="status" aria-live="polite"></div><div id="plList"></div>`;
+  }
+  const bySex=x=>plRows("s").filter(r=>!x||r.s===x).length;
+  $("pSex").innerHTML=[["","Все"],["М","М"],["Ж","Ж"]].map(([v,t])=>`<button type="button" role="tab" aria-selected="${PS.s===v}" class="${PS.s===v?"on":""}" data-ps="${v}">${t} <i>${bySex(v)}</i></button>`).join("");
+  const ageCnt=g=>plRows("g").filter(r=>!g||r.g===g).length;
+  $("pAge").innerHTML=d.ages.length?[["","Все возрасты"],...d.ages.map(a=>[a.id,a.name])].map(([v,t])=>`<button type="button" aria-pressed="${PS.g===v}" class="${PS.g===v?"on":""}" data-pg="${esc(v)}">${esc(t)} <i>${ageCnt(v)}</i></button>`).join(""):"";
+  const rows=plRows(), shown=rows.slice(0,PS.n);
+  $("plCnt").textContent=`Заявлено: ${rows.length} · всего в этой дисциплине: ${PL.rows.filter(x=>x.d===PS.d).length} · обновлено ${d.updated}`;
+  $("plList").innerHTML=(shown.length?`<ol class="pl-list" start="1">${shown.map((x,i)=>`<li><span class="no">${i+1}.</span><div class="who"><b>${esc(x.n)}</b>
+      <span class="sub">${[x.y?x.y+" г.р.":"",x.r].filter(Boolean).map(esc).join(" · ")}${x.m?'<span class="lockd" title="Данные скрыты: заявка подана по тексту согласия без публикации в открытом списке">🔒 данные скрыты</span>':""}</span>
+      ${x.t||x.c?`<span class="sub">${esc(x.t)}${x.c?`${x.t?" · ":""}тренер: ${esc(x.c)}`:""}</span>`:""}</div></li>`).join("")}</ol>`
+    :'<div class="muted" style="padding:12px 0">Никого не найдено. Если спортсмена нет в списке, заявка ещё не одобрена секретарём или не подана.</div>')
+    +(rows.length>shown.length?`<button type="button" class="ghost" id="plMore" style="margin-top:10px">Показать ещё (${rows.length-shown.length})</button>`:"")
+    +(d.relays&&d.relays.length&&!PS.q?`<h3 class="pl-h3">Эстафетные команды</h3><ul class="pl-rel">${d.relays.filter(x=>!PS.d||x.discipline===PS.d).map(x=>`<li><b>${esc(x.team)}</b> <span class="muted">· ${esc(x.discipline)}</span></li>`).join("")}</ul>`:"");
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest&&e.target.closest("[data-ps],[data-pg],#plMore"); if(!b||!PL) return;
+  if(b.id==="plMore") PS.n+=50; else if(b.dataset.ps!==undefined){ PS.s=b.dataset.ps; PS.n=50; } else { PS.g=b.dataset.pg; PS.n=50; }
+  drawPl(false);
+});
+document.addEventListener("input",e=>{ if(e.target&&e.target.id==="pQ"){ PS.q=e.target.value; PS.n=50; drawPl(false); } });
+document.addEventListener("change",e=>{ if(e.target&&e.target.id==="pDisc"){ PS.d=e.target.value; PS.s=PS.g=""; PS.n=50; drawPl(false); } });
 // программа дня и контакты организатора
 function aboutBlock(){
   const c=CARD, prog=Array.isArray(c.program)?c.program.filter(p=>p&&p.title):[], cont=Array.isArray(c.contacts)?c.contacts.filter(x=>x&&x.text):[];

@@ -199,7 +199,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.1.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.1.0", r.stdout + r.stderr)
+    check("версия сервера 7.2.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.2.0", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -390,7 +390,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.1.0" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.2.0" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -403,7 +403,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.1.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.2.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1278,7 +1278,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.1: версия 7.1.0 и дата сборки 14.10.2026", st3["version"] == "7.1.0" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.2.0 и дата сборки 14.10.2026", st3["version"] == "7.2.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -2027,28 +2027,87 @@ def main() -> int:
         for r_ in regs14:        # «Ждущая» остаётся на проверке: в списке её быть не должно
             if r_["last_name"] != "Ждущая":
                 api("POST", f"/api/events/{e14}/regs/{r_['id']}", {"status": "approved"})
-        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
-        check("7.1: открытый список не опубликован, пока секретарь не включил его (404)", codes14 == [201] * 4 and c_ == 404, f"{codes14} {c_} {t_[:80]}")
+        c_, t_, _ = pub("GET", f"/r/{s14}/participants.json")
+        check("7.2: открытый список участников не опубликован, пока секретарь не включил его (404)", codes14 == [201] * 4 and c_ == 404, f"{codes14} {c_} {t_[:80]}")
         c_, pb14 = api("POST", f"/api/events/{e14}/publish", {"regs": True})
-        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
-        rl14 = json.loads(t_) if c_ == 200 else {}
-        flat14 = {a["name"]: (g["group"], a["disciplines"]) for g in rl14.get("groups", []) for a in g["athletes"]}
-        check("7.1: открытый список без входа: «Фамилия И.», возрастная группа из AGES и дисциплины одобренных заявок; неодобренные не видны",
-              c_ == 200 and pb14.get("pub_regs") is True and rl14["total"] == 3
-              and flat14.get("Петрова М.") == ("до 14 лет", [DM, D60]) and flat14.get("Сидорова О.") == ("до 14 лет", [D60])
-              and flat14.get("Старшая А.", ("",))[0] == "взрослые" and "Ждущая И." not in flat14, t_[:300])
-        leak = [w for w in ("Мария", "Ольга", "2013", "bib", "birth", "lane", "Секретная", "Тренер", "79140000000", "Родитель", "contact", "coach", "team", "rank")
-                if w in t_]
-        check("7.1: в открытом списке нет полных имён, дат рождения, номеров, дорожек, команд, тренеров и контактов", not leak, str(leak))
+        c_, t_, _ = pub("GET", f"/r/{s14}/participants.json")
+        pl14 = json.loads(t_) if c_ == 200 else {}
+        row14 = {r_["n"]: r_ for r_ in pl14.get("rows", [])}
+        check("7.2: модуль «Заявленные участники» без входа: строка на заявку, Фамилия Имя, год рождения, разряд, команда, тренер, пол и возрастная группа; "
+              "неодобренные не видны; дисциплины со счётчиками",
+              c_ == 200 and pb14.get("pub_regs") is True and pl14["total"] == 4 and pl14["people"] == 3
+              and row14.get("Петрова Мария", {}).get("y") == "2013" and row14["Петрова Мария"]["r"] == "3 юн."
+              and row14["Петрова Мария"]["t"] == "Секретная команда" and row14["Петрова Мария"]["c"] == "Тренер Т.Т."
+              and row14["Петрова Мария"]["s"] == "Ж" and row14["Петрова Мария"]["g"] == "u14" and row14["Петрова Мария"]["m"] == 0
+              and "Ждущая Ирина" not in row14 and {x["name"]: x["count"] for x in pl14["disciplines"]} == {DM: 1, D60: 4 - 1}
+              and any(a["id"] == "sen" for a in pl14["ages"]), t_[:400])
+        leak = [w for w in ("bib", "birth", "lane", "contact", "79140000000", "Родитель", "representative", "consent", "email") if w in t_]
+        check("7.2: в открытом списке нет номеров, дорожек, дат рождения, контактов и представителей", not leak, str(leak))
         c_, t_, _ = pub("GET", f"/r/{s14}/startlist.json")
         c2_, t2_, _ = pub("GET", f"/r/{s14}/results.json")
         c3_, t3_, _ = pub("GET", f"/r/{s14}/protocol")
-        check("7.1: полные протоколы по-прежнему закрыты без входа: нужен личный кабинет", c_ == 401 and c2_ == 401 and c3_ in (302, 401), f"{c_} {c2_} {c3_}")
+        check("7.2: судейские бланки и протоколы по-прежнему закрыты без входа: нужен личный кабинет", c_ == 401 and c2_ == 401 and c3_ in (302, 401), f"{c_} {c2_} {c3_}")
         c_, t_, _ = pub("GET", f"/r/{s14}/info")
-        check("7.1: страница события знает, что список опубликован (regs_public)", c_ == 200 and json.loads(t_).get("regs_public") is True, t_[:120])
+        check("7.2: страница события знает, что список опубликован (regs_public)", c_ == 200 and json.loads(t_).get("regs_public") is True, t_[:120])
+        pg14 = pub("GET", f"/r/{s14}")[1]
+        check("7.2: страница события содержит модуль «Заявленные участники» с выбором дисциплины, полом и возрастами, поиском и «Показать ещё»",
+              "Заявленные участники" in pg14 and "pDisc" in pg14 and "data-ps" in pg14 and "data-pg" in pg14 and "plMore" in pg14 and 'name="robots"' in pg14, "")
+        # согласие без пункта о публикации → «Фамилия И.» без года, разряда, команды и тренера
+        c_, e15v = api("POST", "/api/events", {"name": "Закрытая форма", "date": "2026-10-21", "kind": "stadium", "timing": "manual"})
+        e15 = e15v["id"]
+        c_, evr15 = api("POST", f"/api/events/{e15}", {"reg_open": True, "reg_rules": "Девочки до 14 лет;Ж;2012;2013", "reg_distances": D60,
+                                                       "reg_consent": "Я даю согласие на обработку данных для регистрации на соревнование."})
+        s15 = evr15["reg_path"].rsplit("/", 1)[-1]
+        body15 = {"last_name": "Иванова", "first_name": "Анна", "birth_date": "2013-02-02", "sex": "Ж", "team": "Команда Х", "coach": "Тренер Х",
+                  "consent": True, "policy": True, "representative": "Р", "rank": "3 юн.", "distances": [{"distance": D60, "best": "9.5"}]}
+        pub("POST", f"/r/{s15}", json.dumps(body15).encode())
+        api("POST", f"/api/events/{e15}/regs", {"approve_all": True})
+        api("POST", f"/api/events/{e15}/publish", {"regs": True})
+        c_, t_, _ = pub("GET", f"/r/{s15}/participants.json")
+        r15 = json.loads(t_)["rows"][0] if c_ == 200 else {}
+        check("7.2: у заявки, поданной по согласию без пункта о публикации, данные скрыты: «Иванова А.», без года, разряда, команды и тренера",
+              c_ == 200 and r15.get("n") == "Иванова А." and r15.get("m") == 1 and not r15.get("y") and not r15.get("r") and not r15.get("t") and not r15.get("c"), t_[:300])
         api("POST", f"/api/events/{e14}/publish", {"regs": False})
-        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
-        check("7.1: публикацию списка можно снять — снова 404", c_ == 404, str(c_))
+        c_, t_, _ = pub("GET", f"/r/{s14}/participants.json")
+        check("7.2: публикацию списка можно снять — снова 404", c_ == 404, str(c_))
+
+        # пакетная генерация «Сформировать ВСЕ протоколы»
+        c_, e16v = api("POST", "/api/events", {"name": "Пакетная генерация", "date": "2026-10-22", "kind": "stadium", "timing": "manual"})
+        e16 = e16v["id"]
+        c_, evr16 = api("POST", f"/api/events/{e16}", {"reg_open": True, "reg_rules": "Девочки до 14 лет;Ж;2012;2013", "reg_distances": f"{DM}\n60 м\n200 м"})
+        s16 = evr16["reg_path"].rsplit("/", 1)[-1]
+        for i_ in range(10):
+            b_ = {"last_name": "Пакетова" + "абвгдежзик"[i_], "first_name": "Нина", "birth_date": "2013-03-03", "sex": "Ж", "team": "СШОР", "coach": "Т",
+                  "consent": True, "policy": True, "representative": "Р", "rank": "3 юн.",
+                  "distances": [{"distance": d_, "best": "20" if d_ == DM else "9.5"} for d_ in ((DM, D60) if i_ < 6 else (D60, "200 м"))]}
+            pub("POST", f"/r/{s16}", json.dumps(b_).encode())
+        api("POST", f"/api/events/{e16}/regs", {"approve_all": True})
+        c_, na = api("POST", f"/api/events/{e16}/heats-all", {})
+        check("7.2: «Сформировать ВСЕ» без номеров: ничего не строится, у каждой дисциплины понятная причина (номера вручную, автонумерации нет)",
+              c_ == 200 and not na["done"] and len(na["skipped"]) == 3 and all("номер" in x["reason"] for x in na["skipped"]), str(na)[:300])
+        bv16 = json.loads(http("GET", f"/api/events/{e16}/bibs?distance=" + urllib.parse.quote("60 м"))[1])
+        api("POST", f"/api/events/{e16}/bibs", {"rows": [{"ids": r["ids"], "bib": str(200 + i_)} for i_, r in enumerate(bv16["rows"])]})
+        bvm16 = json.loads(http("GET", f"/api/events/{e16}/bibs?distance=" + urllib.parse.quote("200 м"))[1])
+        c_, na2 = api("POST", f"/api/events/{e16}/heats-all", {"lanes": 8})
+        sl16 = json.loads(http("GET", f"/api/events/{e16}/startlist")[1])
+        kinds16 = {x["distance"]: x["mode"] for x in na2["done"]}
+        check("7.2: после ввода номеров в 60 м (и у тех же людей в других видах) за один проход собраны все дисциплины, у которых номера есть: "
+              "метание — общий список, бег — забеги; у кого не хватает номеров — пропущено с причиной",
+              c_ == 200 and kinds16.get(DM) == "list" and kinds16.get("60 м") == "heats" and na2["entries"] >= 16
+              and any(x["distance"] == "200 м" and "номер" in x["reason"] for x in na2["skipped"]) == (bvm16["with_bib"] < bvm16["total"])
+              and len(sl16["heats"]) >= 3, str(na2)[:400])
+        bvm16 = json.loads(http("GET", f"/api/events/{e16}/bibs?distance=" + urllib.parse.quote("200 м"))[1])
+        api("POST", f"/api/events/{e16}/bibs", {"rows": [{"ids": r["ids"], "bib": r["bib"] or str(300 + i_)} for i_, r in enumerate(bvm16["rows"])]})
+        c_, na3 = api("POST", f"/api/events/{e16}/heats-all", {"lanes": 8})
+        check("7.2: после добровольного ввода недостающих номеров повторное нажатие собирает остальные; повтор безопасен (пересборка), 3 дисциплины готовы",
+              c_ == 200 and len(na3["done"]) == 3 and not na3["skipped"] and na3["entries"] == 20, str(na3)[:300])
+        c_, na4 = api("POST", f"/api/events/{e16}/start", {"wave": sl16["heats"][0]["name"]})
+        c_, na5 = api("POST", f"/api/events/{e16}/heats-all", {})
+        check("7.2: дисциплина со стоящим временем старта при пакетной пересборке пропускается, остальные — собираются",
+              c_ == 200 and len(na5["skipped"]) == 1 and "старт" in na5["skipped"][0]["reason"] and len(na5["done"]) == 2, str(na5)[:300])
+        c_, e17v = api("POST", "/api/events", {"name": "Пустое событие", "date": "2026-10-23", "kind": "stadium", "timing": "manual"})
+        c_, na6 = api("POST", f"/api/events/{e17v['id']}/heats-all", {})
+        check("7.2: пакетная генерация по событию без одобренных заявок отклоняется понятным сообщением", c_ == 400 and "заяв" in na6.get("error", ""), str(na6))
 
         # очистка номеров дисциплины
         bv = json.loads(http("GET", f"/api/events/{e14}/bibs?distance=" + urllib.parse.quote(D60))[1])

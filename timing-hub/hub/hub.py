@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.1.0"
+VERSION = "7.2.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1357,11 +1357,13 @@ class Hub:
         picked = sum(1 for r in rows if r["picked_at"])
         return {"rows": rows, "total": len(rows), "picked": picked, "left": len(rows) - picked}
 
-    def registered_list(self, ev: dict) -> dict:
-        """7.1: открытый «Список прохождения регистрации» для тренеров — БЕЗ авторизации, поэтому строго минимальный набор:
-        «Фамилия И.», возрастная группа из справочника AGES и дисциплины, на которые заявка одобрена секретарём.
-        Ни номеров, ни дорожек, ни дат рождения, ни команд, ни контактов; у эстафет — только название команды."""
+    def participants_list(self, ev: dict) -> dict:
+        """7.2: открытый модуль «Заявленные участники» (по образцу списков MyRace): одна строка на заявку, одобренную секретарём.
+        Полные данные (Фамилия Имя, год рождения, разряд, команда, тренер) выдаются только по тем заявкам, где согласие участника
+        охватывало размещение в открытом списке (текст согласия содержит PUBLIC_LIST_MARK); по остальным — «Фамилия И.» без
+        года, разряда, команды и тренера. Номеров, дорожек, дат рождения, контактов и представителей нет никогда."""
         regs = [r for r in self.store.registrations(ev["id"]) if r["status"] == "approved"]
+        covered = {t["hash"] for t in self.store.consent_texts() if self.PUBLIC_LIST_MARK in (t.get("text") or "")}
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
         ages = [a for a in (self.disciplines()["data"].get("ages") or []) if a.get("id")]
         ordered = sorted([a for a in ages if a["id"] != "sen"], key=lambda a: int(a.get("max", 200))) + [a for a in ages if a["id"] == "sen"]
@@ -1370,35 +1372,33 @@ class Hub:
             try:
                 age = year - int(str(birth)[:4])
             except ValueError:
-                return "Без возрастной группы"
+                return ""
             for a in ordered:
                 if int(a.get("min", 0)) <= age <= int(a.get("max", 200)):
-                    return a["name"]
-            return "Без возрастной группы"
-        order = {d: i for i, d in enumerate(self.reg_distances(ev))}
-        key_of = self._people(regs)
-        people: dict = {}
-        relays: dict = {}
-        for r in sorted(regs, key=lambda r: r["id"]):
+                    return a["id"]
+            return ""
+        dists = self.reg_distances(ev)
+        order = {d: i for i, d in enumerate(dists)}
+        rows, relays = [], {}
+        for r in regs:
             if r.get("relay"):
                 relays.setdefault((r["relay"], r["distance"]), None)
                 continue
-            first = str(r.get("first_name") or "").strip()
-            p = people.setdefault(key_of[r["id"]], {
-                "name": f"{str(r['last_name']).strip().capitalize()} {first[:1].upper()}." if first else str(r["last_name"]).strip().capitalize(),
-                "group": group_of(r.get("birth_date")), "disciplines": []})
-            if r["distance"] not in p["disciplines"]:
-                p["disciplines"].append(r["distance"])
-        groups: dict = {}
-        for p in people.values():
-            p["disciplines"].sort(key=lambda d: order.get(d, 99))
-            groups.setdefault(p["group"], []).append({"name": p["name"], "disciplines": p["disciplines"]})
-        rank = {a["name"]: i for i, a in enumerate(ordered)}
-        out = [{"group": g, "athletes": sorted(lst, key=lambda x: x["name"].lower())}
-               for g, lst in sorted(groups.items(), key=lambda kv: (rank.get(kv[0], 99), kv[0]))]
+            last, first = str(r["last_name"]).strip(), str(r.get("first_name") or "").strip()
+            full = r.get("consent_hash") in covered
+            rows.append({"d": r["distance"], "s": str(r.get("sex") or "").upper(), "g": group_of(r.get("birth_date")),
+                         "n": f"{last} {first}".strip() if full else (f"{last} {first[:1]}." if first else last),
+                         "y": str(r.get("birth_date") or "")[:4] if full else "", "r": (r.get("rank") or "") if full else "",
+                         "t": (r.get("team") or "") if full else "", "c": (r.get("coach") or "") if full else "", "m": 0 if full else 1})
+        rows.sort(key=lambda x: (order.get(x["d"], 99), x["d"], x["n"].lower()))
+        seen_d = [d for d in dists if any(x["d"] == d for x in rows)] + sorted({x["d"] for x in rows} - set(dists))
+        used_g = {x["g"] for x in rows}
+        people = len({(x["n"], x["y"], x["t"]) for x in rows}) if rows else 0
         return {"event": {"name": ev["name"], "date": ev.get("date"), "place": ev.get("place") or ""},
-                "updated": fmt_db(now_local())[:16], "total": len(people), "groups": out,
-                "relays": [{"team": t, "discipline": d} for (t, d) in sorted(relays)]}
+                "updated": fmt_db(now_local())[:16], "total": len(rows), "people": people,
+                "disciplines": [{"name": d, "count": sum(1 for x in rows if x["d"] == d)} for d in seen_d],
+                "ages": [{"id": a["id"], "name": a["name"]} for a in ordered if a["id"] in used_g],
+                "rows": rows, "relays": [{"team": t, "discipline": d} for (t, d) in sorted(relays)]}
 
     def calendar(self, year: Optional[int]) -> dict:
         evs = [e for e in self.store.list_events() if e.get("pub_site")]
@@ -2704,7 +2704,7 @@ class Hub:
                              ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
             v = self._event_view(self.store.get_event(eid))
             return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "pub_regs": v["pub_regs"], "url": v["page_url"],
-                       "registered_url": f"{self.public_base()}/r/{slug}#registered",
+                       "registered_url": f"{self.public_base()}/r/{slug}#participants",
                        "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
         if action == "resetheats":
@@ -2737,6 +2737,21 @@ class Hub:
                 self.store.update_event(eid, {"reg_lanes": data["lanes"]})
             self.store.audit(who, eid, "Сформирован общий список" if out.get("mode") == "list" else "Сформированы забеги",
                              f"{data.get('distance') + ': ' if data.get('distance') else ''}{len(out['heats'])} забегов, {out['entries']} участников")
+            try:
+                self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
+                               self._startlist_csv(self.store.get_event(eid)).encode("utf-8"), "startlist", who, "Для судей")
+            except Exception:
+                log.exception("стартовый список в папку «Для судей»")
+            return ok(out)
+        if action == "heats-all":
+            out = self.generate_all(ev, data.get("lanes") or ev.get("reg_lanes") or 8)
+            if not out["disciplines"]:
+                return err("нет подтверждённых заявок: сначала одобрите их на этапе «2. Регистрация»")
+            if data.get("lanes"):
+                self.store.update_event(eid, {"reg_lanes": data["lanes"]})
+            self.store.audit(who, eid, "Сформированы все стартовые протоколы",
+                             f"дисциплин {len(out['done'])} из {out['disciplines']}, участников {out['entries']}"
+                             + (f"; пропущено: {'; '.join(x['distance'] for x in out['skipped'])}" if out["skipped"] else ""))
             try:
                 self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
                                self._startlist_csv(self.store.get_event(eid)).encode("utf-8"), "startlist", who, "Для судей")
@@ -3216,6 +3231,9 @@ class Hub:
                              f"{len(plan)}: " + "; ".join(ch) + (f"; продублировано на другие дисциплины: {spread}" if spread else ""))
         return 200, {"ok": True, "saved": len(plan), "spread": spread}
 
+    # фраза, по которой видно: этот текст согласия охватывает размещение данных в открытом списке участников
+    PUBLIC_LIST_MARK = "фамилии, имени, года рождения, спортивного разряда, команды и тренера в открытом списке заявленных участников"
+
     def consent_text(self, ev: dict) -> str:
         if ev.get("reg_consent"):
             return ev["reg_consent"]
@@ -3230,7 +3248,8 @@ class Hub:
                 f"Цели: регистрация и участие в соревнованиях «{ev['name']}»; формирование стартовых и итоговых "
                 f"протоколов; расчёт выполненных спортивных разрядов по ЕВСК и подготовка документов для их присвоения; "
                 f"работа судей, хронометраж; отображение фамилии, имени, стартового номера и результата на табло "
-                f"и их объявление диктором на месте соревнований.\n\n"
+                f"и их объявление диктором на месте соревнований; размещение {self.PUBLIC_LIST_MARK} на странице "
+                f"соревнования в интернете (для просмотра тренерами и спортсменами состава участников).\n\n"
                 f"Действия: сбор, запись, систематизация, накопление, хранение, уточнение, извлечение, использование, "
                 f"предоставление доступа судьям, организаторам и тренерам с подтверждённой учётной записью, передача "
                 f"в органы, присваивающие спортивные разряды, обезличивание, блокирование, удаление, уничтожение — "
@@ -3827,6 +3846,25 @@ class Hub:
             for rid in r["_ids"]:
                 self.store.update_registration(rid, bib=r["bib"])
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
+
+    def generate_all(self, ev: dict, lanes: int) -> dict:
+        """«⚡ Сформировать ВСЕ стартовые протоколы»: за один проход — сетки по каждой дисциплине, на которую есть одобренные
+        заявки. Вид программы определяется сам (бег — забеги с дорожками, техника — сквозной общий список на 6 попыток);
+        работает тот же generate_scoped, что и поштучно. Дисциплина, у которой не хватает вписанных вручную номеров или уже
+        стоит время старта, пропускается с понятной причиной — остальные формируются."""
+        eid = ev["id"]
+        order = self.reg_distances(ev)
+        have = {r["distance"] for r in self.store.registrations(eid) if r["status"] == "approved" and r.get("distance")}
+        dists = [d for d in order if d in have] + sorted(have - set(order))
+        done, skipped = [], []
+        for d in dists:
+            try:
+                out = self.generate_scoped(self.store.get_event(eid), lanes, {"distance": d})
+            except ValueError as e:
+                skipped.append({"distance": d, "reason": str(e)})
+                continue
+            done.append({"distance": d, "kind": out["kind"], "mode": out["mode"], "heats": len(out["heats"]), "entries": out["entries"]})
+        return {"done": done, "skipped": skipped, "disciplines": len(dists), "entries": sum(x["entries"] for x in done)}
 
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
         """Принудительный сброс сетки (кнопка «Сбросить сетку / Удалить забеги»). Никогда не блокируется тем, что у забега
@@ -5445,7 +5483,7 @@ class Hub:
                                 "deadline": e.get("reg_deadline"), "slug": e["reg_slug"]})
             return js({"events": out})
         m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json"
-                         r"|/protocol|/registered\.json|/files/\d+)?/?", path)
+                         r"|/protocol|/participants\.json|/files/\d+)?/?", path)
         if not m:
             return 404, "text/plain; charset=utf-8", "нет такой страницы", None
         ev = self.store.event_by_slug(m.group(1))
@@ -5459,13 +5497,13 @@ class Hub:
             info = self._public_info(ev)
             info["card"] = self.event_card(ev)
             return js(info)
-        if method == "GET" and sub == "/registered.json":
+        if method == "GET" and sub == "/participants.json":
             # открыто без входа, но только если секретарь включил публикацию; данные минимальны (см. registered_list)
             if not self._rate_ok("rl:" + client, 120, 600):
                 return js({"error": "Слишком много запросов, попробуйте через минуту"}, 429)
             if not self._event_view(ev)["pub_regs"]:
-                return js({"error": "Список прошедших регистрацию пока не опубликован"}, 404)
-            code, ctype, data_, _ = js(self.registered_list(ev))
+                return js({"error": "Список заявленных участников пока не опубликован"}, 404)
+            code, ctype, data_, _ = js(self.participants_list(ev))
             return code, ctype, data_, {"Cache-Control": "public, max-age=30"}
         if method == "GET" and sub in ("/results.json", "/startlist.json", "/protocol"):
             # 5.0: протоколы закрыты — только администратор, судья и тренер с подтверждённой почтой
