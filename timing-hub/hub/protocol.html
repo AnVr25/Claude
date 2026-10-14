@@ -93,6 +93,17 @@ thead{display:table-header-group}
 /* хвост листа: примечание, подписи и колонтитул не отрываются от таблицы и друг от друга */
 .tail{break-inside:avoid;page-break-inside:avoid}
 
+/* 7.7: правка шапки и примечания прямо на листе: пунктир при наведении, при печати — только чистый текст */
+[contenteditable="true"]{outline:none;cursor:text;border-radius:2px}
+.phead [contenteditable="true"]:hover,.phead [contenteditable="true"]:focus{outline:1px dashed #9AA7B8;outline-offset:2px}
+.wzp-note-edit{font-size:12px;color:var(--pr-ink);margin:1mm 0 2mm;padding:1px 3px;white-space:pre-wrap}
+.wzp-note-edit.ph{color:#8A96A8;font-style:italic}
+.wzp-note-edit:hover,.wzp-note-edit:focus{border-color:#9AA7B8!important}
+@media print{
+  [contenteditable]{outline:none!important}
+  .wzp-note-edit,.wzp-note-edit:hover,.wzp-note-edit:focus{border-color:transparent!important;padding:0}
+  .wzp-note-edit.ph,.wzp-note-edit:empty{display:none!important}
+}
 /* Подписи */
 .sign{margin-top:6mm;display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:7mm;align-items:end;font-size:12.5px;break-inside:avoid;page-break-inside:avoid;max-width:150mm}
 .sign .u{border-bottom:1px solid var(--pr-ink);height:1px;min-width:120px}
@@ -320,14 +331,45 @@ function signs(ev){
     </div>`;
 }
 // шапка бланка в одну полосу: Сахалин · ФЛАСО — заголовок, соревнование, дата и место — SakhStart
+// 7.7: правки секретаря на экране (название, дата, место, начало, организатор, примечание судей) живут в localStorage браузера
+// 12 часов: переживают перерисовку листа, пересборку предпросмотра и открытие «для печати» в новой вкладке; на сервер не уходят
+const EDK=f=>"ss.ed."+(new URLSearchParams(location.search).get("event")||SLUG||"")+"."+f;
+const ED_TTL=12*3600*1000;      // правка живёт 12 часов: к следующему дню старые «погода» и «рекорды» сами исчезнут
+const edGet=f=>{try{ const o=JSON.parse(localStorage.getItem(EDK(f))||"null"); if(!o) return null; if(Date.now()-o.t>ED_TTL){ localStorage.removeItem(EDK(f)); return null; } return o.v; }catch(e){return null}};
+const edSet=(f,v)=>{try{ if(v==null) localStorage.removeItem(EDK(f)); else localStorage.setItem(EDK(f),JSON.stringify({v,t:Date.now()})); }catch(e){}};
+const NOTE_PH="[ Кликните, чтобы добавить примечание к протоколу (Рекорды, Погода, Судейские отметки) ]";
+// поле шапки: contenteditable, сохранённая правка (если есть) вместо исходного текста
+const edf=(f,def,tag="span",cls="")=>{ const v=edGet(f); return `<${tag}${cls?` class="${cls}"`:""} contenteditable="true" spellcheck="false" data-ed="${f}" title="Кликните, чтобы исправить текст в бланке">${v==null?def:esc(v)}</${tag}>`; };
+// шапка бланка в одну полосу: Сахалин · ФЛАСО — заголовок, соревнование, дата и место — SakhStart
 function headHtml(ev,title,sub){
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
   const startTxt=ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
   return `<header class="phead"><span class="logos"><img class="lg-sakh" src="${A}sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="${A}flaso-light.png" alt="ФЛАСО"></span>
-    <div class="ph-c">${ev.organizer?`<div class="org">${esc(ev.organizer)}</div>`:""}<h1>${title}</h1><div class="ev">${esc(ev.name)}</div>${sub?`<div class="ev sub">${sub}</div>`:""}
-      <div class="meta"><span>Дата: <b>${esc(dateRu(ev.date))||"—"}</b></span><span>Место проведения: <b>${esc(ev.place||"—")}</b></span><span>Начало: <b>${esc(startTxt||"—")}</b></span></div></div>
+    <div class="ph-c">${ev.organizer?`<div class="org" contenteditable="true" spellcheck="false" data-ed="org" title="Кликните, чтобы исправить текст в бланке">${edGet("org")==null?esc(ev.organizer):esc(edGet("org"))}</div>`:""}<h1>${title}</h1><div class="ev" contenteditable="true" spellcheck="false" data-ed="name" title="Кликните, чтобы исправить название соревнования">${edGet("name")==null?esc(ev.name):esc(edGet("name"))}</div>${sub?`<div class="ev sub">${sub}</div>`:""}
+      <div class="meta"><span>Дата: <b contenteditable="true" spellcheck="false" data-ed="date" title="Кликните, чтобы исправить дату">${edGet("date")==null?(esc(dateRu(ev.date))||"—"):esc(edGet("date"))}</b></span><span>Место проведения: <b contenteditable="true" spellcheck="false" data-ed="place" title="Кликните, чтобы исправить место проведения">${edGet("place")==null?esc(ev.place||"—"):esc(edGet("place"))}</b></span><span>Начало: <b contenteditable="true" spellcheck="false" data-ed="start" title="Кликните, чтобы исправить время начала (например, фактическое)">${edGet("start")==null?esc(startTxt||"—"):esc(edGet("start"))}</b></span></div></div>
     <img class="lg-ss" src="${A}sakhstart.svg" alt="SakhStart"></header>`;
 }
+// примечание судей под строкой дисциплины (рекорды, погода, фактическое время старта): пустое — на бумагу не попадает
+function noteHtml(key){
+  const v=edGet("note."+key), has=v!=null&&v.trim();
+  return `<div contenteditable="true" class="wzp-note-edit${has?"":" ph"}" data-ed="note.${esc(key)}" style="border: 1px dashed transparent; min-height: 1.2em;" title="Кликните, чтобы добавить примечание судей (например, Рекорды, Погоду или Фактическое время старта)">${has?esc(v):NOTE_PH}</div>`;
+}
+function decorateSheet(){
+  document.querySelectorAll("#sheet h2").forEach(h=>{
+    const nx=h.nextElementSibling; if(nx&&nx.classList.contains("wzp-note-edit")) return;
+    const key=(h.firstChild?h.firstChild.textContent:h.textContent).trim().slice(0,80);
+    h.insertAdjacentHTML("afterend",noteHtml(key));
+  });
+}
+(()=>{ const sh=document.getElementById("sheet"); if(!sh) return;
+  new MutationObserver(()=>decorateSheet()).observe(sh,{childList:true,subtree:true});
+  document.addEventListener("focusin",e=>{ const n=e.target.closest&&e.target.closest(".wzp-note-edit.ph"); if(n){ n.textContent=""; n.classList.remove("ph"); } });
+  document.addEventListener("focusout",e=>{ const n=e.target.closest&&e.target.closest(".wzp-note-edit"); if(n&&!n.textContent.trim()){ n.textContent=NOTE_PH; n.classList.add("ph"); edSet(n.dataset.ed,null); } });
+  document.addEventListener("input",e=>{ const n=e.target.closest&&e.target.closest("[contenteditable][data-ed]"); if(n&&!n.classList.contains("ph")) edSet(n.dataset.ed,n.innerText.replace(/\s+\n/g,"\n").trim()); });
+  document.addEventListener("keydown",e=>{ const n=e.target.closest&&e.target.closest("[contenteditable][data-ed]"); if(n&&e.key==="Enter"&&!n.classList.contains("wzp-note-edit")){ e.preventDefault(); n.blur(); } });
+  document.addEventListener("paste",e=>{ const n=e.target.closest&&e.target.closest("[contenteditable]"); if(!n) return; e.preventDefault();
+    const t=(e.clipboardData||window.clipboardData).getData("text/plain"); document.execCommand("insertText",false,n.classList.contains("wzp-note-edit")?t:t.replace(/\s+/g," ")); });
+})();
 function setPage(land){
   let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
   const pg=`size:A4 ${land?"landscape":"portrait"};margin:${land?"10mm 12mm 12mm":"12mm 12mm 14mm"}`;
