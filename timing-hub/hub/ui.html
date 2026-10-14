@@ -741,12 +741,7 @@ a.btn.xls:hover{background:#E9F5EE}
       <div class="tabs"><span id="gTabs" style="display:contents"></span><input class="search" id="gSearch" placeholder="Фамилия, команда, тренер" aria-label="Поиск заявок"></div>
       <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
-      <div class="tbl free"><table class="regtbl">
-        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
-        <tbody id="gBody"></tbody>
-      </table></div>
-      <datalist id="gCats"></datalist>
-      <div class="rowacts">
+      <div class="rowacts regtools" style="margin:0 0 10px">
         <button class="primary" id="gApproveAll">Подтвердить все ожидающие</button>
         <button id="gImport" title="Загрузить заявки из Excel или CSV — они сразу подтверждены">Загрузить из Excel</button>
         <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
@@ -755,6 +750,11 @@ a.btn.xls:hover{background:#E9F5EE}
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
         <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: ФИО, разряды, команды, тренеры и номера обновятся по ID заявки">📥 Загрузить и применить изменения из CSV</button>
       </div>
+      <div class="tbl free"><table class="regtbl">
+        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
+        <tbody id="gBody"></tbody>
+      </table></div>
+      <datalist id="gCats"></datalist>
       <details class="panel" style="margin-top:12px"><summary><b>Внести заявку вручную</b> <span class="small muted">— без формы, сразу подтверждена</span></summary>
         <div class="regform">
           <input id="mLast" placeholder="Фамилия"><input id="mFirst" placeholder="Имя"><input id="mBirth" type="date" aria-label="Дата рождения">
@@ -1505,7 +1505,6 @@ async function loadEntries(){
   if (curId == null) return;
   try{ const r = await api(`/api/events/${curId}/entries`); $("dEntriesInfo").textContent = r.count ? `Сейчас в списке: ${r.count}` : "Список пока пуст — участники появятся после подтверждения заявок."; }catch(e){}
 }
-function loadScript(src){ return new Promise((ok,fail)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=fail; document.head.appendChild(s); }); }
 
 /* ---------- регистрация ---------- */
 // дистанции из настроек: «5 км | лимит 300 | номера с 1» → «5 км»; solo — без эстафет
@@ -1548,11 +1547,8 @@ async function drawQr(url){
   const ev = curEvent(), src = `/api/events/${ev.id}/qr.png?u=${encodeURIComponent(url)}`;
   const ok = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
   if (ok) { box.innerHTML = ""; box.appendChild(ok); $("gQrDl").href = src; $("gQrDl").classList.remove("hide"); return; }
-  try{
-    if (!window.QRCode) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js");
-    box.innerHTML = ""; new QRCode(box, {text:url, width:512, height:512, correctLevel:QRCode.CorrectLevel.M});
-    setTimeout(() => { const c = box.querySelector("canvas"); if (c) { $("gQrDl").href = c.toDataURL("image/png"); $("gQrDl").classList.remove("hide"); } }, 100);
-  }catch(e){ box.innerHTML = '<span class="small muted" style="padding:50px 0">QR не загрузился</span>'; }
+  // офлайн: QR строит только сервер (/qr.png); внешних библиотек и CDN нет
+  box.innerHTML = '<span class="small muted" style="padding:50px 0;text-align:center">QR не получилось построить на сервере.<br>Ссылку можно скопировать кнопкой выше.</span>';
 }
 $("gPick").addEventListener("toggle", () => { if (!$("gPick").open || $("gPickBox").dataset.on) return; $("gPickBox").dataset.on = "1";
   discPicker($("gPickBox"), {get: () => $("gDist").value.split("\n").map(x => x.trim()).filter(Boolean), set: (l) => { $("gDist").value = l.join("\n"); }}); });
