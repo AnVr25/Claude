@@ -39,9 +39,14 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.4.0"
+VERSION = "7.4.5"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
+
+
+def _name_key(name) -> str:
+    """Ключ для сопоставления ФИО: без регистра, лишних пробелов (в т.ч. неразрывных), «ё» = «е»."""
+    return " ".join(str(name or "").replace("\u00a0", " ").lower().replace("ё", "е").split())
 
 
 # --------------------------------------------------------------------------- #
@@ -607,19 +612,24 @@ class Store:
             rec = {"year": str(bd or "")[:4], "team": team or "", "coach": coach or ""}
             regs[rid] = rec
             for nm in (f"{ln} {fn}", f"{ln} {fn} {mn or ''}"):
-                by_name.setdefault((eid, " ".join(nm.lower().split())), rec)
+                by_name.setdefault((eid, _name_key(nm)), rec)
         upd = 0
         for eid_, id_, reg_id, name, by, team, coach in self.con.execute(
                 "SELECT event_id, id, reg_id, name, birth_year, team, coach FROM entries").fetchall():
             if by and team and coach:
                 continue
-            rec = regs.get(reg_id) or by_name.get((eid_, " ".join(str(name or "").lower().split())))
+            rec = regs.get(reg_id) or by_name.get((eid_, _name_key(name)))
             if not rec:
                 continue
             new = (by or rec["year"], team or rec["team"], coach or rec["coach"])
             if new != (by or "", team or "", coach or ""):
                 self.con.execute("UPDATE entries SET birth_year = ?, team = ?, coach = ? WHERE id = ?", (*new, id_))
                 upd += 1
+        # обратно: если в заявке тренер пуст, а в строке сетки он есть (загружен списком) — заявка получает его
+        for rid, ecoach in self.con.execute("SELECT r.id, e.coach FROM registrations r JOIN entries e ON e.reg_id = r.id "
+                                            "WHERE TRIM(COALESCE(r.coach,'')) = '' AND TRIM(COALESCE(e.coach,'')) != ''").fetchall():
+            self.con.execute("UPDATE registrations SET coach = ? WHERE id = ?", (ecoach, rid))
+            upd += 1
         if upd:
             log.info("миграция 7.4: в %s строках участников восстановлены год рождения, команда и тренер", upd)
 
@@ -1178,19 +1188,29 @@ class Hub:
     # Площадки федерации: адрес и ссылка на карту для календаря fla65.ru и страницы события
     VENUES = (
         {"key": "manezh", "name": "Легкоатлетический манеж", "address": "Южно-Сахалинск, ул. Горького, 39",
-         "match": ("манеж",), "q": "Легкоатлетический манеж, Южно-Сахалинск, улица Горького, 39"},
+         "match": ("манеж",), "q": "Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж",
+         "ll": (142.760570, 46.928092)},        # 7.4.5: точные координаты (Яндекс.Карты, дом Горького, 39) — карта не уходит в другой город
         {"key": "spartak", "name": "Стадион «Спартак»", "address": "Южно-Сахалинск, ул. Горького, 7",
-         "match": ("спартак",), "q": "Стадион Спартак, Южно-Сахалинск, улица Горького, 7"},
+         "match": ("спартак",), "q": "Южно-Сахалинск, улица Горького, 7, Стадион Спартак"},
         {"key": "triumf", "name": "ЛБК «Триумф»", "address": "Южно-Сахалинск, ул. Горького, 25А",
          "match": ("триумф",), "map": "https://yandex.ru/maps/org/biatlonny_kompleks_triumf/227359721489/"},
     )
+
+    YS_CENTER = (142.738100, 46.959100)           # центр Южно-Сахалинска: карта открывается здесь, а не в регионе посетителя
 
     def venue_for(self, ev: dict) -> Optional[dict]:
         """Где проходит старт: указанное место или (если не указано) правило федерации для Южно-Сахалинска:
         кросс — ЛБК «Триумф»; апрель–октябрь — стадион «Спартак»; остальное и «в помещении» — манеж.
         Массовые забеги по улицам и старты в других городах не угадываем."""
         from urllib.parse import quote
-        ymap = lambda q: "https://yandex.ru/maps/?text=" + quote(q)
+        def ymap(q, ll=None, bias=True):
+            """Ссылка на Яндекс.Карты. Без привязки к месту поиск шёл по региону посетителя (карта Хабаровска), поэтому в ссылку
+            всегда кладётся центр карты: точные координаты площадки или центр Южно-Сахалинска; для площадки — ещё и метка."""
+            if not ll and not bias:
+                return "https://yandex.ru/maps/?text=" + quote(q)
+            lon, lat = ll or self.YS_CENTER
+            pt = f"&pt={lon:.6f},{lat:.6f},pm2rdm" if ll else ""
+            return f"https://yandex.ru/maps/?ll={lon:.6f}%2C{lat:.6f}&z={17 if ll else 13}{pt}&text={quote(q)}"
         place = (ev.get("place") or "").strip()
         city = (ev.get("city") or "").strip()
         pick = next((v for v in self.VENUES if any(m in place.lower() for m in v["match"])), None)
@@ -1202,9 +1222,9 @@ class Hub:
                    else "spartak" if 4 <= month <= 10 and "помещени" not in name else "manezh")
             pick = next((v for v in self.VENUES if v["key"] == key), None)
         if pick:
-            return {"name": pick["name"], "address": pick["address"], "map": pick.get("map") or ymap(pick["q"])}
+            return {"name": pick["name"], "address": pick["address"], "map": pick.get("map") or ymap(pick["q"], pick.get("ll"))}
         if place:
-            return {"name": place, "address": city, "map": ymap(", ".join(x for x in (place, city) if x))}
+            return {"name": place, "address": city, "map": ymap(", ".join(x for x in (place, city) if x), None, not city or city.startswith("Южно-Сахалинск"))}
         return None
 
     def event_card(self, ev: dict) -> dict:
@@ -1394,6 +1414,7 @@ class Hub:
         года, разряда и тренера (если секретарь не подтвердил согласия: pub_regs_full). Нагрудный номер — актуальный из базы. Дорожек, дат рождения, контактов и представителей нет никогда."""
         regs = [r for r in self.store.registrations(ev["id"]) if r["status"] == "approved"]
         bst = self._bib_state(ev["id"])
+        ent_of = {e["reg_id"]: e for e in self.store.entries_rows(ev["id"]) if e.get("reg_id")}
         confirmed = bool(ev.get("pub_regs_full"))      # 7.4: секретарь подтвердил, что согласия на распространение получены
         covered = {t["hash"] for t in self.store.consent_texts() if self.PUBLIC_LIST_MARK in (t.get("text") or "")}
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
@@ -1418,10 +1439,13 @@ class Hub:
                 continue
             last, first = str(r["last_name"]).strip(), str(r.get("first_name") or "").strip()
             full = confirmed or r.get("consent_hash") in covered
+            ent = ent_of.get(r["id"]) or {}
+            year_ = str(r.get("birth_date") or "")[:4] or str(ent.get("birth_year") or "")[:4]     # 7.4.5: нет в заявке — берём из строки сетки
+            coach_ = (r.get("coach") or "").strip() or str(ent.get("coach") or "").strip()
             rows.append({"b": self._reg_bib(r, bst), "d": r["distance"], "s": str(r.get("sex") or "").upper(), "g": group_of(r.get("birth_date")),
                          "n": f"{last} {first}".strip() if full else (f"{last} {first[:1]}." if first else last),
-                         "y": str(r.get("birth_date") or "")[:4] if full else "", "r": (r.get("rank") or "") if full else "",
-                         "t": (r.get("team") or ""), "c": (r.get("coach") or "") if full else "", "m": 0 if full else 1})
+                         "y": year_ if full else "", "r": (r.get("rank") or "") if full else "",
+                         "t": (r.get("team") or ""), "c": coach_ if full else "", "m": 0 if full else 1})
         rows.sort(key=lambda x: (order.get(x["d"], 99), x["d"], x["n"].lower()))
         seen_d = [d for d in dists if any(x["d"] == d for x in rows)] + sorted({x["d"] for x in rows} - set(dists))
         used_g = {x["g"] for x in rows}
