@@ -1128,7 +1128,7 @@ def main() -> int:
         _, txt = http("GET", "/api/system/update")
         ust = json.loads(txt)
         check("обновление: статус для страницы — готово к установке, версия и дата сборки",
-              ust.get("ready") is True and ust["ready_info"]["version"] == "9.9.9" and ust["build_date"] == "2026-10-13", txt[:300])
+              ust.get("ready") is True and ust["ready_info"]["version"] == "9.9.9" and ust["build_date"] == "2026-10-14", txt[:300])
         code, txt = http("POST", "/api/system/update/install", b"{}", J)
         check("обновление: после подтверждения установка передана службе", code == 200 and os.path.exists(os.path.join(upd, "incoming.zip")), txt)
         code, txt = http("POST", "/api/system/update/install", b"{}", J)
@@ -1384,7 +1384,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 5.2.0 и дата сборки 13.10.2026", st3["version"] == "5.2.0" and st3["build_date"] == "2026-10-13", txt[:200])
+        check("3.0: версия 6.0.0 и дата сборки 14.10.2026", st3["version"] == "6.0.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1604,6 +1604,54 @@ def main() -> int:
         fr2 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["bib"] == r_bib)
         check("5.2: после старта пересобрать нельзя; «Отменить старт» обнуляет время — сетка пересобирается, введённые результаты целы",
               cg1 == 400 and not wv.get("start_time") and cg2 == 200 and fr2["result"] == "8.4", f"{cg1} {wv} {cg2} {tg2[:150]}")
+        # 6.0: официальный результат считает только сервер (POST /api/calc); возрасты — из справочника; общее состояние Мастера и корзины
+        def calc(dist, rows):
+            c, t = http("POST", "/api/calc", json.dumps({"distance": dist, "rows": rows}).encode(), J)
+            return c, (json.loads(t)["rows"] if c == 200 else t)
+        c1, r1 = calc("60 м", [{"key": "a", "t": ["8.20", "8.40", "8.30"]}, {"key": "b", "t": ["8.2", "8.5"]}, {"key": "c", "t": ["8.27"]},
+                              {"key": "d", "t": ["8.2", "ой"]}, {"key": "e", "t": []}])
+        check("6.0: /api/calc — три секундомера → средний, два → худший, один → сам (вверх до 0,1), ошибка ввода → сообщение, пусто → пусто",
+              c1 == 200 and [x["result"] for x in r1] == ["8.3", "8.5", "8.3", "", ""] and r1[3]["errors"] and not r1[0]["errors"], str(r1))
+        c2, r2 = calc("Прыжок в длину", [{"key": "a", "a": ["5.10", "X", "5.40", "-", "5.25"]}, {"key": "b", "a": ["Ы"]}])
+        check("6.0: /api/calc — попытки: лучшая; неверная ячейка — сообщение", c2 == 200 and r2[0]["result"] in ("5.40", "5.4") and r2[1]["errors"], str(r2))
+        hubdir = os.path.dirname(os.path.abspath(args.hub))
+        src = {n: open(os.path.join(hubdir, n), encoding="utf-8").read() for n in ("ui.html", "sector.html", "hub.py")}
+        check("6.0: в браузере нет правила секундомеров (ни в админке, ни на планшете сектора) — только запрос к серверу",
+              all(w not in src[n] for n in ("ui.html", "sector.html") for w in ("function swMain", "function attBest", "function parseT", "function fmtT"))
+              and "/api/calc" in src["ui.html"] and "/api/calc" in src["sector.html"], "")
+        check("6.0: возрастные границы не прописаны в коде — только в seed/disciplines.json; мёртвый экран ввода и localStorage Мастера/корзины удалены",
+              "AGE_LIMITS" not in src["hub.py"] and "AGE_LIM " not in src["ui.html"] and "loadEntry" not in src["ui.html"] and "resEntry" not in src["ui.html"]
+              and "ss.wzp" not in src["ui.html"] and "ss.cart" not in src["ui.html"] and "const STATUS_NAMES" in src["ui.html"], "")
+        check("6.0: ни одного принудительного скролла наверх при смене шагов Мастера и после сохранения (scrollIntoView удалён)",
+              "scrollIntoView" not in src["ui.html"] and src["ui.html"].count("window.scrollTo(") == 1, str(src["ui.html"].count("window.scrollTo(")))
+        _, txt = http("GET", "/api/disciplines")
+        ag = {a["id"]: (a.get("min"), a.get("max")) for a in json.loads(txt)["ages"]}
+        check("6.0: возрастные группы отдаются справочником с границами min/max", ag.get("u12") == (0, 12) and ag.get("sen") == (19, 200), str(ag))
+        _, txt = http("GET", f"/api/events/{e9}/ui")
+        u0 = json.loads(txt)["state"]
+        check("6.0: общее состояние: у нового соревнования Мастер и корзина пусты", u0["wizard"]["rev"] == 0 and u0["cart"]["value"] == [], txt[:200])
+        cw, tw = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "wizard", "cid": "A", "value": {"disc": "60 м", "step": 4, "sex": "Ж", "ages": ["u12", "нет-такой"]}}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e9}/ui")
+        wz_ = json.loads(txt)["state"]["wizard"]
+        check("6.0: дисциплина, шаг и фильтры Мастера хранятся в базе и видны другому экрану; неизвестная возрастная группа отброшена",
+              cw == 200 and wz_["rev"] == 1 and wz_["cid"] == "A" and wz_["value"] == {"disc": "60 м", "step": 4, "sex": "Ж", "ages": ["u12"]}, txt[:300])
+        item = {"type": "start", "dist": "60 м", "gk": "", "sf": "", "mode": "heats", "orient": "", "label": "Старт: 60 м — Все участники"}
+        ca, ta = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "add", "cid": "A", "item": item}).encode(), J)
+        cb, tb = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "add", "cid": "B", "item": dict(item, dist="Прыжок в длину", label="Старт: прыжок")}).encode(), J)
+        cd, td = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "add", "cid": "B", "item": item}).encode(), J)
+        cart = json.loads(td)["value"]
+        check("6.0: корзина общая: два секретаря добавили разные листы — оба на месте, повтор того же листа не дублируется",
+              ca == cb == cd == 200 and json.loads(ta)["added"] and not json.loads(td)["added"] and len(cart) == 2 and all(x["on"] and x["id"] for x in cart), td[:300])
+        http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "toggle", "id": cart[0]["id"], "on": False}).encode(), J)
+        http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "remove", "id": cart[1]["id"]}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e9}/ui")
+        c3 = json.loads(txt)["state"]["cart"]["value"]
+        cx, _ = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "взорвать"}).encode(), J)
+        cy, _ = http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "что-то"}).encode(), J)
+        http("POST", f"/api/events/{e9}/ui", json.dumps({"key": "cart", "op": "clear"}).encode(), J)
+        _, txt = http("GET", f"/api/events/{e9}/ui")
+        check("6.0: корзина — отметка, удаление и очистка делаются на сервере; неизвестные операции и разделы отвергаются",
+              len(c3) == 1 and c3[0]["on"] is False and cx == 400 and cy == 400 and json.loads(txt)["state"]["cart"]["value"] == [], txt[:200])
         # 4.0: судья на секторе / секретарь вида — только ввод результатов
         def spost(path, obj, cookie=None):
             h = {"Content-Type": "application/json", "X-Requested-With": "timing-hub", "X-Forwarded-Proto": "https", "X-Real-IP": "198.51.100.7"}

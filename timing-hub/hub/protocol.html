@@ -480,14 +480,18 @@ $("ptabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-tab]"); if(b){ TAB=b.dataset.tab; render(); return; }
   if(e.target.id==="tabCart") addTabToCart();
 });
-function addTabToCart(){
+async function addTabToCart(){
   const start=isStartView(), it=currentItem(start), tab=tabsFor(start).find(t=>t.id===TAB)||{label:"Все участники"};
   const label=`${start?"Старт":"Итоги"}: ${DIST||"все дисциплины"} — ${tab.label}${start?(it.mode==="list"?" · общий список":" · по забегам"):""}`;
-  let a=LS.get("ss.cart."+eid,[]); a=Array.isArray(a)?a:[];
-  const same=a.some(x=>["type","dist","gk","sf","mode","orient"].every(k=>(x[k]||"")===(it[k]||"")));
-  if(!same){ a.push(Object.assign({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),on:true,label},it)); LS.set("ss.cart."+eid,a); }
   const n=sheetsFor(it).length;
-  $("cartMsg").textContent=same?"Эта вкладка уже в корзине":`В корзине: «${tab.label}» — ${n} ${n===1?"лист":n<5?"листа":"листов"}`;
+  // 6.0: корзина общая для всех секретарей — лежит на сервере (ui_state); дубли отсекает сервер
+  try{
+    const r=await fetch(`/api/events/${encodeURIComponent(eid)}/ui`,{method:"POST",headers:{"X-Requested-With":"timing-hub","Content-Type":"application/json"},
+      body:JSON.stringify({key:"cart",op:"add",item:Object.assign({label},it)})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status);
+    try{ parent.postMessage({ss:"cart"},location.origin); }catch(e){}
+    $("cartMsg").textContent=d.added?`В корзине: «${tab.label}» — ${n} ${n===1?"лист":n<5?"листа":"листов"}`:"Эта вкладка уже в корзине";
+  }catch(e){ $("cartMsg").textContent="Не удалось добавить в корзину: "+e.message; }
 }
 function renderStart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
@@ -496,11 +500,12 @@ function renderStart(){
   const secs=sheetsFor(currentItem(true));
   showSheets(secs);
 }
-// «Корзина печати»: набор листов из админки (ss.cart.<событие>) — один документ, каждый лист с новой страницы
-function renderCart(){
+// «Корзина печати»: набор листов, общий для всех секретарей (хранится на сервере) — один документ, каждый лист с новой страницы
+async function renderCart(){
   if(!SL){ $("sheet").innerHTML='<div class="empty">Загрузка…</div>'; loadStart(); return; }
   drawTabs(null);
-  let items=LS.get("ss.cart."+eid,[]); items=Array.isArray(items)?items:[];
+  let items=[];
+  try{ const r=await fetch(`/api/events/${encodeURIComponent(eid)}/ui`,{headers:{"X-Requested-With":"timing-hub"}}); const d=await r.json(); items=Array.isArray(d.state&&d.state.cart.value)?d.state.cart.value:[]; }catch(e){}
   if(QIDS.length) items=items.filter(it=>QIDS.includes(String(it.id)));
   const secs=[];
   items.forEach(it=>{ DIST=it.dist||""; if(it.type==="final"&&!R) return; sheetsFor(it).forEach(r=>{ if(!r.empty) secs.push(r); }); });

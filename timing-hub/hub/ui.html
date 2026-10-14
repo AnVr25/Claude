@@ -57,7 +57,11 @@ a{color:inherit}
 .st{position:relative;flex:1;min-width:0;max-width:none;display:grid;grid-template-columns:auto 1fr;column-gap:10px;padding:10px 12px 18px 0;text-decoration:none;color:var(--muted)}
 .st .pin{grid-row:1/3;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 15px var(--head);background:var(--panel);border:2px solid var(--line);color:var(--muted);position:relative;z-index:1}
 .st b{font:600 15px var(--head);color:var(--ink);white-space:nowrap}
-.st small{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st small{font-size:12.5px;line-height:16px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 6.0: высота панели этапов зафиксирована — подписи меняются, а шапка и страница под ней не двигаются */
+.lane{height:68px;box-sizing:border-box;overflow-y:hidden}
+.lane .st{height:67px;box-sizing:border-box}
+.lane.off .st{pointer-events:none;opacity:.55}
 .st.done .pin{border-color:var(--ok);color:var(--ok);font-size:0}.st.done .pin::after{content:"✓";font-size:15px}
 .st.warn small{color:var(--start);font-weight:700}
 .st.live .pin{background:var(--track);border-color:var(--track);color:#fff;box-shadow:0 0 0 4px #E71E2530}
@@ -228,7 +232,7 @@ body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
 .wzp-grid{width:100%}.wzp-grid td > b{white-space:nowrap}
 .wzp-grid input{width:100%;min-width:58px;padding:5px 6px;font:14px var(--mono)}.wzp-grid td{padding:3px 4px}
 .wzp-grid td.out{font:700 14px var(--mono);white-space:nowrap}.wzp-grid tr.dirty{background:#FFF9E5}
-.wzp-grid input.err{border-color:var(--track)}
+.wzp-grid input.err{border-color:var(--track)}.wzp-grid td.out.err{color:var(--track)}
 .wzp-grid select.dr{min-width:118px;width:100%;padding:5px 6px}.wzp-grid select.dr.man{border-color:var(--track);font-weight:700}
 .wzp-grid tr.wzp-cat td{background:var(--line);font:700 14px var(--body);padding:6px 8px}
 .wzp-ctl{align-items:center}.wzp-ctl button{white-space:normal}
@@ -513,17 +517,6 @@ a.btn.xls:hover{background:#E9F5EE}
   .utbl td{border:0!important;padding:0!important;min-width:0}.utbl td:first-child,.utbl td:nth-child(4),.utbl td.uact,.utbl td[colspan]{grid-column:1/-1}
   .utbl input,.utbl select{min-width:0;border-color:var(--line)}.utbl td.uact{text-align:left;white-space:normal;display:flex;flex-wrap:wrap;gap:6px}}
 .tag{font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 8px;background:#17905A1a;color:var(--ok);margin-left:6px;vertical-align:middle;font-family:var(--body)}
-body[data-view=timing][data-mode=entry]{background:var(--ice)}
-body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 70px}
-.entry td input.res{width:110px;font:600 18px var(--head);padding:5px 8px;text-align:right}
-.entry td input.sw,.entry td input.att{width:84px;font:500 16px var(--head);padding:5px 6px;text-align:right;min-height:40px}
-.entry td input.att{width:72px}
-.entry td input.res[data-man="1"]{border-color:var(--start)}
-.entry .mtag{display:block;font-size:11px;color:var(--start);text-align:right;cursor:pointer;text-decoration:underline}
-.entry th.grp{text-align:center}
-.entry td select{width:auto;padding:5px 6px}
-.entry tr.dirty td{background:#F3481D0d}
-.entry tr.st-out td{opacity:.6}
 .usr{background:var(--night-2);border:1px solid var(--night-line);color:#d5deeb;font:600 14px var(--body);padding:6px 10px}
 .usr:hover{border-color:#4a6491;color:#fff}
 .pubchk{margin:0;font-size:13px}
@@ -618,11 +611,11 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 <nav class="lane" id="lane" aria-label="Этапы соревнования">
   <a href="#prep" data-step="prep" class="st" id="stPrep"><span class="pin">1</span><b>Подготовка</b><small></small></a>
   <a href="#reg" data-step="reg" class="st" id="stReg"><span class="pin">2</span><b>Регистрация</b><small></small></a>
-  <a href="#wizard" data-step="wizard" class="st hide" id="stWiz"><span class="pin">3</span><b>Протоколы</b><small>мастер</small></a>
-  <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">3</span><b>Чипы</b><small></small></a>
-  <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">4</span><b>Старт и финиш</b><small></small></a>
-  <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">5</span><b>Результаты</b><small></small></a>
-  <a href="#files" data-step="files" class="st" id="stFiles"><span class="pin">6</span><b>Документы</b><small></small></a>
+  <a href="#wizard" data-step="wizard" class="st" id="stWiz"><span class="pin">3</span><b>Протоколы</b><small>мастер</small></a>
+  <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">4</span><b>Чипы</b><small></small></a>
+  <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">5</span><b>Старт и финиш</b><small></small></a>
+  <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">6</span><b>Результаты</b><small></small></a>
+  <a href="#files" data-step="files" class="st" id="stFiles"><span class="pin">7</span><b>Документы</b><small></small></a>
 </nav>
 
 <main>
@@ -950,19 +943,6 @@ body[data-view=timing][data-mode=entry] main{max-width:1280px;padding:24px 18px 
 
 <!-- 4. СТАРТ И ФИНИШ -->
 <section id="tab-timing" class="hide">
- <div id="resEntry" class="hide">
-  <div class="pagehead">
-    <div><h1>Ввод результатов</h1><p class="lead">Ручной секундомер: впишите результат каждого участника — места и протокол посчитаются сами. Формат: <b>12.84</b>, <b>1:05.32</b>. Отметки: DNS — не стартовал, DNF — сошёл, DQ — дисквалифицирован.</p></div>
-    <div class="row"><button class="primary" id="eSave">Сохранить результаты</button></div>
-  </div>
-  <div class="tabs" id="eHeats"></div>
-  <p class="small muted" id="eHint" style="margin:6px 0"></p>
-  <div class="tbl entry"><table>
-    <thead id="eHead"></thead>
-    <tbody id="eBody"></tbody>
-  </table></div>
-  <div class="row" style="margin-top:12px"><span class="small muted" id="eInfo">Enter — к следующему участнику. Несохранённые строки подсвечены.</span><span class="spacer"></span><button id="eFinish">Завершить соревнование</button></div>
- </div>
  <div class="race">
   <div class="race-top">
     <div><h1 class="tName">Выберите соревнование</h1><div class="meta" id="tMeta"></div></div>
@@ -1312,7 +1292,7 @@ document.querySelectorAll(".wl-card[data-dir]").forEach(c => c.onclick = () => {
 // карточки на главной: IPICO — оборудование; стадион — сразу пошаговое создание (сценарий задаёт карточка, а не память браузера)
 document.querySelectorAll(".hp-card").forEach(c => c.onclick = () => {
   const d = c.dataset.pick; dirAll = false; setDir(d); renderHome(); renderEvents(); renderArchive();
-  if (d === "stadium") wzOpen("stadium"); else { wzClose(); $("ipicoBlock").scrollIntoView({block:"nearest", behavior:"smooth"}); }
+  if (d === "stadium") wzOpen("stadium"); else wzClose();
 });
 $("wlAll").onclick = () => { if (DIR) dirAll = true; };
 $("sbStart").onclick = () => wzOpen("stadium");
@@ -1327,7 +1307,7 @@ function renderSysNav(active){
 }
 function showTab(){
   let tab = tabName(), pane = "";
-  // 5.2: у стадиона с ручным вводом один экран ввода — шаг 4 Мастера; старый экран «Ввод результатов» не открываем
+  // 6.0: у стадиона с ручным вводом один экран ввода — шаг 4 Мастера (этап «5. Ввод результатов»); старая закладка #timing ведёт туда же
   if (tab === "timing" && isEntryMode(curEvent())) { wzp.setStep(4); history.replaceState(null, "", "#wizard"); tab = "wizard"; }
   if (/^hw-(timing|net)$/.test(tab)) { pane = tab.slice(3); tab = "hw"; } else if (tab === "hw") pane = "gen";
   if (!document.getElementById("tab-"+tab)) tab = "home";
@@ -1335,11 +1315,11 @@ function showTab(){
   if (STEPS.includes(tab) && !curEvent()) tab = "home";
   document.body.dataset.view = tab; applyDir();
   document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
-  document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === tab));
+  markLane();
   const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
   if (onStep && lane.scrollWidth > lane.clientWidth) lane.scrollLeft = onStep.offsetLeft - (lane.clientWidth - onStep.offsetWidth) / 2;
-  // в мастере протоколов своя навигация (шаги 1–5) — общая панель этапов скрыта, чтобы шаги не задваивались
-  $("lane").classList.toggle("hide", !STEPS.includes(tab));
+  // панель этапов всегда на месте (кроме стартового экрана): не прячется на «Главной» и в «Системе», поэтому шапка не прыгает
+  $("lane").classList.toggle("hide", tab === "welcome"); $("lane").classList.toggle("off", !curEvent());
   renderFinState();
   if (STEPS.includes(tab) && tab !== "wizard") store.set("ss.lastStep", tab);
   $("gear").classList.toggle("on", tab === "hw" || tab === "log" || tab === "users");
@@ -1347,8 +1327,7 @@ function showTab(){
   if (tab === "home") { renderEvents(); }
   if (tab === "prep") { openForm(curEvent(), "prep"); loadEntries(); }
   if (tab === "results" || tab === "timing") loadResults();
-  if (tab === "timing") { loadManual(); applyTimingMode(); }
-  if (tab !== "timing") document.body.dataset.mode = "";
+  if (tab === "timing") loadManual();
   if (tab === "users") { loadUsers(); loadTrainers(); loadConsents(); }
   if (tab === "prep") renderSite();
   if (tab === "files") renderPub();
@@ -1359,9 +1338,15 @@ function showTab(){
   if (tab === "files") renderFilesTab();
   if (tab === "reg") { renderRegHead(true); loadRegs(); }
   if (tab === "wizard") wzp.open();
+  if (lastView !== null && lastView !== tab) window.scrollTo(0, 0);      // только при переходе между разделами; шаги Мастера, ввод и сохранение экран не двигают
+  lastView = tab;
 }
-window.addEventListener("hashchange", () => { showTab(); window.scrollTo(0, 0); });
-function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? "timing" : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
+let lastView = null;
+// какой этап подсвечен: «Ввод результатов» стадиона с ручным вводом — это шаг 4 Мастера, поэтому на нём горит этап 5, а не 3
+function laneActive(){ const v = document.body.dataset.view; return v === "wizard" && isEntryMode(curEvent()) && wzp.step() === 4 ? "timing" : v; }
+function markLane(){ const act = laneActive(); document.querySelectorAll(".lane .st").forEach(a => a.classList.toggle("on", a.dataset.step === act)); }
+window.addEventListener("hashchange", showTab);
+function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? (isEntryMode(ev) ? "wizard" : "timing") : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
 function openEvent(id){
   const e0 = events.find(x => x.id === id); if (e0) setDir(e0.kind === "stadium" ? "stadium" : "ipico");
   selectEvent(id);
@@ -1477,7 +1462,7 @@ function renderEvents(){
   if (STEPS.includes(tabName()) && !ev && document.body.dataset.view !== "home") showTab();
 }
 let chkCache = null;
-function setStep(id, cls, text){ const a = $(id); const hid = a.classList.contains("hide"); a.className = "st " + (cls||"") + (a.dataset.step === document.body.dataset.view ? " on" : "") + (hid ? " hide" : ""); a.querySelector("small").textContent = text || ""; }
+function setStep(id, cls, text){ const a = $(id); const hid = a.classList.contains("hide"); a.className = "st " + (cls||"") + (a.dataset.step === laneActive() ? " on" : "") + (hid ? " hide" : ""); a.querySelector("small").textContent = text || ""; }
 function renderLane(){
   const ev = curEvent(); if (!ev) return;
   const stadium = ev.kind === "stadium", entry = isEntryMode(ev);
@@ -1504,6 +1489,12 @@ function renderLane(){
   setStep("stResults", ev.status === "finished" ? "done" : "", r && r.finished.length ? `финишировали: ${r.finished.length}` : "появятся после старта");
   setStep("stFiles", "", ev.files_count ? `${ev.files_count} ${plural(ev.files_count, ["файл","файла","файлов"])}` : "протоколы, файлы");
 }
+// этап «5. Ввод результатов» (ручной ввод) ведёт строго на шаг 4 Мастера; «3. Протоколы» с шага 4 возвращает на шаг 3
+$("lane").addEventListener("click", (e) => {
+  const a = e.target.closest("a.st"); if (!a || !isEntryMode(curEvent())) return;
+  if (a.id === "stTiming") { e.preventDefault(); if (document.body.dataset.view === "wizard") wzp.go(4); else { wzp.setStep(4); location.hash = "#wizard"; } }
+  else if (a.id === "stWiz" && document.body.dataset.view === "wizard" && wzp.step() === 4) { e.preventDefault(); wzp.go(3); }
+});
 const heatState = {planned:"ждёт старта", running:"идёт", finished:"завершён"};
 function renderWaves(){
   const ev = curEvent(); if (!ev) return;
@@ -1542,7 +1533,7 @@ function selectEvent(id){
   if (id === curId) return;
   curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
   lastId = 0; $("feedBody").innerHTML = "";
-  renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
+  uiSync().catch(() => {}); renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
   regLoaded = null; renderRegHead(true); if (tabName()==="reg") loadRegs();
   if (tabName()==="prep") openForm(curEvent(), "prep");
 }
@@ -1680,11 +1671,10 @@ function wzFlow(){
 }
 // kind: «stadium» | «mass»; пусто — направление ещё не выбрано: сначала карточки «Мастера подбора»
 function wzOpen(kind){
-  if (!kind) { wzClose(); location.hash = "#home"; const p = $("homePick"); p.classList.add("ask"); p.scrollIntoView({block:"nearest", behavior:"smooth"});
+  if (!kind) { wzClose(); location.hash = "#home"; const p = $("homePick"); p.classList.add("ask");
     setTimeout(() => p.classList.remove("ask"), 2400); toast("Выберите, что проводим: массовый забег или соревнования на стадионе"); return; }
   Object.assign(wz, {kind, i:0, type:kind === "mass" ? "mass" : null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
   $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wzDraw();
-  $("wizard").scrollIntoView({block:"nearest"});
 }
 function wzClose(){ $("wizard").classList.add("hide"); }
 async function wzLoadRules(){
@@ -2083,15 +2073,26 @@ function renderHeats(sl){
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
 const sexOfE = (e) => { const x = String(e.sex||"").toUpperCase(); if (x==="М"||x==="Ж") return x; const c = String(e.category||"").toLowerCase();
   if (/юнош|мальч|мужч|^муж/.test(c)) return "М"; if (/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return ""; };
-const cartKey = () => "ss.cart." + curId;
-function cartGet(){ try{ const v = JSON.parse(localStorage.getItem(cartKey()) || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
-function cartSet(a){ try{ localStorage.setItem(cartKey(), JSON.stringify(a)); }catch(e){ toast("Браузер не сохраняет корзину — проверьте настройки приватности"); } renderCart(); }
-const cartUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-function cartAdd(items){
-  const a = cartGet(); let n = 0;
-  items.forEach(it => { if (a.some(x => ["type","dist","gk","sf","mode","orient"].every(k => (x[k]||"") === (it[k]||"")))) return; a.push(Object.assign({id: cartUid(), on: true}, it)); n++; });
-  cartSet(a); return n;
+// 6.0: корзина печати и состояние Мастера общие для всех секретарей — лежат в базе (ui_state), в браузере не хранятся.
+// Добавление/удаление/отметка — операции на сервере: два секретаря, работающие одновременно, не затирают друг друга.
+const UI = {ev: null, cart: [], cartRev: -1};
+const cartGet = () => UI.ev === curId ? UI.cart : [];
+async function cartOp(body){
+  if (curId == null) return null;
+  try{ const r = await api(`/api/events/${curId}/ui`, Object.assign({key: "cart"}, body));
+    UI.ev = curId; UI.cart = r.value; UI.cartRev = r.rev; renderCart(); return r; }
+  catch(err){ toast("Корзина не сохранилась: " + err.message); return null; }
 }
+async function cartAdd(items){ let n = 0; for (const it of items) { const r = await cartOp({op: "add", item: it}); if (r && r.added) n++; } return n; }
+// опрос общего состояния раз в 3 с и сразу по сигналу из встроенного протокола; first — первое открытие Мастера
+async function uiSync(first){
+  if (curId == null) return;
+  const id = curId, r = await api(`/api/events/${id}/ui`); if (id !== curId) return;
+  if (UI.ev !== id) { UI.ev = id; UI.cart = []; UI.cartRev = -1; }
+  const c = r.state.cart; if (c.rev !== UI.cartRev) { UI.cart = Array.isArray(c.value) ? c.value : []; UI.cartRev = c.rev; renderCart(); }
+  wzp.remote(r.state.wizard, first, id);
+}
+window.addEventListener("message", (e) => { if (e.origin === location.origin && e.data && e.data.ss === "cart") uiSync().catch(() => {}); });
 function renderCart(){
   const a = cartGet(), on = a.filter(x => x.on).length;
   const html = `<h3>🛒 Корзина печати <span class="small muted">${a.length ? "— листов: " + a.length + ", к печати: " + on : ""}</span></h3>
@@ -2101,9 +2102,9 @@ function renderCart(){
   document.querySelectorAll(".cartmount").forEach(m => { m.innerHTML = html; });
 }
 document.addEventListener("click", async (e) => {
-  const rm = e.target.closest("[data-rm]"); if (rm) { cartSet(cartGet().filter(x => x.id !== rm.dataset.rm)); return; }
+  const rm = e.target.closest("[data-rm]"); if (rm) { cartOp({op: "remove", id: rm.dataset.rm}); return; }
   const b = e.target.closest("[data-cart]"); if (!b) return;
-  if (b.dataset.cart === "clear") { if (confirm("Очистить корзину печати?")) cartSet([]); return; }
+  if (b.dataset.cart === "clear") { if (confirm("Очистить корзину печати?")) cartOp({op: "clear"}); return; }
   if (curId == null) return;
   const sel = cartGet().filter(x => x.on);
   if (b.dataset.cart === "print") {
@@ -2124,15 +2125,14 @@ document.addEventListener("click", async (e) => {
 });
 document.addEventListener("change", (e) => {
   const c = e.target.closest("[data-cs]"); if (!c) return;
-  const a = cartGet(); const it = a.find(x => x.id === c.dataset.cs); if (it) { it.on = c.checked; cartSet(a); }
+  cartOp({op: "toggle", id: c.dataset.cs, on: c.checked});
 });
-// лист, добавленный в корзину во вкладке протокола (встроенный предпросмотр), сразу виден здесь
-window.addEventListener("storage", (e) => { if (curId != null && e.key === cartKey()) renderCart(); });
 
 /* ---------- Мастер протоколов: бег и техника — две ветки по пять шагов ---------- */
 const wzp = (() => {
   const W = {disc: "", step: 1, ages: [], sex: "", lanes: 8, regs: [], sl: null, ev: null};
-  const AGE_LIM = {u12:[0,12], u14:[0,14], u16:[0,16], u18:[0,18], u20:[0,20], u23:[0,23], sen:[19,200]};
+  // границы возрастных групп — только из справочника seed/disciplines.json (ages[].min/max), в коде их нет
+  const ageBy = (id) => (DISC.ages || []).find(a => a.id === id);
   const STEP_T = {
     run:   ["Фильтр участников", "Нагрудные номера", "Забеги и стартовый протокол", "Ввод на финише", "Итоговый протокол"],
     tech:  ["Фильтр участников", "Нагрудные номера", "Общий список и стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
@@ -2143,7 +2143,7 @@ const wzp = (() => {
   const kind = () => kindOf(W.disc);
   const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
   const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
-    return W.ages.some(a => AGE_LIM[a] && age >= AGE_LIM[a][0] && age <= AGE_LIM[a][1]); };
+    return W.ages.some(id => { const a = ageBy(id); return a && age >= a.min && age <= a.max; }); };
   const regsIn = () => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!W.sex || String(r.sex||"").toUpperCase() === W.sex) && ageOk(r));
   const entriesIn = () => {            // участники дисциплины из стартового списка с учётом фильтров
     const out = []; if (!W.sl) return out;
@@ -2165,18 +2165,61 @@ const wzp = (() => {
     const e0 = ev(); if (!e0) { $("wzpBody").innerHTML = '<p class="muted">Выберите соревнование в меню вверху.</p>'; return; }
     $("wzpEv").textContent = [e0.name, e0.date ? e0.date.split("-").reverse().join(".") : "", e0.place].filter(Boolean).join(" · ");
     await loadDisc();
-    if (W.evId !== e0.id) { W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; try{ const sv = JSON.parse(localStorage.getItem("ss.wzp." + e0.id) || "{}"); Object.assign(W, {disc: sv.disc || "", step: sv.step || 1, sex: sv.sex === "М" || sv.sex === "Ж" ? sv.sex : "", ages: Array.isArray(sv.ages) ? sv.ages : []}); }catch(x){} }
+    if (W.evId !== e0.id) {
+      // 6.0: активная дисциплина, шаг и фильтры — общие для всех секретарей, лежат в базе (таблица ui_state), а не в браузере
+      W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; W.uiRev = -1;
+      try{ await uiSync(true); }catch(x){ console.warn(x); }
+      if (W.forceStep) { W.step = W.forceStep; W.forceStep = 0; save(); }
+    }
     await load();
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
     if (!names.includes(W.disc)) W.disc = names[0] || "";
     $("wzpDisc").value = W.disc; render();
   }
-  function save(){ try{ localStorage.setItem("ss.wzp." + W.evId, JSON.stringify({disc: W.disc, step: W.step, sex: W.sex, ages: W.ages})); }catch(x){} }
+  // запись общего состояния на сервер; ответ с номером версии запоминаем, чтобы собственное эхо не принимать за чужое
+  function save(){
+    if (W.evId == null) return;
+    api(`/api/events/${W.evId}/ui`, {key: "wizard", cid: CID, value: {disc: W.disc, step: W.step, sex: W.sex, ages: W.ages}})
+      .then(r => { W.uiRev = Math.max(W.uiRev ?? -1, r.rev); }).catch(err => console.warn("состояние Мастера не записано", err)); }
+  const CID = Math.random().toString(36).slice(2, 12);
+  const busyEditing = () => { const a = document.activeElement;
+    return W.bibDirty || !!document.querySelector("#wzpRows tr.dirty") || (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && $("tab-wizard").contains(a)); };
+  // чужое изменение (другой секретарь переключил дисциплину, шаг или фильтр): принимаем, но не выбиваем у человека ввод из-под рук
+  function remote(w, first, evId){
+    if (evId !== W.evId) return;          // ответ про другое соревнование
+    if (first && w && w.rev > 0) { const v = w.value || {};     // первое открытие: берём то, на чём остановились другие, без уведомлений
+      Object.assign(W, {disc: v.disc || "", step: v.step || 1, sex: v.sex === "М" || v.sex === "Ж" ? v.sex : "", ages: Array.isArray(v.ages) ? v.ages : []}); W.uiRev = w.rev; return; }
+    if (first) { W.uiRev = w ? w.rev : 0; return; }
+    if (!w || W.evId == null || w.rev <= (W.uiRev ?? -1)) { if (W.deferred && !busyEditing()) { W.deferred = false; applyDraw(); } return; }
+    W.uiRev = w.rev;
+    const v = w.value || {}; if (w.cid === CID || !v.disc) return;
+    const same = v.disc === W.disc && v.step === W.step && (v.sex || "") === W.sex && JSON.stringify(v.ages || []) === JSON.stringify(W.ages);
+    if (same) return;
+    Object.assign(W, {disc: v.disc, step: v.step || 1, sex: v.sex || "", ages: v.ages || []});
+    toast(`${w.who || "Другой секретарь"}: ${W.disc} · шаг ${W.step}`);
+    if (document.body.dataset.view !== "wizard") return;
+    if (busyEditing()) { W.deferred = true; return; }
+    applyDraw();
+  }
+  function applyDraw(){ const sel = $("wzpDisc"); if (sel && [...sel.options].some(o => o.value === W.disc)) sel.value = W.disc; render(); }
   function go(n){
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Уйти с шага без сохранения?")) return;
-    W.bibDirty = false; W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+    W.bibDirty = false; W.deferred = false; W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+  // перерисовка тела Мастера без прыжков: высота держится до конца отрисовки, прокрутка не трогается, фокус возвращается в ту же ячейку
+  const focusKey = () => { const a = document.activeElement, b = $("wzpBody"); if (!a || !b.contains(a) || a === b) return null;
+    const tr = a.closest("tr[data-bib]"); return {id: a.id || "", bib: tr ? tr.dataset.bib : "", cls: a.className || "", i: a.dataset.i ?? "", pos: a.selectionStart}; };
+  const restoreFocus = (k) => { if (!k) return; const b = $("wzpBody"); let el = null;
+    if (k.id) el = document.getElementById(k.id);
+    else if (k.bib) { const tr = [...b.querySelectorAll("tr[data-bib]")].find(x => x.dataset.bib === k.bib);
+      if (tr) el = [...tr.querySelectorAll("input,select")].find(x => x.className === k.cls && (x.dataset.i ?? "") === k.i); }
+    if (!el) return; el.focus({preventScroll: true}); if (k.pos != null && el.setSelectionRange) try{ el.setSelectionRange(k.pos, k.pos); }catch(x){} };
   function render(){
+    const fk = focusKey(), bd = $("wzpBody"); bd.style.minHeight = bd.offsetHeight + "px";
+    draw(); restoreFocus(fk); markLane();
+    requestAnimationFrame(() => { bd.style.minHeight = ""; });
+  }
+  function draw(){
     const k = kind(), t = STEP_T[k];
     $("wzpKind").className = "wzp-kind " + k;
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника · попытки · общий список" : "Бег · забеги и дорожки" + (isPoints(W.disc) ? " (очки)" : "");
@@ -2368,6 +2411,17 @@ const wzp = (() => {
     const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
     if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
     return row; };
+  // 6.0: арифметики и правил секундомеров в браузере нет — сырые цифры уходят на сервер (POST /api/calc), в ячейку ставится его ответ
+  function calcRow(tr){
+    const out = tr.querySelector("[data-out]"); if (!out) return;
+    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")]; if (!sw.length && !at.length) return;
+    const row = {key: tr.dataset.bib}; if (sw.length) row.t = sw.map(i => i.value.trim()); else row.a = at.map(i => i.value.trim());
+    const sig = JSON.stringify(row); clearTimeout(tr._calcT);
+    tr._calcT = setTimeout(async () => {
+      try{ const d = await api("/api/calc", {distance: W.disc, rows: [row]}); const r0 = d.rows[0];
+        if (!r0 || !tr.isConnected || JSON.stringify(Object.assign({key: tr.dataset.bib}, sw.length ? {t: [...tr.querySelectorAll("input.sw")].map(i => i.value.trim())} : {a: [...tr.querySelectorAll("input.att")].map(i => i.value.trim())})) !== sig) return;
+        out.textContent = r0.result; out.title = r0.errors.join("; "); out.classList.toggle("err", !!r0.errors.length); }catch(e){ /* нет связи — итог посчитает сервер при сохранении */ } }, 120);
+  }
   const sync = (t, cls) => { const s = $("wzpSync"); if (s) { s.textContent = t; s.className = "wzp-sync " + (cls || ""); } };
   let autoT = null, saving = false;
   // мгновенная отправка: строка уходит на сервер, как только судья переходит к следующему полю — табло и протокол видят её сразу
@@ -2387,7 +2441,7 @@ const wzp = (() => {
       else sync(`Сохранено в ${new Date().toLocaleTimeString("ru-RU")} — результаты уже на сервере и на табло`, "ok");
       if (!auto) toast(`Сохранено: ${r.saved}`);
       await load();
-      if (!auto && !bad.size) render(); else refreshRows();
+      refreshRows();          // 6.0: без render() — экран и фокус остаются на месте; обновляются только расчётные клетки
       loadResults(); loadEvents._sig = null; loadEvents();
     }catch(err){ sync("Нет связи с сервером — изменения не потеряны, повторю через 5 секунд", "bad"); if (!auto) toast("Ошибка: " + err.message); queueAuto(5000); }
     finally{ saving = false; }
@@ -2439,9 +2493,7 @@ const wzp = (() => {
   root.addEventListener("input", (e) => {
     if (e.target.classList.contains("bibin2")) { e.target.classList.remove("err"); return bibCheck(); }
     const tr = e.target.closest("#wzpRows tr"); if (!tr) return; tr.classList.add("dirty"); e.target.classList.remove("err");
-    const out = tr.querySelector("[data-out]"); if (!out) return;
-    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")];
-    out.textContent = sw.length ? swMain(sw.map(i => i.value)) : at.length ? attBest(at.map(i => i.value)) : out.textContent;
+    calcRow(tr);
   });
   root.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.classList.contains("bibin2")) { e.preventDefault();
@@ -2456,9 +2508,10 @@ const wzp = (() => {
     W.bibDirty = false; W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
-  function setStep(n){ W.step = n; const e0 = ev(); if (!e0) return;
-    try{ const k = "ss.wzp." + e0.id, sv = JSON.parse(localStorage.getItem(k) || "{}"); sv.step = n; localStorage.setItem(k, JSON.stringify(sv)); }catch(x){} }
-  return {open, setStep};
+  function setStep(n){ const e0 = ev(); if (!e0) return;
+    if (W.evId !== e0.id) { W.forceStep = n; return; }        // Мастер ещё не открывался для этого соревнования — шаг применит open()
+    W.step = n; save(); }
+  return {open, setStep, go, remote, step: () => W.step};
 })();
 async function moveEntry(tr, body){
   try{
@@ -2613,7 +2666,7 @@ const reopenEv = async (id) => {
 const finToggle = () => { const ev = curEvent(); return ev && ev.status === "finished" ? reopenEv() : finishEv(); };
 function renderFinState(){
   const ev = curEvent(), fin = !!ev && ev.status === "finished";
-  ["btnFinish", "btnFinish2", "eFinish"].forEach(i => { const b = $(i); if (!b) return;
+  ["btnFinish", "btnFinish2"].forEach(i => { const b = $(i); if (!b) return;
     b.textContent = fin ? "↩️ Возобновить соревнование" : "Завершить соревнование"; b.classList.toggle("primary", fin); });
   if (ev && fin) $("btnFinish").disabled = false;
   const bar = $("finBar"), show = fin && (STEPS.includes(tabName()) || tabName() === "wizard");
@@ -3188,134 +3241,10 @@ $("calImport").onclick = async () => {
   catch(e){ toast("Ошибка: "+e.message); }
 };
 
-/* ---------- стадион: ввод результатов (ручной секундомер, позже — FinishLynx) ---------- */
+/* ---------- стадион с ручным вводом: единственный экран ввода — шаг 4 Мастера протоколов (6.0) ---------- */
 function isEntryMode(ev){ return !!ev && ev.kind === "stadium" && (ev.timing === "manual" || ev.timing === "lynx"); }
-function applyTimingMode(){
-  const entry = isEntryMode(curEvent());
-  $("resEntry").classList.toggle("hide", !entry);
-  document.querySelector("#tab-timing .race").classList.toggle("hide", entry);
-  document.body.dataset.mode = entry ? "entry" : "";
-  if (entry) loadEntry();
-}
-let eData = null, eHeat = null;
 const STATUS_NAMES = {DNS:"DNS — не стартовал", DNF:"DNF — сошёл", DQ:"DQ — дисквалифицирован", NM:"NM — без результата"};
-async function loadEntry(){
-  const ev = curEvent(); if (!ev) return;
-  if (document.querySelector("#eBody tr.dirty")) return;      // не затираем то, что вписывают сейчас
-  try{
-    const [sl, rs] = await Promise.all([api(`/api/events/${ev.id}/startlist`), api(`/api/events/${ev.id}/results`)]);
-    const place = {}; rs.finished.forEach(r => place[r.bib] = r.place);
-    const groups = sl.heats.map(h => ({name: h.name, sub: [h.category, h.distance].filter(Boolean).join(" · "), entries: h.entries}));
-    if (sl.no_heat.length) groups.push({name: groups.length ? "Без забега" : "Все участники", sub: "", entries: sl.no_heat});
-    eData = {groups, place};
-    if (!groups.some(g => g.name === eHeat)) eHeat = groups[0] ? groups[0].name : null;
-    renderEntry();
-  }catch(e){ console.warn(e); }
-}
-/* показания трёх секундомеров и попытки: главный результат считается сам, как на сервере */
-const T_RE = /^(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?$/;
-function parseT(t){
-  t = String(t || "").replace(/\s+/g, ""); const m = T_RE.exec(t); if (!m || !t) return null;
-  const [, a, b, c, f] = m, h = b != null ? +a : 0, mi = b != null ? +b : (a != null ? +a : 0), sec = +c;
-  if ((a != null || b != null) && sec >= 60) return null;
-  const tot = h * 3600 + mi * 60 + sec + (f ? +f / Math.pow(10, f.length) : 0); return tot > 0 ? tot : null;
-}
-function fmtT(sec){
-  const tn = Math.round(sec * 10), h = Math.floor(tn / 36000), m = Math.floor(tn % 36000 / 600), s = Math.floor(tn % 600 / 10), t = tn % 10;
-  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${t}` : m ? `${m}:${String(s).padStart(2, "0")}.${t}` : `${s}.${t}`;
-}
-function swMain(vals){
-  const v = vals.map(parseT).filter(x => x != null).sort((a, b) => a - b); if (!v.length) return "";
-  const main = v.length >= 3 ? v[1] : v[v.length - 1];
-  return fmtT(Math.ceil(+(main * 10).toFixed(6)) / 10);
-}
-function attBest(vals, hi){
-  let best = null; vals.forEach(x => { const m = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(String(x || "").replace(/\s+/g, "")); if (m) { const v = +(m[1] + "." + (m[2] || "0")); if (v > 0 && (best == null || v > best)) best = v; } });
-  return best == null ? "" : best.toFixed(2);
-}
-// что вводить в забеге: «time» — три секундомера, «att» — попытки (6 или 12 для высоты), «one» — одно поле (очки и т.п.)
-function entryMode(g){
-  const dd = g && g.sub ? discBy(g.sub.split(" · ").pop()) : null;
-  if (!dd || dd.result === "time") return {kind: "sw", rt: "time", dd};
-  if (dd.attempts) return {kind: "att", rt: dd.result, n: dd.result === "height" ? 12 : 6, dd};
-  return {kind: "one", rt: dd.result, dd};
-}
-const RT_HINT = {
-  sw: "Три ручных секундомера: главный результат считается сам — среднее из трёх (если два совпали, это их время), из двух — худшее. Округление вверх до 0,1 с. Можно вписать главный результат вручную: он станет главным.",
-  distance: "Попытки: расстояние в метрах (7.85 или 7,85), X — неудачная, «-» — пропуск. Лучший результат определяется сам; его можно поправить вручную.",
-  height: "Покорённые высоты в метрах по порядку (1.80, 1.85 …), X — неудачная попытка. Лучшая высота определяется сама; детальные попытки по высотам ведутся в протоколе судей.",
-  points: "Результат — сумма очков многоборья по таблице: целое число, например 7250."};
-function renderEntry(){
-  if (!eData) return;
-  $("eHeats").innerHTML = eData.groups.map(g => `<button data-h="${esc(g.name)}" class="${g.name===eHeat?"on":""}">${esc(g.name)}${g.sub?` <span class="small muted" style="font-family:var(--body)">${esc(g.sub)}</span>`:""}<i>${g.entries.length}</i></button>`).join("");
-  const g = eData.groups.find(x => x.name === eHeat), md = entryMode(g);
-  $("eHint").textContent = md.kind === "sw" ? RT_HINT.sw : md.kind === "att" ? RT_HINT[md.rt] : RT_HINT[md.rt] || "";
-  const head = md.kind === "sw" ? ["Дор.", "№", "Участник", "Разряд", "Секундомер 1", "Секундомер 2", "Секундомер 3", "Результат", "Отметка", "Место"]
-    : md.kind === "att" ? ["№", "Участник", "Разряд", ...Array.from({length: md.n}, (_, i) => "П" + (i + 1)), "Лучший", "Отметка", "Место"]
-    : ["Дор.", "№", "Участник", "Разряд", "Результат", "Отметка", "Место"];
-  $("eHead").innerHTML = "<tr>" + head.map(h => `<th>${esc(h)}</th>`).join("") + "</tr>";
-  const cells = (r) => {
-    const d = r.detail || {}, ph = md.rt === "points" ? "очки" : md.rt === "time" ? "—" : "м";
-    const main = `<td><input class="res" value="${esc(r.result||"")}" inputmode="decimal" placeholder="${ph}" aria-label="Результат ${esc(r.bib)}"><span class="mtag hide" title="Считать результат автоматически">вручную · авто</span></td>`;
-    if (md.kind === "sw") return [0, 1, 2].map(i => `<td><input class="sw" data-i="${i}" value="${esc((d.t || [])[i] || "")}" inputmode="decimal" placeholder="—" aria-label="Секундомер ${i + 1}, ${esc(r.bib)}"></td>`).join("") + main;
-    if (md.kind === "att") return Array.from({length: md.n}, (_, i) => `<td><input class="att" data-i="${i}" value="${esc((d.a || [])[i] || "")}" placeholder="—" aria-label="Попытка ${i + 1}, ${esc(r.bib)}"></td>`).join("") + main;
-    return main;
-  };
-  $("eBody").innerHTML = g ? g.entries.map(r => `<tr data-bib="${esc(r.bib)}" class="${r.status?"st-out":""}">
-      ${md.kind === "att" ? "" : `<td>${r.lane ?? ""}</td>`}<td class="bib">${esc(r.bib)}</td>
-      <td><b>${esc(r.name||"")}</b><div class="small muted">${esc(r.birth_year||"")}${r.team ? " · " + esc(r.team) : ""}</div></td><td class="small">${esc(r.rank||"")}</td>
-      ${cells(r)}
-      <td><select class="stsel" aria-label="Отметка ${esc(r.bib)}"><option value="">—</option>${Object.entries(STATUS_NAMES).map(([k,t]) => `<option value="${k}" ${r.status===k?"selected":""}>${t}</option>`).join("")}</select></td>
-      <td class="pl p${eData.place[r.bib]||""}">${eData.place[r.bib] ?? ""}</td></tr>`).join("")
-    : `<tr><td colspan="${head.length}" class="empty">Участников нет. Загрузите стартовый список на этапе «Подготовка» или сформируйте забеги из заявок.</td></tr>`;
-  // главный результат введён вручную, если он не совпадает с автоматическим
-  if (g) g.entries.forEach(r => { const d = r.detail || {}; const tr = $("eBody").querySelector(`tr[data-bib="${CSS.escape(String(r.bib))}"]`); if (!tr) return;
-    const calc = md.kind === "sw" ? swMain(d.t || []) : md.kind === "att" ? attBest(d.a || []) : null;
-    if (calc != null && r.result && (d.t || d.a) && calc !== r.result) setManual(tr, true); });
-}
-function setManual(tr, on){ const res = tr.querySelector("input.res"); res.dataset.man = on ? "1" : ""; const t = tr.querySelector(".mtag"); if (t) t.classList.toggle("hide", !on); }
-function recalcRow(tr){
-  const res = tr.querySelector("input.res"); if (res.dataset.man === "1") return;
-  const sw = [...tr.querySelectorAll("input.sw")].map(i => i.value), at = [...tr.querySelectorAll("input.att")].map(i => i.value);
-  if (sw.length) res.value = swMain(sw); else if (at.length) res.value = attBest(at);
-}
-$("eHeats").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-h]"); if (!b) return;
-  if (document.querySelector("#eBody tr.dirty") && !confirm("Есть несохранённые результаты в этом забеге. Перейти без сохранения?")) return;
-  eHeat = b.dataset.h; renderEntry();
-});
-$("eBody").addEventListener("input", (e) => { const tr = e.target.closest("tr"); if (!tr) return; tr.classList.add("dirty");
-  if (e.target.classList.contains("res")) setManual(tr, !!e.target.value.trim() && (tr.querySelector("input.sw,input.att") != null));
-  else if (e.target.matches("input.sw,input.att")) recalcRow(tr); });
-$("eBody").addEventListener("click", (e) => { const t = e.target.closest(".mtag"); if (!t) return; const tr = t.closest("tr"); setManual(tr, false); recalcRow(tr); tr.classList.add("dirty"); });
-$("eBody").addEventListener("change", (e) => { const tr = e.target.closest("tr"); if (tr) tr.classList.add("dirty"); });
-$("eBody").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || !e.target.matches("input.res,input.sw,input.att")) return;
-  e.preventDefault();
-  // в строке с секундомерами или попытками главный результат пропускаем, пока он считается сам
-  const all = [...document.querySelectorAll("#eBody input.res,#eBody input.sw,#eBody input.att")].filter(i => !(i.classList.contains("res")
-    && i.closest("tr").querySelector("input.sw,input.att") && i.dataset.man !== "1" && i !== e.target)), i = all.indexOf(e.target);
-  if (all[i+1]) { all[i+1].focus(); all[i+1].select(); } else $("eSave").click();
-});
-$("eSave").onclick = async () => {
-  const rows = [...document.querySelectorAll("#eBody tr.dirty")].map(tr => {
-    const row = {bib: tr.dataset.bib, result: tr.querySelector("input.res").value.trim(), status: tr.querySelector("select.stsel").value,
-      auto: tr.querySelector("input.res").dataset.man !== "1"};
-    const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")];
-    if (sw.length) row.t = sw.map(i => i.value.trim());
-    if (at.length) row.a = at.map(i => i.value.trim());
-    return row; });
-  if (!rows.length) return toast("Нет изменений");
-  try{
-    const r = await api(`/api/events/${curId}/results`, {rows});
-    if (r.errors.length) alert("Не сохранены:\n" + r.errors.join("\n"));
-    toast(`Сохранено: ${r.saved}`);
-    document.querySelectorAll("#eBody tr.dirty").forEach(tr => { if (!r.errors.some(x => x.startsWith(tr.dataset.bib + ":"))) tr.classList.remove("dirty"); });
-    if (!document.querySelector("#eBody tr.dirty")) await loadEntry();
-    loadResults(); loadEvents._sig = null; loadEvents();
-  }catch(e){ toast("Ошибка: "+e.message); }
-};
-$("eFinish").onclick = finToggle;
+
 
 /* ---------- пользователи и вход ---------- */
 let ME = null;
@@ -3430,7 +3359,8 @@ $("uSave").onclick = async () => {
   setInterval(loadHw, 10000);
   loadHw();
   setInterval(pollFeed, 1000);
-  setInterval(() => { const t=tabName(); if (t==="check") { loadCheck(); loadPickup(); } if (t==="timing") { loadManual(); if (isEntryMode(curEvent())) loadEntry(); } if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
+  setInterval(() => { if (!document.hidden) uiSync().catch(() => {}); }, 3000);
+  setInterval(() => { const t=tabName(); if (t==="check") { loadCheck(); loadPickup(); } if (t==="timing") loadManual(); if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
   setInterval(async () => { try{ const id=curId; await loadEvents(); if (id!==curId) loadEntries(); }catch(e){} }, 15000);
   pollFeed();
 })();

@@ -42,8 +42,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "5.2.0"
-BUILD_DATE = "2026-10-13"        # дата сборки: показывается в «Системе» и в /api/status
+VERSION = "6.0.0"
+BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
 
@@ -875,6 +875,11 @@ class Store:
         add("registrations", (("relay", "TEXT"), ("leg", "INTEGER"), ("rank", "TEXT")))
         # 4.4: состояние стадионного табло (пульт управления) — по соревнованию
         self.con.execute("CREATE TABLE IF NOT EXISTS scoreboard(event_id INTEGER PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        # 6.0: общее состояние экранов секретарей — активная дисциплина и фильтры Мастера, корзина печати.
+        # Раньше жили в localStorage браузера (у двух секретарей — две разные картины). rev растёт на каждую запись
+        self.con.execute("""CREATE TABLE IF NOT EXISTS ui_state(
+            event_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 1,
+            who TEXT, cid TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(event_id, key))""")
         # 5.0: личный кабинет тренера — учётки с подтверждённой почтой, вход к закрытым протоколам.
         # verification_token — sha256 от кода из письма (сам код в базе не хранится)
         self.con.execute("""CREATE TABLE IF NOT EXISTS trainers(
@@ -914,6 +919,25 @@ class Store:
     def set_scoreboard(self, eid: int, state: dict) -> None:
         self.con.execute("INSERT OR REPLACE INTO scoreboard(event_id, state, updated_at) VALUES (?,?,?)",
                          (eid, json.dumps(state, ensure_ascii=False), fmt_db(now_local())))
+
+    # ---- 6.0: общее состояние экранов секретарей (Мастер протоколов, корзина печати)
+    def ui_states(self, eid: int) -> dict:
+        out = {}
+        for key, value, rev, who, cid, at in self.con.execute(
+                "SELECT key, value, rev, who, cid, updated_at FROM ui_state WHERE event_id = ?", (eid,)):
+            try:
+                out[key] = {"value": json.loads(value), "rev": rev, "who": who or "", "cid": cid or "", "at": at}
+            except ValueError:
+                continue
+        return out
+
+    def ui_put(self, eid: int, key: str, value: Any, who: str, cid: str) -> int:
+        """Записать значение целиком, rev увеличивается на 1; возвращает новый rev."""
+        old = self.con.execute("SELECT rev FROM ui_state WHERE event_id = ? AND key = ?", (eid, key)).fetchone()
+        rev = (old[0] if old else 0) + 1
+        self.con.execute("INSERT OR REPLACE INTO ui_state(event_id, key, value, rev, who, cid, updated_at) VALUES (?,?,?,?,?,?,?)",
+                         (eid, key, json.dumps(value, ensure_ascii=False), rev, who, cid, fmt_db(now_local())))
+        return rev
 
     # ---- пользователи и сессии (вход через браузер)
     def users(self) -> list:
@@ -1146,7 +1170,7 @@ class Store:
             self.con.execute(f"UPDATE events SET {k} = ? WHERE id = ?", (v, eid))
 
     def delete_event(self, eid: int) -> None:
-        for t in ("entries", "waves", "manual", "files", "registrations"):
+        for t in ("entries", "waves", "manual", "files", "registrations", "ui_state", "scoreboard"):
             self.con.execute(f"DELETE FROM {t} WHERE event_id = ?", (eid,))
         self.con.execute("DELETE FROM events WHERE id = ?", (eid,))
 
@@ -2275,6 +2299,113 @@ class Hub:
             return 0
         return 12 if d.get("result") == "height" else 6
 
+    CART_KEYS = ("type", "dist", "gk", "sf", "mode", "orient")     # что считается одним и тем же листом корзины
+
+    def ui_view(self, eid: int) -> dict:
+        st = self.store.ui_states(eid)
+        st.setdefault("wizard", {"value": {}, "rev": 0, "who": "", "cid": "", "at": ""})
+        st.setdefault("cart", {"value": [], "rev": 0, "who": "", "cid": "", "at": ""})
+        return {"state": st}
+
+    def ui_write(self, ev: dict, data: dict, who: str) -> tuple:
+        """POST …/ui. wizard: {value:{disc,step,sex,ages}} — последний записавший выигрывает.
+        cart: {op: add|remove|toggle|clear} — операции складываются на сервере, поэтому два секретаря,
+        одновременно добавляющие листы, не затирают друг друга."""
+        eid, key, cid = ev["id"], str(data.get("key") or ""), str(data.get("cid") or "")[:40]
+        if key == "wizard":
+            v = data.get("value") if isinstance(data.get("value"), dict) else {}
+            lim = self.age_limits()
+            try:
+                step = int(v.get("step") or 1)
+            except (TypeError, ValueError):
+                step = 1
+            sex = str(v.get("sex") or "")
+            val = {"disc": str(v.get("disc") or "")[:120], "step": max(1, min(5, step)), "sex": sex if sex in ("М", "Ж") else "",
+                   "ages": [a for a in (v.get("ages") if isinstance(v.get("ages"), list) else []) if a in lim]}
+            rev = self.store.ui_put(eid, "wizard", val, who, cid)
+            return 200, {"key": key, "rev": rev, "value": val}
+        if key == "cart":
+            op = str(data.get("op") or "")
+            items = self.store.ui_states(eid).get("cart", {}).get("value") or []
+            items = items if isinstance(items, list) else []
+            added = False
+            if op == "add" and isinstance(data.get("item"), dict):
+                it = {str(k)[:20]: (v if isinstance(v, (int, float, bool)) else str(v)[:200])
+                      for k, v in list(data["item"].items())[:14] if isinstance(v, (str, int, float, bool))}
+                if any(all((x.get(k) or "") == (it.get(k) or "") for k in self.CART_KEYS) for x in items):
+                    pass
+                elif len(items) >= 200:
+                    return 400, {"error": "в корзине слишком много листов — очистите её"}
+                else:
+                    it.update({"id": f"{int(time.time() * 1000):x}{random.randrange(36 ** 3):03x}", "on": True})
+                    items.append(it)
+                    added = True
+            elif op == "remove":
+                items = [x for x in items if x.get("id") != data.get("id")]
+            elif op == "toggle":
+                for x in items:
+                    if x.get("id") == data.get("id"):
+                        x["on"] = bool(data.get("on"))
+            elif op == "clear":
+                items = []
+            else:
+                return 400, {"error": "неизвестная операция с корзиной"}
+            rev = self.store.ui_put(eid, "cart", items, who, cid)
+            return 200, {"key": key, "rev": rev, "value": items, "added": added}
+        return 400, {"error": "неизвестный раздел состояния"}
+
+    def official_from_raw(self, dn, rt: str, rw: dict) -> tuple:
+        """ЕДИНСТВЕННОЕ место, где считается официальный результат по сырым цифрам (6.0).
+        rw["t"] — до трёх показаний секундомеров (бег): 3 — среднее по величине, 2 — худшее, 1 — само значение,
+        округление вверх до 0,1 с; rw["a"] — попытки (прыжки, метания, высота): лучшая.
+        → (detail для базы, есть ли detail, официальный результат текстом или None, ошибки [текст]).
+        Клиенты (админка, планшет сектора) арифметики не знают: шлют сырые цифры и показывают ответ сервера."""
+        detail, set_detail, auto_txt, errs = {}, False, None, []
+        if isinstance(rw.get("t"), list):
+            set_detail = True
+            secs, tclean = [], []
+            for i, raw in enumerate(rw["t"][:3], 1):
+                t = str(raw or "").strip()
+                if not t:
+                    tclean.append("")
+                    continue
+                pr = self.parse_result(t) if rt == "time" else None
+                if not pr:
+                    errs.append(f"секундомер {i}: не понял «{t[:12]}» — пример: 12.84 или 1:05.3")
+                    tclean.append("")
+                    continue
+                secs.append(pr[0])
+                tclean.append(pr[1])
+            if errs:
+                return detail, set_detail, auto_txt, errs
+            while tclean and not tclean[-1]:
+                tclean.pop()
+            if tclean:
+                detail["t"] = tclean
+            m = self.stopwatch_main(secs)
+            auto_txt = self.fmt_result(m) if m is not None else None
+        if isinstance(rw.get("a"), list):
+            set_detail = True
+            slots = self.attempt_slots(dn) or 6
+            aclean, best, aerr = self.parse_attempts(rt, rw["a"][:slots], dn)
+            if aerr:
+                return detail, set_detail, auto_txt, [m_ for _, m_ in aerr]
+            if aclean:
+                detail["a"] = aclean
+            auto_txt = best[1] if best else None
+        return detail, set_detail, auto_txt, errs
+
+    def calc_official(self, distance: str, rows: list) -> dict:
+        """POST /api/calc: официальный результат для строк ввода без записи в базу (живой пересчёт на экране)."""
+        rt = self.result_type(distance)
+        out = []
+        for rw in rows[:200]:
+            if not isinstance(rw, dict):
+                continue
+            _, _, txt, errs = self.official_from_raw(distance, rt, rw)
+            out.append({"key": rw.get("key"), "result": txt or "", "errors": errs})
+        return {"rows": out}
+
     @classmethod
     def parse_attempts(cls, rtype: str, cells: list, name=None) -> tuple:
         """Ячейки попыток → (чистый список, лучший результат (ключ, текст) или None, ошибки [(номер, текст)]).
@@ -3121,6 +3252,8 @@ class Hub:
         if path == "/api/disciplines" and method == "GET":
             data = self.disciplines()["data"]
             return ok({k: data.get(k) for k in ("version", "updated", "sources", "groups", "result_types", "ages", "disciplines", "presets")})
+        if path == "/api/calc" and method == "POST":      # 6.0: официальный результат по сырым цифрам — считает только сервер
+            return ok(self.calc_official(str(data.get("distance") or ""), data.get("rows") if isinstance(data.get("rows"), list) else []))
         if path == "/api/default-rules" and method == "GET":
             # возрастные группы по образцу положений ВФЛА для года соревнований (для мастера создания)
             y = str(qs.get("year", ""))
@@ -3205,6 +3338,8 @@ class Hub:
                 return self._regs_csv(ev)
             if action == "startlist":
                 return ok(self.startlist(ev))
+            if action == "ui":              # 6.0: общее состояние Мастера и корзины печати
+                return ok(self.ui_view(eid))
             if action == "bibs":            # 5.2: шаг 2 Мастера — ручные нагрудные номера
                 ages = [a for a in str(qs.get("ages") or "").split(",") if a]
                 return ok(self.bibs_view(ev, {"distance": qs.get("distance"), "sex": qs.get("sex"), "ages": ages}))
@@ -3322,43 +3457,10 @@ class Hub:
                     continue
                 dn = dn_of.get(bib)
                 rt = self.result_type(dn)
-                detail, set_detail, auto_txt = {}, False, None
-                # показания трёх ручных секундомеров → главный результат по правилам
-                if "t" in rw and isinstance(rw["t"], list):
-                    set_detail = True
-                    secs, tclean, terr = [], [], False
-                    for i, raw in enumerate(rw["t"][:3], 1):
-                        t = str(raw or "").strip()
-                        if not t:
-                            tclean.append("")
-                            continue
-                        pr = self.parse_result(t) if rt == "time" else None
-                        if not pr:
-                            bad.append(f"{bib}: секундомер {i}: не понял «{t[:12]}» — пример: 12.84 или 1:05.3")
-                            terr = True
-                            tclean.append("")
-                            continue
-                        secs.append(pr[0])
-                        tclean.append(pr[1])
-                    if terr:
-                        continue
-                    while tclean and not tclean[-1]:
-                        tclean.pop()
-                    if tclean:
-                        detail["t"] = tclean
-                    m = self.stopwatch_main(secs)
-                    auto_txt = self.fmt_result(m) if m is not None else None
-                # попытки в прыжках и метаниях → лучший результат
-                if "a" in rw and isinstance(rw["a"], list):
-                    set_detail = True
-                    slots = self.attempt_slots(dn) or 6
-                    aclean, best, aerr = self.parse_attempts(rt, rw["a"][:slots], dn)
-                    if aerr:
-                        bad.extend(f"{bib}: {m_}" for _, m_ in aerr)
-                        continue
-                    if aclean:
-                        detail["a"] = aclean
-                    auto_txt = best[1] if best else None
+                detail, set_detail, auto_txt, errs = self.official_from_raw(dn, rt, rw)
+                if errs:
+                    bad.extend(f"{bib}: {m_}" for m_ in errs)
+                    continue
                 # auto — главный результат считает система; иначе значение секретаря остаётся как есть
                 if set_detail and (rw.get("auto") or not txt):
                     txt = auto_txt or ""
@@ -3615,6 +3717,9 @@ class Hub:
                 return err(str(e))
             self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}")
             return ok(out)
+        if action == "ui":
+            code, out = self.ui_write(ev, data, who)
+            return code, J, json.dumps(out, ensure_ascii=False), None
         if action == "bibs":
             code, out = self.save_bibs(ev, data.get("rows") if isinstance(data.get("rows"), list) else [], who)
             return code, J, json.dumps(out, ensure_ascii=False), None
@@ -3911,7 +4016,7 @@ class Hub:
         """Шаг 2: подтверждённые участники дисциплины (с фильтром шага 1) и их нагрудные номера."""
         eid, dist = ev["id"], str(scope.get("distance") or "").strip()
         sex = str(scope.get("sex") or "").strip().upper()[:1]
-        ages = [a for a in (scope.get("ages") or []) if a in self.AGE_LIMITS]
+        ages = [a for a in (scope.get("ages") or []) if a in self.age_limits()]
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
 
         def ok_(r):
@@ -3919,13 +4024,7 @@ class Hub:
                 return False
             if sex in ("М", "Ж") and str(r.get("sex") or "").upper() != sex:
                 return False
-            if ages:
-                try:
-                    age = year - int(str(r["birth_date"])[:4])
-                except ValueError:
-                    return False
-                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
-            return True
+            return self.age_ok(year, r["birth_date"], ages)
         regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if ok_(r)])
         ent = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
         cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
@@ -4502,7 +4601,23 @@ class Hub:
         return order[:n]
 
     # возрастные группы мастера: допустимый возраст на год соревнований (возраст = год старта − год рождения)
-    AGE_LIMITS = {"u12": (0, 12), "u14": (0, 14), "u16": (0, 16), "u18": (0, 18), "u20": (0, 20), "u23": (0, 23), "sen": (19, 200)}
+    @classmethod
+    def age_limits(cls) -> dict:
+        """Возрастные группы шага 1 Мастера: границы берутся ТОЛЬКО из seed/disciplines.json (ages[].min/max)."""
+        return {a["id"]: (int(a.get("min", 0)), int(a.get("max", 200)))
+                for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
+
+    @classmethod
+    def age_ok(cls, year: int, birth, ages: list) -> bool:
+        """Год рождения подходит хотя бы под одну из выбранных групп; пустой выбор — подходят все."""
+        if not ages:
+            return True
+        try:
+            age = year - int(str(birth)[:4])
+        except ValueError:
+            return False
+        lim = cls.age_limits()
+        return any(lim[a][0] <= age <= lim[a][1] for a in ages if a in lim)
 
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
         """Мастер протоколов: сетка одной дисциплины с фильтром по возрасту и полу.
@@ -4514,7 +4629,7 @@ class Hub:
         kind = self.discipline_kind(dist)
         sex = str(scope.get("sex") or "").strip().upper()[:1]
         sex = sex if sex in ("М", "Ж") else ""
-        ages = [a for a in (scope.get("ages") or []) if a in self.AGE_LIMITS]
+        ages = [a for a in (scope.get("ages") or []) if a in self.age_limits()]
         lanes = max(1, min(int(lanes or 8), 50))
         waves = self.store.waves(eid)
         if any(w.get("start_time") for w in waves if (w.get("distance") or "") == dist):
@@ -4526,13 +4641,7 @@ class Hub:
                 return False
             if sex and str(r.get("sex") or "").upper() != sex:
                 return False
-            if ages:
-                try:
-                    age = year - int(str(r["birth_date"])[:4])
-                except ValueError:
-                    return False
-                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
-            return True
+            return self.age_ok(year, r["birth_date"], ages)
         allregs = self.store.registrations(eid)
         regs = self.collapse_relays(ev, [r for r in allregs if in_scope(r)])
         if not regs:
@@ -5370,20 +5479,14 @@ class Hub:
         from urllib.parse import quote
         dist = str(qs.get("distance") or qs.get("dist") or "").strip()
         sex = str(qs.get("sex") or "").strip().upper()[:1]
-        ages = [a for a in str(qs.get("ages") or "").split(",") if a in self.AGE_LIMITS]
+        ages = [a for a in str(qs.get("ages") or "").split(",") if a in self.age_limits()]
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
         tech = self.discipline_kind(dist) == "tech"
 
         def keep(e):
             if sex in ("М", "Ж") and str(e.get("sex") or "").upper() != sex:
                 return False
-            if ages:
-                try:
-                    age = year - int(str(e.get("birth_year") or "")[:4])
-                except ValueError:
-                    return False
-                return any(self.AGE_LIMITS[a][0] <= age <= self.AGE_LIMITS[a][1] for a in ages)
-            return True
+            return self.age_ok(year, e.get("birth_year") or "", ages)
         sl = self.startlist(ev)
         groups = []
         for h in sl["heats"]:
