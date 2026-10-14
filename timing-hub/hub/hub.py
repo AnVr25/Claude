@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.5.1"
+VERSION = "7.6.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2266,6 +2266,14 @@ class Hub:
             code, out = self.submit_team(ev, info, rows, status="approved", actor=actor)
             return code, J, json.dumps(out, ensure_ascii=False), None
 
+        mr = re.fullmatch(r"/api/events/(\d+)/regs-csv", path)
+        if mr and method == "POST":            # 7.6: глобальный CSV-корректор (?check=1 — только сводка изменений)
+            ev = self.store.get_event(int(mr.group(1)))
+            if ev is None:
+                return err("соревнование не найдено", 404)
+            code, out = self.apply_regs_csv(ev, body, actor, check=bool(qs.get("check")))
+            return code, J, json.dumps(out, ensure_ascii=False), None
+
         mb = re.fullmatch(r"/api/events/(\d+)/bibs-csv", path)
         if mb and method == "POST":            # 7.5.1: нагрудные номера списком — тот же CSV, что выгружен из «Регистрации»
             ev = self.store.get_event(int(mb.group(1)))
@@ -3241,7 +3249,7 @@ class Hub:
                          + (f"; также у этих людей в: {', '.join(also)}" if also else ""))
         return {"cleared": len(ids), "people": len(keys), "entries": len(ents), "also": also}
 
-    def save_bibs(self, ev: dict, items: list, who: str) -> tuple:
+    def save_bibs(self, ev: dict, items: list, who: str, dry: bool = False) -> tuple:
         """Сохранить номера, вписанные вручную. Номер человека записывается во ВСЕ его заявки и строки сетки
         (все дисциплины). Ничего не пишется, пока весь набор не прошёл проверку."""
         eid = ev["id"]
@@ -3287,6 +3295,8 @@ class Hub:
                 owners.setdefault(new, set()).add(k)
         if errors:
             return 400, {"error": "Номера не сохранены — исправьте отмеченные строки", "errors": errors}
+        if dry:                                  # только проверка (CSV-корректор): ничего не пишем
+            return 200, {"ok": True, "saved": len(plan), "dry": True}
         # запись: сначала временные номера (обмен номерами двух участников не конфликтует), потом настоящие
         con = self.store.con
         con.execute("BEGIN")
@@ -3340,25 +3350,174 @@ class Hub:
         self.store.audit(who, eid, "Очищены отклонённые заявки", f"удалено заявок: {len(ids)}")
         return {"deleted": len(ids)}
 
-    BIB_ID_HEADS = ("№ заявки", "id", "reg_id", "id заявки", "заявка")
+    BIB_ID_HEADS = ("id заявки", "№ заявки", "id", "reg_id", "заявка")
     BIB_HEADS = ("нагрудный номер", "нагр. №", "нагр №", "bib", "номер")
+
+    # колонки корректора: ключ поля → допустимые заголовки (в нижнем регистре)
+    CSV_ID_HEADS = ("id заявки", "№ заявки", "id", "reg_id")
+    CSV_FIELD_HEADS = {"last_name": ("фамилия",), "first_name": ("имя",), "middle_name": ("отчество",), "rank": ("разряд",),
+                       "team": ("команда / клуб", "команда/клуб", "команда", "клуб"), "coach": ("тренер",),
+                       "bib": ("нагрудный номер", "нагр. №", "нагр №", "bib")}
+
+    def apply_regs_csv(self, ev: dict, blob: bytes, who: str, check: bool = False) -> tuple:
+        """7.6: ГЛОБАЛЬНЫЙ CSV-КОРРЕКТОР. Файл, выгруженный из «Регистрации» и отредактированный в Excel/Блокноте, — первоисточник:
+        строки сопоставляются ТОЛЬКО по ID заявки (registrations.id), фамилия, имя, отчество, разряд, команда, тренер перезаписываются
+        значениями файла во всех заявках и в связанных строках сетки (entries), нагрудные номера — через save_bibs (все или ничего,
+        один человек — один номер на все его дисциплины). Пустая фамилия/имя — ошибка; пустые отчество, команда, тренер очищают
+        поле; пустой разряд и пустой номер оставляют прежнее значение. Пол, год рождения, дисциплина и справочные колонки не
+        применяются. Проверка (check=True) ничего не пишет и возвращает сводку изменений; любая ошибка отменяет всё."""
+        table = self._read_table(blob)
+        if table is None:
+            return 400, {"error": "Не удалось прочитать файл. Загрузите CSV или Excel, выгруженный кнопкой «Выгрузить CSV»."}
+        cols, hi = {}, None
+        for i, row in enumerate(table[:10]):
+            low = [str(c or "").strip().lower() for c in row]
+            idc = next((j for j, c in enumerate(low) if c in self.CSV_ID_HEADS), None)
+            if idc is None:
+                continue
+            found = {k: next((j for j, c in enumerate(low) if c in heads), None) for k, heads in self.CSV_FIELD_HEADS.items()}
+            found = {k: j for k, j in found.items() if j is not None}
+            if found:
+                hi, cols = i, {"id": idc, **found}
+                break
+        if hi is None:
+            return 400, {"error": "В файле нет колонки «ID заявки» и колонок с данными. Возьмите файл, выгруженный кнопкой «Выгрузить CSV» в «Регистрации», и правьте его, не меняя первую строку."}
+        st = self._bib_state(ev["id"])
+        regs, key_of = st["regs"], st["key_of"]
+        errors, changes, per_person, seen = [], [], {}, set()
+        stats = {"rows": 0, "changed": 0, "cleared": 0, "same": 0, "anonymized": 0, "empty_bib": 0}
+        label = {"last_name": "фамилия", "first_name": "имя", "middle_name": "отчество", "rank": "разряд", "team": "команда", "coach": "тренер"}
+        cell = lambda row, k: (str(row[cols[k]] if cols[k] < len(row) else "") if k in cols else None)  # noqa: E731
+        for n, row in enumerate(table[hi + 1:], hi + 2):
+            if not any(str(c or "").strip() for c in row):
+                continue
+            stats["rows"] += 1
+            rid_s = str(row[cols["id"]] if cols["id"] < len(row) else "").strip()
+            rid_s = rid_s[:-2] if rid_s.endswith(".0") else rid_s
+            if not rid_s.isdigit() or int(rid_s) not in regs:
+                errors.append(f"строка {n}: заявки «{rid_s or '—'}» нет в этом соревновании — первую колонку менять нельзя")
+                continue
+            rid = int(rid_s)
+            if rid in seen:
+                errors.append(f"строка {n}: заявка №{rid} встречается в файле дважды")
+                continue
+            seen.add(rid)
+            r = regs[rid]
+            if r.get("anonymized_at"):
+                stats["anonymized"] += 1
+                continue
+            new, diff = {}, []
+            for k in ("last_name", "first_name", "middle_name", "team", "coach"):
+                v = cell(row, k)
+                if v is None:
+                    continue
+                v = self._clean(v, 80)
+                if k in ("last_name", "first_name") and not v:
+                    errors.append(f"строка {n}: {label[k]} не может быть пустой")
+                    continue
+                new[k] = v or None
+            rk = cell(row, "rank")
+            if rk is not None and rk.strip():
+                nr = self.norm_rank(rk)
+                if nr not in self.RANKS:
+                    errors.append(f"строка {n}: разряд «{rk.strip()[:15]}» не из списка ({', '.join(self.RANKS)})")
+                    continue
+                new["rank"] = nr
+            for k, v in new.items():
+                old = r.get(k) or None
+                if v != old:
+                    diff.append((k, old, v))
+            bib = cell(row, "bib")
+            if bib is not None:
+                bib = bib.strip()
+                bib = bib[:-2] if re.fullmatch(r"\d+\.0", bib) else bib
+                if not bib:
+                    stats["empty_bib"] += 1
+                elif not self.BIB_RE.fullmatch(bib):
+                    errors.append(f"строка {n}: номер «{bib[:12]}» — до 10 цифр или букв, без пробелов")
+                    continue
+                elif rid in key_of:
+                    slot = per_person.setdefault(key_of[rid], {"ids": [], "bibs": set(), "row": n})
+                    slot["ids"].append(rid)
+                    slot["bibs"].add(bib)
+            if diff:
+                changes.append((rid, r, new, diff))
+                stats["changed"] += 1
+                stats["cleared"] += sum(1 for _, o, v in diff if o and not v)
+            else:
+                stats["same"] += 1
+        items = []
+        for k, slot in per_person.items():
+            if len(slot["bibs"]) > 1:
+                r0 = regs[slot["ids"][0]]
+                errors.append(f"строка {slot['row']}: у {r0['last_name']} {r0['first_name']} разные номера в разных дисциплинах "
+                              f"({', '.join(sorted(slot['bibs']))}) — номер один на все виды")
+                continue
+            items.append({"ids": slot["ids"], "bib": next(iter(slot["bibs"]))})
+        if errors:
+            return 400, {"error": "Файл не применён — исправьте и загрузите снова", "errors": errors[:30], "more": max(0, len(errors) - 30)}
+        if not stats["rows"]:
+            return 400, {"error": "В файле нет строк с данными"}
+        code, out = self.save_bibs(ev, items, who, dry=True) if items else (200, {"saved": 0})
+        if code != 200:
+            return code, out
+        stats["bibs"] = out.get("saved", 0)
+        ex = [f"№{rid} {r['last_name']} {r['first_name']}: " + "; ".join(f"{label[k]} «{o or ''}» → «{v or ''}»" for k, o, v in diff)
+              for rid, r, _, diff in changes[:12]]
+        stats["examples"] = ex
+        if check:
+            return 200, {"ok": True, "check": True, **stats}
+        eid = ev["id"]
+        con = self.store.con
+        con.execute("BEGIN")
+        try:
+            for rid, r, new, diff in changes:
+                self.store.update_registration(rid, **{k: v for k, v in new.items() if k in dict((d[0], 1) for d in diff)})
+                if not r.get("relay"):                       # связанные строки сетки: имя, команда, тренер, разряд
+                    e = {}
+                    if "last_name" in new or "first_name" in new:
+                        e["name"] = " ".join(x for x in (new.get("last_name", r["last_name"]), new.get("first_name", r["first_name"])) if x)
+                    for k in ("team", "coach", "rank"):
+                        if k in new:
+                            e[k] = new[k]
+                    if e:
+                        for en in [x for x in self.store.entries_rows(eid) if x.get("reg_id") == rid]:
+                            self.store.update_entry(eid, en["id"], **e)
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        if items:
+            code, out = self.save_bibs(ev, items, who)
+            if code != 200:                                 # маловероятно после проверки; текстовые правки уже применены
+                return code, out
+        self.store.audit(who, eid, "Данные заявок исправлены из CSV",
+                         f"строк в файле: {stats['rows']}, заявок изменено: {stats['changed']}, очищено значений: {stats['cleared']}, "
+                         f"людей с номерами: {stats['bibs']}")
+        return 200, {"ok": True, "check": False, **stats}
+
+    @staticmethod
+    def _read_table(blob: bytes):
+        """CSV (; или ,; UTF-8 с BOM или cp1251) либо Excel → список строк; None, если файл не читается."""
+        try:
+            if blob[:2] == b"PK":
+                return xlsx_read(blob)
+            try:
+                text = blob.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = blob.decode("cp1251", errors="replace")
+            sep = ";" if text.count(";") >= text.count(",") else ","
+            return list(csv.reader(io.StringIO(text), delimiter=sep))
+        except Exception:
+            return None
 
     def bibs_from_csv(self, ev: dict, blob: bytes, who: str) -> tuple:
         """7.5.1: загрузка нагрудных номеров из CSV/Excel — файла «Заявки …csv» (колонки «№ заявки» и «Нагрудный номер»), где
         номера проставлены списком. Строки сопоставляются по номеру заявки; пустые ячейки номера пропускаются (никого не стирают);
         запись идёт тем же методом, что кнопка шага 2 (`save_bibs`): все или ничего, один человек — один номер на все его дисциплины,
         повторы у разных людей отклоняются. Шаг 2 Мастера читает номера из базы, поэтому показывает их сразу."""
-        try:
-            if blob[:2] == b"PK":
-                table = xlsx_read(blob)
-            else:
-                try:
-                    text = blob.decode("utf-8-sig")
-                except UnicodeDecodeError:
-                    text = blob.decode("cp1251", errors="replace")
-                sep = ";" if text.count(";") >= text.count(",") else ","
-                table = list(csv.reader(io.StringIO(text), delimiter=sep))
-        except Exception:
+        table = self._read_table(blob)
+        if table is None:
             return 400, {"error": "Не удалось прочитать файл. Загрузите CSV или Excel, выгруженный кнопкой «Выгрузить CSV»."}
         hi = None
         for i, row in enumerate(table[:10]):
@@ -4684,19 +4843,25 @@ class Hub:
         return 200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", self.team_template(ev), {
             "Content-Disposition": f"attachment; filename=\"zayavka.xlsx\"; filename*=UTF-8''{quote(fname)}"}
 
+    REGS_CSV_HEAD = ("ID заявки", "Фамилия", "Имя", "Отчество", "Пол", "Год рождения", "Разряд", "Команда / Клуб", "Тренер",
+                     "Дисциплина", "Нагрудный номер",
+                     # ниже — справочные колонки: при загрузке не применяются
+                     "Статус", "Категория", "Лучший результат", "Представитель", "Контакт", "Подана")
+
     def _regs_csv(self, ev: dict):
+        """7.6: файл-«первоисточник» для массовой правки в Excel/Блокноте: все рабочие поля участника, первая колонка — ID заявки
+        (ключ при загрузке обратно: «📥 Загрузить и применить изменения из CSV»)."""
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
-        w.writerow(["№ заявки", "Статус", "Фамилия", "Имя", "Отчество", "Дата рождения", "Пол", "Категория",
-                    "Дистанция", "Лучший результат", "Разряд", "Команда", "Тренер", "Представитель", "Контакт", "Нагрудный номер",
-                    "Подана"])
+        w.writerow(self.REGS_CSV_HEAD)
         st = {"pending": "на рассмотрении", "approved": "подтверждена", "rejected": "отклонена"}
-        bst = self._bib_state(ev["id"])         # 7.5.1: «Нагрудный номер» — актуальный (вписанный в заявку или стоящий в сетке); пусто — впишите и загрузите обратно
+        bst = self._bib_state(ev["id"])         # «Нагрудный номер» — актуальный (вписанный в заявку или стоящий в сетке)
         for r in self.store.registrations(ev["id"]):
-            w.writerow([r["id"], st.get(r["status"], r["status"]), r["last_name"], r["first_name"], r["middle_name"] or "",
-                        r["birth_date"], r["sex"], r["category"] or "", r["distance"], r["best"] or "", r.get("rank") or "", r["team"] or "",
-                        r["coach"] or "", r["representative"] or "", r["contact"] or "",
-                        (self._reg_bib(r, bst) if r["id"] in bst["key_of"] else (r["bib"] or "")), r["created_at"]])
+            w.writerow([r["id"], r["last_name"], r["first_name"], r["middle_name"] or "", r["sex"], str(r["birth_date"] or "")[:4],
+                        r.get("rank") or "", r["team"] or "", r["coach"] or "", r["distance"],
+                        (self._reg_bib(r, bst) if r["id"] in bst["key_of"] else (r["bib"] or "")),
+                        st.get(r["status"], r["status"]), r["category"] or "", r["best"] or "", r["representative"] or "",
+                        r["contact"] or "", r["created_at"]])
         from urllib.parse import quote
         return 200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(), {
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote('Заявки ' + ev['name'] + '.csv')}"}

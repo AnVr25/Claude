@@ -199,7 +199,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.5.1 (--version)", r.returncode == 0 and r.stdout.strip() == "7.5.1", r.stdout + r.stderr)
+    check("версия сервера 7.6.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.6.0", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -392,7 +392,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.5.1" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.6.0" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -405,7 +405,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.5.1", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.6.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -829,7 +829,7 @@ def main() -> int:
         code, txt, _ = pub("GET", "/r/api/calendar")
         zmap = {c["name"]: (c.get("venue") or {}).get("map", "") for c in json.loads(txt)["events"]}.get("Зимний старт", "")
         from urllib.parse import unquote
-        check("7.5.1: ссылка на манеж — Яндекс.Карты с центром в Южно-Сахалинске (142.76, 46.93), меткой и текстом «Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж»",
+        check("7.6.0: ссылка на манеж — Яндекс.Карты с центром в Южно-Сахалинске (142.76, 46.93), меткой и текстом «Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж»",
               "ll=142.760570%2C46.928092" in zmap and "pt=142.760570,46.928092" in zmap
               and "Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж" in unquote(zmap), zmap)
         code, txt, hd = pub("GET", "/r/assets/calendar.js")
@@ -1288,7 +1288,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.5.1 и дата сборки 14.10.2026", st3["version"] == "7.5.1" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.6.0 и дата сборки 14.10.2026", st3["version"] == "7.6.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -2095,38 +2095,78 @@ def main() -> int:
         b2 = pub_bibs()
         check("7.4: колонка «Нагрудный №»: сохранённый секретарём номер сразу виден на сайте, повторная правка — тоже",
               b1 and set(b1) == {"741"} and b2 and set(b2) == {"852"}, f"{b1} {b2}")
-        # 7.5.1: нагрудные номера списком из CSV и очистка отклонённых заявок
+        # 7.6.0: нагрудные номера списком из CSV и очистка отклонённых заявок
         OCT = {"Content-Type": "application/octet-stream", "X-Requested-With": "timing-hub"}
         csv14 = http("GET", f"/api/events/{e14}/regs.csv")[1].lstrip("\ufeff")
         rows14 = [r_.split(";") for r_ in csv14.strip().split("\r\n")]
         h14 = rows14[0]
         ib = h14.index("Нагрудный номер")
-        pet14 = [r_ for r_ in rows14[1:] if r_[2] == "Петрова"]
-        check("7.5.1: CSV из «Регистрации» содержит колонку «Нагрудный номер» (у вписанных — номер, у остальных пусто) и «№ заявки»",
-              h14[0] == "№ заявки" and pet14 and all(r_[ib] == "852" for r_ in pet14) and all(r_[ib] == "" for r_ in rows14[1:] if r_[2] == "Сидорова"), csv14[:300])
+        pet14 = [r_ for r_ in rows14[1:] if r_[1] == "Петрова"]
+        check("7.6.0: CSV из «Регистрации» содержит колонку «Нагрудный номер» (у вписанных — номер, у остальных пусто) и «№ заявки»",
+              h14[0] == "ID заявки" and pet14 and all(r_[ib] == "852" for r_ in pet14) and all(r_[ib] == "" for r_ in rows14[1:] if r_[1] == "Сидорова"), csv14[:300])
         def setcsv(vals):
             out = [";".join(h14)]
             for r_ in rows14[1:]:
-                r2 = list(r_); r2[ib] = vals.get(r_[2], r_[ib]); out.append(";".join(r2))
+                r2 = list(r_); r2[ib] = vals.get(r_[1], r_[ib]); out.append(";".join(r2))
             return ("\ufeff" + "\r\n".join(out)).encode("utf-8")
         c1, t1 = http("POST", f"/api/events/{e14}/bibs-csv", setcsv({"Сидорова": "301", "Старшая": "302", "Ждущая": "303"}), OCT)
         pb_ = {r_["n"]: r_["b"] for r_ in json.loads(pub("GET", f"/r/{s14}/participants.json")[1])["rows"]}
-        check("7.5.1: «Загрузить номера из CSV»: номера по № заявки записаны в базу и сразу видны в списке участников и на шаге 2 (GET /bibs); номер у нескольких видов — один",
+        check("7.6.0: «Загрузить номера из CSV»: номера по № заявки записаны в базу и сразу видны в списке участников и на шаге 2 (GET /bibs); номер у нескольких видов — один",
               c1 == 200 and pb_.get("Сидорова Ольга") == "301" and pb_.get("Старшая Анна") == "302" and pb_.get("Петрова Мария") == "852"
               and {r_["bib"] for r_ in json.loads(http("GET", f"/api/events/{e14}/bibs")[1])["rows"] if "Сидорова" in r_["name"]} == {"301"}, f"{c1} {t1[:200]} {pb_}")
         c2, t2 = http("POST", f"/api/events/{e14}/bibs-csv", setcsv({"Сидорова": "852"}), OCT)
         c3, t3 = http("POST", f"/api/events/{e14}/bibs-csv", ("\ufeff" + ";".join(h14) + "\r\n" + ";".join(["999999"] + [""] * (len(h14) - 1))).encode("utf-8"), OCT)
         c4, t4 = http("POST", f"/api/events/{e14}/bibs-csv", b"a;b\r\n1;2\r\n", OCT)
         pb2_ = {r_["n"]: r_["b"] for r_ in json.loads(pub("GET", f"/r/{s14}/participants.json")[1])["rows"]}
-        check("7.5.1: чужой номер, неизвестная заявка и файл без нужных колонок отклоняются понятным текстом; в базе ничего не меняется",
+        check("7.6.0: чужой номер, неизвестная заявка и файл без нужных колонок отклоняются понятным текстом; в базе ничего не меняется",
               c2 == 400 and "852" in t2 and c3 == 400 and "нет в этом соревновании" in t3 and c4 == 400 and "Нагрудный номер" in t4 and pb2_.get("Сидорова Ольга") == "301", f"{c2} {t2[:120]} {c3} {c4}")
+        # 7.6: глобальный CSV-корректор: ID заявки — ключ; ФИО, разряд, команда, тренер, номера перезаписываются и в заявках, и в сетке
+        hdrs = h14
+        ix = {n_: hdrs.index(n_) for n_ in ("ID заявки", "Фамилия", "Имя", "Отчество", "Разряд", "Команда / Клуб", "Тренер", "Нагрудный номер")}
+        def editcsv(fn):
+            out = [";".join(hdrs)]
+            for r_ in rows14[1:]:
+                r2 = list(r_); fn(r2); out.append(";".join(r2))
+            return ("\ufeff" + "\r\n".join(out)).encode("utf-8")
+        def fix(r2):
+            if r2[ix["Фамилия"]] == "Сидорова":
+                r2[ix["Фамилия"]] = "Сидорова-Ёлкина"; r2[ix["Команда / Клуб"]] = "СШОР ЛВС"; r2[ix["Тренер"]] = "Иванова И.И."; r2[ix["Разряд"]] = "2 р."
+            if r2[ix["Фамилия"]] == "Старшая":
+                r2[ix["Имя"]] = "Анастасия"; r2[ix["Нагрудный номер"]] = "777"
+        before_sl = http("GET", f"/api/events/{e14}/startlist")[1]
+        cc, dd = http("POST", f"/api/events/{e14}/regs-csv?check=1", editcsv(fix), OCT)
+        dd = json.loads(dd)
+        regs_mid = json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]
+        check("7.6: проверка CSV-корректора показывает сводку и примеры, но ничего не пишет",
+              cc == 200 and dd["check"] and dd["changed"] == 2 and dd["bibs"] == 1 and dd["examples"] and not any(r_["last_name"] == "Сидорова-Ёлкина" for r_ in regs_mid), str(dd)[:300])
+        cc, dd = http("POST", f"/api/events/{e14}/regs-csv", editcsv(fix), OCT)
+        dd = json.loads(dd)
+        regs_new = {r_["id"]: r_ for r_ in json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]}
+        sid = next(r_ for r_ in regs_new.values() if r_["last_name"] == "Сидорова-Ёлкина")
+        sta = next(r_ for r_ in regs_new.values() if r_["first_name"] == "Анастасия")
+        pb3 = {r_["n"]: r_["b"] for r_ in json.loads(pub("GET", f"/r/{s14}/participants.json")[1])["rows"]}
+        check("7.6: CSV-корректор: по ID заявки перезаписаны фамилия, имя, разряд, команда, тренер и номер; на сайте и в шаге 2 — новые данные",
+              cc == 200 and dd["changed"] == 2 and sid["team"] == "СШОР ЛВС" and sid["coach"] == "Иванова И.И." and sid["rank"] == "2 р."
+              and sta["bib"] == "777" and pb3.get("Старшая Анастасия") == "777" and "Сидорова-Ёлкина Ольга" in pb3
+              and any(r_["name"] == "Старшая Анастасия" for r_ in json.loads(http("GET", f"/api/events/{e14}/bibs")[1])["rows"]), f"{dd} {pb3}")
+        def bad_rank(r2):
+            if r2[ix["Фамилия"]] == "Петрова": r2[ix["Разряд"]] = "чемпион"
+        def bad_id(r2):
+            if r2[ix["Фамилия"]] == "Петрова": r2[ix["ID заявки"]] = "424242"
+        def empty_name(r2):
+            if r2[ix["Фамилия"]] == "Петрова": r2[ix["Фамилия"]] = ""
+        res_ = [http("POST", f"/api/events/{e14}/regs-csv", f_(), OCT) for f_ in (lambda: editcsv(bad_rank), lambda: editcsv(bad_id), lambda: editcsv(empty_name))]
+        regs_after = json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]
+        check("7.6: неизвестный разряд, чужой ID заявки и пустая фамилия — файл отклоняется целиком с понятным текстом, в базе ничего не меняется",
+              [c_ for c_, _ in res_] == [400, 400, 400] and "разряд" in res_[0][1] and "нет в этом соревновании" in res_[1][1] and "пустой" in res_[2][1]
+              and any(r_["last_name"] == "Петрова" for r_ in regs_after), str(res_)[:300])
         n_before = len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"])
         wait_id = next(r_["id"] for r_ in json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"] if r_["last_name"] == "Ждущая")
         api("POST", f"/api/events/{e14}/regs/{wait_id}", {"status": "rejected"})
         c5, d5 = api("POST", f"/api/events/{e14}/clear-rejected", {})
         left = json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]
         c6, d6 = api("POST", f"/api/events/{e14}/clear-rejected", {})
-        check("7.5.1: «Очистить отклонённые заявки» удаляет из базы только отклонённые этого соревнования; повторно — 0; остальные на месте",
+        check("7.6.0: «Очистить отклонённые заявки» удаляет из базы только отклонённые этого соревнования; повторно — 0; остальные на месте",
               c5 == 200 and d5.get("deleted") == 1 and len(left) == n_before - 1 and all(r_["status"] != "rejected" for r_ in left) and d6.get("deleted") == 0, f"{d5} {d6}")
         c_, t_, _ = pub("GET", f"/r/{s14}/startlist.json")
         c2_, t2_, _ = pub("GET", f"/r/{s14}/results.json")
@@ -2138,7 +2178,7 @@ def main() -> int:
         check("7.2: страница события содержит модуль «Заявленные участники» с выбором дисциплины, полом и возрастами, поиском и «Показать ещё»",
               "Заявленные участники" in pg14 and "pDisc" in pg14 and "data-ps" in pg14 and "data-pg" in pg14 and "plMore" in pg14 and 'name="robots"' in pg14, "")
         c_, pgp, _ = pub("GET", f"/r/{s14}/participants")
-        check("7.5.1: отдельное окно /r/<slug>/participants открывается, в нём модуль участников и ссылка «Участники соревнований» на главной странице; главная не рисует таблицу",
+        check("7.6.0: отдельное окно /r/<slug>/participants открывается, в нём модуль участников и ссылка «Участники соревнований» на главной странице; главная не рисует таблицу",
               c_ == 200 and "participantsPage" in pgp and "Участники соревнований" in pg14 and "participantsLink" in pg14 and "loadParticipants();\n  if(d.open)" not in pg14, str(c_))
         # согласие без пункта о публикации → «Фамилия И.» без года, разряда, команды и тренера
         c_, e15v = api("POST", "/api/events", {"name": "Закрытая форма", "date": "2026-10-21", "kind": "stadium", "timing": "manual"})

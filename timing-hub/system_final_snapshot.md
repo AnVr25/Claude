@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `7.5.1` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.6.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `66e7da8`
-- **Дамп сформирован:** 2026-10-14 12:08 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 333 из 333 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 5951 строк, `hub/ui.html` 2853, `hub/protocol.html` 637
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `200fb44`
+- **Дамп сформирован:** 2026-10-14 12:34 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 336 из 336 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 6116 строк, `hub/ui.html` 2859, `hub/protocol.html` 637
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -514,7 +514,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 3930–4031
+#### `Hub.generate_scoped` — `hub/hub.py` строки 4089–4190
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -621,7 +621,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 3900–3909
+#### `Hub.lane_order` — `hub/hub.py` строки 4059–4068
 
 ```python
     @staticmethod
@@ -636,7 +636,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4052–4092
+#### `Hub.reset_heats` — `hub/hub.py` строки 4211–4251
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -682,7 +682,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 3912–3916
+#### `Hub.age_limits` — `hub/hub.py` строки 4071–4075
 
 ```python
     @classmethod
@@ -692,7 +692,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 3918–3928
+#### `Hub.age_ok` — `hub/hub.py` строки 4077–4087
 
 ```python
     @classmethod
@@ -787,7 +787,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4132–4151
+#### `Hub.startlist` — `hub/hub.py` строки 4291–4310
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -1120,7 +1120,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.8 Ветки HTTP-API Мастера (внутри `Hub._api_event`)
 
-#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2818–2834
+#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2826–2842
 
 ```python
         if action == "heats":
@@ -1142,7 +1142,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2797–2804
+#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2805–2812
 
 ```python
         if action == "resetheats":
@@ -1155,7 +1155,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2773–2796
+#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2781–2804
 
 ```python
         if action == "publish":
@@ -1184,7 +1184,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
 ```
 
-#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2850–2927
+#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2858–2935
 
 ```python
         if action == "entry":
@@ -1267,7 +1267,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok({"ok": True})
 ```
 
-#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2538–2586
+#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2546–2594
 
 ```python
         if action == "results" and isinstance(data.get("rows"), list):
@@ -1884,7 +1884,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1687–1744
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1693–1750
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1948,7 +1948,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1746–2216
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1752–2222
 
 ```js
 const wzp = (() => {
@@ -2610,7 +2610,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 333 из 333 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 336 из 336 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2663,6 +2663,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+200fb44 2026-10-14 major: добавлен массовый импорт номеров из CSV, очистка отклонённых заявок и оптимизация Шага 1 Мастера v7.5.1
 66e7da8 2026-10-14 major: внедрен АРМ аудита администратора, автобэкап базы и автоисправление судейского ввода результатов v7.5.0
 575738d 2026-10-14 release: глобальный дамп архитектуры стадионного монолита v7.4.5
 a623134 2026-10-14 major: исправлен баг пустых полей тренеров в базе данных и геолокация манежа на Сахалине v7.4.5
@@ -2676,6 +2677,5 @@ a7f6476 2026-10-14 ui: оптимизирован Шаг 1 Мастера, до�
 658ec56 2026-10-14 chore: убраны остатки разбора ридеров (регулярные выражения, комментарии, имена VPN-доступов)
 3d0a05f 2026-10-14 major: запущен чистый стадионно-манежный монолит SakhStart v7.0.0, вырезан код чипового хронометража
 6233695 2026-10-14 release: глобальная реконструкция платформы, запущен монолитный SakhStart v6.0.0
-39c6600 2026-10-14 audit: сформирован глобальный архитектурный дамп системы для ревизии
 ```
 

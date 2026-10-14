@@ -747,7 +747,7 @@ a.btn.xls:hover{background:#E9F5EE}
         <span class="spacer"></span>
         <button class="danger hide" id="gClearRej" title="Безвозвратно удалить из базы все отклонённые заявки этого соревнования">❌ Очистить отклонённые заявки</button>
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
-        <button class="sm" id="gBibCsv" title="Загрузить файл, выгруженный кнопкой «Выгрузить CSV», с номерами в колонке «Нагрудный номер»">📥 Загрузить номера из CSV</button>
+        <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: ФИО, разряды, команды, тренеры и номера обновятся по ID заявки">📥 Загрузить и применить изменения из CSV</button>
       </div>
       <details class="panel" style="margin-top:12px"><summary><b>Внести заявку вручную</b> <span class="small muted">— без формы, сразу подтверждена</span></summary>
         <div class="regform">
@@ -1622,20 +1622,26 @@ $("gClearRej").onclick = async () => {
   try{ const r = await api(`/api/events/${curId}/clear-rejected`, {}); toast(`Удалено отклонённых заявок: ${r.deleted}`); $("gFilter").value = ""; regLoaded = null; await loadRegs(); loadEvents(); }
   catch(err){ toast("Ошибка: " + err.message); }
 };
-// 7.5.1: нагрудные номера списком — тот же CSV, номера в последней колонке; шаг 2 Мастера читает их из базы сразу
-$("gBibCsv").onclick = () => {
+// 7.6: глобальный CSV-корректор. «Выгрузить CSV» → правка в Excel/Блокноте (ФИО, разряды, команды, тренеры, номера) → сюда.
+// Строки сопоставляются по «ID заявки»; сначала сводка изменений и подтверждение, затем запись в заявки и в стартовый список.
+$("gCsvApply").onclick = () => {
   const ev = curEvent(); if (!ev) return;
   const i = document.createElement("input"); i.type = "file"; i.accept = ".csv,.xlsx,text/csv";
   i.onchange = async () => {
     const f = i.files[0]; if (!f) return;
-    if (!confirm(`Загрузить нагрудные номера из «${f.name}»?\n\nСтроки сопоставляются по «№ заявки». Пустые ячейки номера пропускаются, повторы у разных людей отклоняются — тогда не сохранится ничего.`)) return;
+    const blob = await f.arrayBuffer();
+    const post = async (q) => { const r = await fetch(`/api/events/${ev.id}/regs-csv${q}`, {method: "POST", headers: {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"}, body: blob});
+      const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || "Ошибка " + r.status); e.list = d.errors || []; e.more = d.more || 0; throw e; } return d; };
     try{
-      const r = await fetch(`/api/events/${ev.id}/bibs-csv`, {method: "POST", headers: {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"}, body: await f.arrayBuffer()});
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { alert((d.error || "Ошибка " + r.status) + (d.errors && d.errors.length ? "\n\n" + d.errors.slice(0, 15).map(x => typeof x === "string" ? x : x.error).join("\n") : "")); return; }
-      toast(`Номера загружены: ${d.people} чел.` + (d.spread ? `, продублировано на другие дисциплины: ${d.spread}` : "") + " — они уже на шаге 2 Мастера");
+      const c = await post("?check=1");
+      if (!c.changed && !c.bibs) return alert(`В файле «${f.name}» нет изменений: ${c.rows} строк совпадают с базой${c.empty_bib ? "; колонка номеров пуста" : ""}.`);
+      const lines = (c.examples || []).map(x => "• " + x).join("\n");
+      if (!confirm(`Применить «${f.name}»?\n\nСтрок в файле: ${c.rows}\nЗаявок будет изменено: ${c.changed}${c.cleared ? ` (очищено значений: ${c.cleared})` : ""}\nЛюдей с нагрудными номерами: ${c.bibs}\n${c.anonymized ? "Обезличенных заявок пропущено: " + c.anonymized + "\n" : ""}\n` + (lines ? "Например:\n" + lines + (c.changed > 12 ? "\n…" : "") + "\n\n" : "") + "Файл считается первоисточником: данные в базе и в стартовых списках будут перезаписаны."))
+        return;
+      const d = await post("");
+      toast(`Применено: заявок изменено ${d.changed}, номера: ${d.bibs} чел. — данные уже в стартовых списках и на шаге 2 Мастера`);
       regLoaded = null; await loadRegs(); loadEvents();
-    }catch(err){ toast("Ошибка: " + err.message); }
+    }catch(err){ alert(err.message + (err.list && err.list.length ? "\n\n" + err.list.slice(0, 15).map(x => typeof x === "string" ? x : x.error).join("\n") + (err.more ? `\n…и ещё ${err.more}` : "") : "")); }
   };
   i.click();
 };
