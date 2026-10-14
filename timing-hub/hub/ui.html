@@ -686,6 +686,8 @@ a.btn.xls:hover{background:#E9F5EE}
       <textarea id="sLinks" style="min-height:70px" placeholder="Итоги в новостях | https://fla65.ru/news/…&#10;Положение на сайте ВФЛА | https://rusathletics.info/…"></textarea>
       <div class="switches" style="margin-top:12px">
         <label class="switch"><input type="checkbox" id="sPubRegs"><i></i>👥 Опубликовать список заявившихся участников на сайте</label>
+        <label class="switch" style="margin-top:8px"><input type="checkbox" id="sPubFull"><i></i>Показывать год рождения и тренера у всех (согласия на распространение получены)</label>
+        <div class="small muted" style="margin-top:4px">Выключено — для заявок, поданных до появления пункта о публикации в согласии, видно только «Фамилия И.» и команду. Включайте, только если согласие на размещение этих данных в интернете уже получено.</div>
         <div class="small muted" style="margin-top:4px">Блок «Заявленные участники» появится на странице соревнования. Стартовые и итоговые протоколы включаются позже — на этапах 3 и 5.</div>
       </div>
       <div class="row" style="margin-top:12px"><button class="primary" id="sSave">Сохранить</button><span class="small muted">Положение, фото и другие файлы — на этапе «Документы», галочка «на сайте».</span></div>
@@ -1546,6 +1548,7 @@ $("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select
 $("gSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
   const body = {reg_open:$("gOpen").checked, reg_deadline:$("gDeadline").value||null, reg_distances:$("gDist").value.trim(), reg_rules:$("gRules").value.trim(), reg_info:$("gInfo").value.trim(), reg_consent:$("gConsent").value.trim()};
+  if (body.pub_regs_full && !ev.pub_regs_full && !confirm("Показать год рождения и тренера по ВСЕМ заявкам в открытом списке?\n\nНажимайте «ОК», только если согласие на размещение этих данных на сайте получено от каждого участника (за детей — от родителей). Ответственность за это — на организаторе.")) { $("sPubFull").checked = false; return; }
   if (body.reg_open && !body.reg_distances) return toast("Укажите хотя бы одну дистанцию");
   try{ await api(`/api/events/${ev.id}`, body); await loadEvents(); renderRegHead(true); $("gSaved").textContent = "сохранено " + new Date().toLocaleTimeString("ru-RU",{hour12:false}); toast("Сохранено"); }
   catch(e){ toast("Ошибка: "+e.message); }
@@ -2595,7 +2598,7 @@ function renderSite(){
   $("sSite").checked = !!ev.pub_site; $("sOurs").checked = ev.ours !== false;
   $("sLevel").value = ev.level || "region"; $("sNote").value = ev.note || "";
   $("sLive").value = ev.live_url || ""; $("sPhoto").value = ev.photo_url || ""; $("sAdaptive").checked = !!ev.adaptive;
-  $("sLinks").value = ev.links || ""; $("sPubRegs").checked = !!ev.pub_regs;
+  $("sLinks").value = ev.links || ""; $("sPubRegs").checked = !!ev.pub_regs; $("sPubFull").checked = !!ev.pub_regs_full;
   $("sReg").checked = !!ev.reg_open; $("sRegTill").value = (ev.reg_deadline || "").slice(0, 16); $("sDist").value = ev.reg_distances || "";
   $("sPage").innerHTML = pageLinkHtml(ev); $("sPage").classList.toggle("hide", !ev.page_url);
   $("sProgram").value = ev.program || ""; $("sContacts").value = ev.contacts || ""; $("sSeries").value = ev.series || "";
@@ -2620,7 +2623,7 @@ $("sSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
   const body = {pub_site:$("sSite").checked, ours:$("sOurs").checked, level:$("sLevel").value, note:$("sNote").value.trim(),
     live_url:$("sLive").value.trim(), photo_url:$("sPhoto").value.trim(), adaptive:$("sAdaptive").checked,
-    links:$("sLinks").value.trim(), pub_regs:$("sPubRegs").checked,
+    links:$("sLinks").value.trim(), pub_regs:$("sPubRegs").checked, pub_regs_full:$("sPubFull").checked,
     reg_open:$("sReg").checked, reg_deadline:$("sRegTill").value || null, reg_distances:$("sDist").value.trim(),
     program:$("sProgram").value.trim(), contacts:$("sContacts").value.trim(), series:$("sSeries").value.trim(),
     cover:$("sCoverFile").value || $("sCoverUrl").value.trim()};

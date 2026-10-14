@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.3.5"
+VERSION = "7.4.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -377,7 +377,7 @@ class Store:
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
                     "reg_info", "reg_consent",
                     "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
-                    "live_url", "photo_url", "links", "pub_start", "pub_results", "pub_regs", "team_best",
+                    "live_url", "photo_url", "links", "pub_start", "pub_results", "pub_regs", "pub_regs_full", "team_best",
                     "cover", "program", "contacts", "series")
     KINDS = ("stadium",)
     TIMINGS = ("judge", "manual", "lynx")
@@ -466,6 +466,7 @@ class Store:
                        ("photo_url", "TEXT"), ("links", "TEXT"), ("pub_start", "INTEGER NOT NULL DEFAULT 0"),
                        ("pub_results", "INTEGER NOT NULL DEFAULT 0")))
         add("events", (("pub_regs", "INTEGER NOT NULL DEFAULT 0"),))      # 7.1: открытый список «прошли регистрацию» для тренеров
+        add("events", (("pub_regs_full", "INTEGER NOT NULL DEFAULT 0"),))  # 7.4: секретарь подтвердил согласия на распространение по старым заявкам
         add("files", (("public", "INTEGER NOT NULL DEFAULT 0"),))
         add("entries", (("result", "TEXT"), ("status", "TEXT")))
         # Таблицы users/sessions могли остаться от старых сборок сервера с другим устройством —
@@ -556,6 +557,7 @@ class Store:
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
         self._migrate_v7()
+        self._migrate_v74()
 
     ENTRY_KEEP = ("bib", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed", "reg_id", "sex", "result",
                   "status", "points", "picked_at", "members", "rank", "detail", "done_rank", "result_at")
@@ -592,6 +594,34 @@ class Store:
                     self.con.execute(f"ALTER TABLE events DROP COLUMN {col}")
                 except sqlite3.Error:
                     pass          # старый SQLite без DROP COLUMN — столбец остаётся, сервер его не использует
+
+    def _migrate_v74(self) -> None:
+        """7.4: у участников, загруженных старыми версиями, в строке сетки (entries) могли остаться пустыми год рождения,
+        тренер и команда. При каждом старте недостающее подтягивается из заявок (registrations): сначала по связи reg_id,
+        затем по ФИО в том же соревновании. Заполненные поля не трогаются."""
+        regs = {}
+        by_name: dict = {}
+        for r in self.con.execute("SELECT id, event_id, last_name, first_name, middle_name, birth_date, team, coach FROM registrations "
+                                  "WHERE status != 'rejected' ORDER BY id"):
+            rid, eid, ln, fn, mn, bd, team, coach = r
+            rec = {"year": str(bd or "")[:4], "team": team or "", "coach": coach or ""}
+            regs[rid] = rec
+            for nm in (f"{ln} {fn}", f"{ln} {fn} {mn or ''}"):
+                by_name.setdefault((eid, " ".join(nm.lower().split())), rec)
+        upd = 0
+        for eid_, id_, reg_id, name, by, team, coach in self.con.execute(
+                "SELECT event_id, id, reg_id, name, birth_year, team, coach FROM entries").fetchall():
+            if by and team and coach:
+                continue
+            rec = regs.get(reg_id) or by_name.get((eid_, " ".join(str(name or "").lower().split())))
+            if not rec:
+                continue
+            new = (by or rec["year"], team or rec["team"], coach or rec["coach"])
+            if new != (by or "", team or "", coach or ""):
+                self.con.execute("UPDATE entries SET birth_year = ?, team = ?, coach = ? WHERE id = ?", (*new, id_))
+                upd += 1
+        if upd:
+            log.info("миграция 7.4: в %s строках участников восстановлены год рождения, команда и тренер", upd)
 
     def get_scoreboard(self, eid: int) -> Optional[dict]:
         row = self.con.execute("SELECT state, updated_at FROM scoreboard WHERE event_id = ?", (eid,)).fetchone()
@@ -766,7 +796,7 @@ class Store:
                 v = d[k]
                 if k == "heats_sequential":
                     v = None if v is None or v == "" else (1 if v else 0)
-                if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs"):
+                if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs", "pub_regs_full"):
                     v = 1 if v else 0
                 if k == "kind":
                     v = v if v in self.KINDS else "stadium"
@@ -1106,7 +1136,7 @@ class Hub:
         out["reg_lanes"] = ev.get("reg_lanes") or 8
         out["kind"] = ev.get("kind") or "stadium"
         out["timing"] = ev.get("timing") if ev.get("timing") in Store.TIMINGS else "judge"
-        for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs"):
+        for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs", "pub_regs_full"):
             out[k] = bool(ev.get(k)) if ev.get(k) is not None else (k == "ours")
         out["page_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") and base else out["reg_path"]
         return out
@@ -1269,7 +1299,7 @@ class Hub:
         data.update(name=re.sub(r"\b(20\d\d)\b", lambda m: str(int(m.group(1)) + 1), ev["name"]),
                     date=next_year(ev.get("date")), date_end=next_year(ev.get("date_end")),
                     reg_deadline=next_year(ev.get("reg_deadline")), reg_open=0, pub_site=0, pub_start=0,
-                    pub_results=0, pub_regs=0, live_url=None, photo_url=None, kind=view["kind"], timing=view["timing"],
+                    pub_results=0, pub_regs=0, pub_regs_full=0, live_url=None, photo_url=None, kind=view["kind"], timing=view["timing"],
                     cover=None if str(ev.get("cover") or "").startswith("file:") else ev.get("cover"))
         eid = self.store.add_event(data)
         self.store.update_event(eid, data)
@@ -1361,8 +1391,10 @@ class Hub:
         """7.2: открытый модуль «Заявленные участники» (по образцу списков MyRace): одна строка на заявку, одобренную секретарём.
         Полные данные (Фамилия Имя, год рождения, разряд, команда, тренер) выдаются только по тем заявкам, где согласие участника
         охватывало размещение в открытом списке (текст согласия содержит PUBLIC_LIST_MARK); по остальным — «Фамилия И.» без
-        года, разряда, команды и тренера. Номеров, дорожек, дат рождения, контактов и представителей нет никогда."""
+        года, разряда и тренера (если секретарь не подтвердил согласия: pub_regs_full). Нагрудный номер — актуальный из базы. Дорожек, дат рождения, контактов и представителей нет никогда."""
         regs = [r for r in self.store.registrations(ev["id"]) if r["status"] == "approved"]
+        bst = self._bib_state(ev["id"])
+        confirmed = bool(ev.get("pub_regs_full"))      # 7.4: секретарь подтвердил, что согласия на распространение получены
         covered = {t["hash"] for t in self.store.consent_texts() if self.PUBLIC_LIST_MARK in (t.get("text") or "")}
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
         ages = [a for a in (self.disciplines()["data"].get("ages") or []) if a.get("id")]
@@ -1385,8 +1417,8 @@ class Hub:
                 relays.setdefault((r["relay"], r["distance"]), None)
                 continue
             last, first = str(r["last_name"]).strip(), str(r.get("first_name") or "").strip()
-            full = r.get("consent_hash") in covered
-            rows.append({"d": r["distance"], "s": str(r.get("sex") or "").upper(), "g": group_of(r.get("birth_date")),
+            full = confirmed or r.get("consent_hash") in covered
+            rows.append({"b": self._reg_bib(r, bst), "d": r["distance"], "s": str(r.get("sex") or "").upper(), "g": group_of(r.get("birth_date")),
                          "n": f"{last} {first}".strip() if full else (f"{last} {first[:1]}." if first else last),
                          "y": str(r.get("birth_date") or "")[:4] if full else "", "r": (r.get("rank") or "") if full else "",
                          "t": (r.get("team") or ""), "c": (r.get("coach") or "") if full else "", "m": 0 if full else 1})
@@ -5504,7 +5536,7 @@ class Hub:
             if not self._event_view(ev)["pub_regs"]:
                 return js({"error": "Список заявленных участников пока не опубликован"}, 404)
             code, ctype, data_, _ = js(self.participants_list(ev))
-            return code, ctype, data_, {"Cache-Control": "public, max-age=30"}
+            return code, ctype, data_, {"Cache-Control": "no-cache"}
         if method == "GET" and sub in ("/results.json", "/startlist.json", "/protocol"):
             # 5.0: протоколы закрыты — только администратор, судья и тренер с подтверждённой почтой
             if not self.protocol_viewer(headers):
