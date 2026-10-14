@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.7.2"
+VERSION = "7.7.3"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -323,6 +323,33 @@ def _merge(base: dict, over: dict) -> dict:
         else:
             out[k] = v
     return out
+
+
+# Локальный запуск без установки (Windows, ноутбук секретаря): настройки лежат в ./config.json рядом с запуском.
+# Нет файла — создаём его с безопасными локальными значениями. Явно указанный --config так не создаётся:
+# опечатка в пути на рабочем сервере должна остаться ошибкой, а не подменить настройки.
+LOCAL_CONFIG_NAME = "config.json"
+LOCAL_CONFIG_TEMPLATE: dict[str, Any] = {
+    "db_path": "reads.db",
+    "log_level": "INFO",
+    "web": {"listen_host": "127.0.0.1", "listen_port": 8080, "user": "admin", "password": ""},
+    "public": {"enabled": False, "listen_host": "127.0.0.1", "listen_port": 8081, "url": ""},
+}
+
+
+def ensure_local_config(path: str) -> bool:
+    """Создаёт локальный config.json, если его нет. True — файл создан сейчас."""
+    if os.path.exists(path):
+        return False
+    d = os.path.dirname(os.path.abspath(path))
+    os.makedirs(d, exist_ok=True)
+    try:
+        with open(path, "x", encoding="utf-8") as f:
+            json.dump(LOCAL_CONFIG_TEMPLATE, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    except FileExistsError:
+        return False
+    return True
 
 
 def load_config(path: str) -> dict:
@@ -6084,11 +6111,21 @@ async def amain(cfg: dict) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="SakhStart: судейско-секретарский АРМ стадиона и манежа")
-    ap.add_argument("--config", default="/etc/timing-hub/config.json")
+    ap.add_argument("--config", default=None,
+                    help=f"файл настроек (по умолчанию ./{LOCAL_CONFIG_NAME} в текущей папке; если его нет — создаётся)")
     ap.add_argument("--check", action="store_true", help="проверить настройки и выйти")
     ap.add_argument("--version", action="version", version=VERSION)
     args = ap.parse_args()
 
+    if args.config is None:
+        args.config = os.path.join(os.getcwd(), LOCAL_CONFIG_NAME)
+        try:
+            if ensure_local_config(args.config):
+                print(f"Файл настроек не найден — создан {args.config} (локальный запуск: страница http://127.0.0.1:8080/, "
+                      f"база reads.db рядом). Задайте пароль в web.password.", file=sys.stderr)
+        except OSError as e:
+            print(f"ОШИБКА НАСТРОЕК: не удалось создать {args.config}: {e}", file=sys.stderr)
+            return 2
     try:
         cfg = load_config(args.config)
     except ConfigError as e:

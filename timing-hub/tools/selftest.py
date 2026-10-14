@@ -200,7 +200,22 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.7.2 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.2", r.stdout + r.stderr)
+    check("версия сервера 7.7.3 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.3", r.stdout + r.stderr)
+    # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
+    lc = tempfile.mkdtemp()
+    r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
+    lcp = os.path.join(lc, "config.json")
+    try:
+        lcj = json.load(open(lcp, encoding="utf-8"))
+    except Exception:
+        lcj = {}
+    check("7.7.3: без --config сервер берёт ./config.json, сам создаёт его (127.0.0.1:8080, база reads.db рядом) и не падает на /etc/timing-hub",
+          r0.returncode == 0 and lcj.get("db_path") == "reads.db" and lcj["web"]["listen_host"] == "127.0.0.1" and "/etc/timing-hub" not in r0.stdout + r0.stderr,
+          r0.stdout + r0.stderr)
+    r1 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
+    r2 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--config", os.path.join(lc, "нет.json"), "--check"], capture_output=True, text=True, cwd=lc)
+    check("7.7.3: повторный запуск использует тот же файл; указанный явно, но отсутствующий --config остаётся ошибкой и ничего не создаёт",
+          r1.returncode == 0 and "создан" not in r1.stderr and r2.returncode == 2 and not os.path.exists(os.path.join(lc, "нет.json")), r1.stderr + r2.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -393,7 +408,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.7.2" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.7.3" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -406,7 +421,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.2", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.3", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1289,7 +1304,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.7.2 и дата сборки 14.10.2026", st3["version"] == "7.7.2" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.7.3 и дата сборки 14.10.2026", st3["version"] == "7.7.3" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
