@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.7.5"
+VERSION = "7.7.6"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4401,10 +4401,11 @@ class Hub:
         except OSError:
             pass
         try:
-            sv["load"] = [round(x, 2) for x in os.getloadavg()]
-            sv["cpus"] = os.cpu_count()
-        except OSError:
-            pass
+            load_avg = os.getloadavg()
+        except (AttributeError, OSError):          # Windows: os.getloadavg нет — показываем нули, а не падаем
+            load_avg = [0.0, 0.0, 0.0]
+        sv["load"] = [round(x, 2) for x in load_avg]
+        sv["cpus"] = os.cpu_count()
         try:
             mem = {}
             with open("/proc/meminfo") as fh:

@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `7.7.5`
+- **Версия сервера (`VERSION`):** `7.7.6`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `fe6548b`
-- **Сформирован:** 2026-10-14 14:20 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 344 из 344 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 6153 строк, `hub/ui.html` 2866, `hub/reg.html` 962, `hub/board.html` 200
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `cd87480`
+- **Сформирован:** 2026-10-14 14:37 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 345 из 345 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 6154 строк, `hub/ui.html` 2866, `hub/reg.html` 962, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -1037,7 +1037,7 @@ def _name_key(name) -> str:
 
 ### 4.7 Тренеры: регистрация и подтверждение e-mail, вход, сессии
 
-### `Hub.trainer_api` — `hub/hub.py` строки 5358–5477 (consent / register / verify / resend / login / logout)
+### `Hub.trainer_api` — `hub/hub.py` строки 5359–5478 (consent / register / verify / resend / login / logout)
 
 ```python
     def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
@@ -1162,7 +1162,7 @@ def _name_key(name) -> str:
         return 404, {"error": "нет такого адреса"}, None
 ```
 
-### `Hub.send_mail` — `hub/hub.py` строки 5223–5262
+### `Hub.send_mail` — `hub/hub.py` строки 5224–5263
 
 ```python
     def send_mail(self, to: str, subject: str, text: str) -> bool:
@@ -1207,7 +1207,7 @@ def _name_key(name) -> str:
         return True
 ```
 
-### `Hub.protocol_viewer` — `hub/hub.py` строки 5324–5329
+### `Hub.protocol_viewer` — `hub/hub.py` строки 5325–5330
 
 ```python
     def protocol_viewer(self, headers: dict) -> Optional[dict]:
@@ -1218,7 +1218,7 @@ def _name_key(name) -> str:
         return u if u["role"] == "trainer" or self._role(u["role"]) in ("admin", "judge") else None
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 5159–5169
+### `Hub.role_allows` — `hub/hub.py` строки 5160–5170
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -2063,7 +2063,7 @@ const wzp = (() => {
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 5159–5169
+### `Hub.role_allows` — `hub/hub.py` строки 5160–5170
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -2099,13 +2099,13 @@ const wzp = (() => {
 
 | Шаблон | Метод | `hub/hub.py` |
 |---|---|---|
-| `/api/` | GET | 5681 |
-| `/api/` | GET|POST | 5659 |
-| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 5641 |
+| `/api/` | GET | 5682 |
+| `/api/` | GET|POST | 5660 |
+| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 5642 |
 | `/api/calc` | POST | 2393 |
 | `/api/calendar` | GET|POST | 2400 |
 | `/api/clock` | GET|POST | 2339 |
-| `/api/consents` | GET | 5722 |
+| `/api/consents` | GET | 5723 |
 | `/api/default-rules` | GET | 2395 |
 | `/api/disciplines` | GET | 2390 |
 | `/api/events` | GET|POST | 2405 |
@@ -2116,57 +2116,57 @@ const wzp = (() => {
 | `/api/events/(\d+)/import` | GET|POST | 2278 |
 | `/api/events/(\d+)/regs-csv` | GET|POST | 2296 |
 | `/api/log` | GET|POST | 2348 |
-| `/api/login` | POST | 5630 |
-| `/api/logout` | POST | 5634 |
-| `/api/me` | GET|POST | 5510 |
-| `/api/me/password` | GET|POST | 5693 |
-| `/api/me/password` | POST | 5512 |
-| `/api/readers/scan` | POST | 5758 |
+| `/api/login` | POST | 5631 |
+| `/api/logout` | POST | 5635 |
+| `/api/me` | GET|POST | 5511 |
+| `/api/me/password` | GET|POST | 5694 |
+| `/api/me/password` | POST | 5513 |
+| `/api/readers/scan` | POST | 5759 |
 | `/api/scoreboard/state` | GET|POST | 2359 |
-| `/api/status` | GET|POST | 5688 |
+| `/api/status` | GET|POST | 5689 |
 | `/api/system` | GET|POST | 2341 |
 | `/api/system/audit` | GET | 2350 |
-| `/api/system/backup/db` | GET | 5706 |
-| `/api/system/backup/latest` | GET | 5697 |
-| `/api/system/retention` | POST | 5717 |
+| `/api/system/backup/db` | GET | 5707 |
+| `/api/system/backup/latest` | GET | 5698 |
+| `/api/system/retention` | POST | 5718 |
 | `/api/system/scoreboard/control` | GET|POST | 2357 |
 | `/api/system/update` | GET|POST | 2343 |
 | `/api/system/update` | POST | 2312 |
-| `/api/system/update/github` | POST | 5736 |
-| `/api/system/update/github/check` | GET | 5732 |
+| `/api/system/update/github` | POST | 5737 |
+| `/api/system/update/github/check` | GET | 5733 |
 | `/api/system/update/install` | POST | 2345 |
-| `/api/trainers` | GET | 5481 |
-| `/api/trainers` | GET|POST | 5727 |
-| `/api/trainers/` | GET|POST | 5727 |
-| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 5483 |
-| `/api/users` | GET | 5523 |
-| `/api/users` | GET|POST | 5693 |
-| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 5533 |
-| `/board` | GET|POST | 5775 |
-| `/login` | GET | 5627 |
-| `/privacy` | GET | 5623 |
-| `/protocol` | GET | 5672 |
-| `/protocol` | GET|POST | 5663 |
-| `/r` | GET | 5857 |
-| `/r` | GET|POST | 5653 |
-| `/r/` | GET | 5857 |
-| `/r/` | GET|POST | 5653 |
-| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 5894 |
-| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 5861 |
-| `/r/api/calendar` | GET | 5872 |
-| `/r/api/open` | GET | 5887 |
-| `/r/api/series` | GET | 5877 |
-| `/r/assets/` | GET | 5865 |
-| `/r/privacy` | GET | 5855 |
-| `/r/series` | GET | 5884 |
-| `/r/series/` | GET | 5884 |
-| `/r/trainer` | GET | 5857 |
-| `/r/trainer/` | GET | 5857 |
-| `/relay` | POST | 5945 |
-| `/results.json` | GET|POST | 5929 |
-| `/scoreboard` | GET|POST | 5775 |
-| `/sector` | GET|POST | 5775 |
-| `/simple` | GET|POST | 5806 |
+| `/api/trainers` | GET | 5482 |
+| `/api/trainers` | GET|POST | 5728 |
+| `/api/trainers/` | GET|POST | 5728 |
+| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 5484 |
+| `/api/users` | GET | 5524 |
+| `/api/users` | GET|POST | 5694 |
+| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 5534 |
+| `/board` | GET|POST | 5776 |
+| `/login` | GET | 5628 |
+| `/privacy` | GET | 5624 |
+| `/protocol` | GET | 5673 |
+| `/protocol` | GET|POST | 5664 |
+| `/r` | GET | 5858 |
+| `/r` | GET|POST | 5654 |
+| `/r/` | GET | 5858 |
+| `/r/` | GET|POST | 5654 |
+| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 5895 |
+| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 5862 |
+| `/r/api/calendar` | GET | 5873 |
+| `/r/api/open` | GET | 5888 |
+| `/r/api/series` | GET | 5878 |
+| `/r/assets/` | GET | 5866 |
+| `/r/privacy` | GET | 5856 |
+| `/r/series` | GET | 5885 |
+| `/r/series/` | GET | 5885 |
+| `/r/trainer` | GET | 5858 |
+| `/r/trainer/` | GET | 5858 |
+| `/relay` | POST | 5946 |
+| `/results.json` | GET|POST | 5930 |
+| `/scoreboard` | GET|POST | 5776 |
+| `/sector` | GET|POST | 5776 |
+| `/simple` | GET|POST | 5807 |
 
 Внутренние ветки `_api` с разбором `action` (`/api/events/<id>/<action>`, допустимые символы `[a-z.-]+`):
 

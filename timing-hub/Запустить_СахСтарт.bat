@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title SakhStart Stadium Monolith Server v7.7.5
+title SakhStart Stadium Monolith Server v7.7.6
 echo =======================================================
-echo   ЗАПУСК АВТОНОМНОГО СУДЕЙСКОГО СЕРВЕРА SAKHSTART v7.7.5
+echo   ЗАПУСК АВТОНОМНОГО СУДЕЙСКОГО СЕРВЕРА SAKHSTART v7.7.6
 echo =======================================================
 set PY=python
 where python >nul 2>nul || set PY=py
