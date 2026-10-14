@@ -199,7 +199,7 @@ h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
 .tile.hot{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
 .tile .live,.list .run{display:inline-flex;align-items:center;gap:7px;color:var(--bad);font-weight:700}
 .tile .live::before,.list .run::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--track);animation:pulse 1.6s ease-out infinite}
-.pbtn{display:flex;flex-direction:column;align-items:flex-start;width:100%;margin:14px 0;font-size:18px;gap:2px;padding:14px 18px}.pbtn small{font-weight:500;font-size:13px;opacity:.85}
+.pbtn{display:flex;flex-direction:column;align-items:flex-start;margin-top:14px;margin-bottom:14px;font-size:18px;gap:2px;padding:14px 18px}.pbtn small{font-weight:500;font-size:13px;opacity:.85}
 .back{display:inline-block;margin:12px 0 4px;font-weight:600}.pl-wide{max-width:1100px;margin-left:auto;margin-right:auto;padding:22px}.pl-wide .pl-tbl{font-size:15px}.pl-wide .pl-tbl td,.pl-wide .pl-tbl th{padding:6px 10px}
 .pl h2{font-size:22px;margin:0 0 10px}.pl-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;margin-bottom:10px}
 .pl input#pQ{display:block;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:11px 12px;min-height:48px;width:100%;box-sizing:border-box}
@@ -585,7 +585,7 @@ function layout(){
   const empty=!ev&&!reg&&!about&&!d.regs_public?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
   const cov=href(c.cover);
   $("root").innerHTML=headerCard()+(cov?`<div class="cover"><img src="${esc(cov)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>`:"")
-    +(regFirst?reg+part+ev:part+ev+reg)+about+empty;
+    +part+(regFirst?reg+ev:ev+reg)+about+empty;
   lockHint();
   if(d.open) render();
 }
@@ -616,7 +616,7 @@ function drawPl(full){
   $("pAge").innerHTML=d.ages.length?[["","Все возрасты"],...d.ages.map(a=>[a.id,a.name])].map(([v,t])=>`<button type="button" aria-pressed="${PS.g===v}" class="${PS.g===v?"on":""}" data-pg="${esc(v)}">${esc(t)} <i>${ageCnt(v)}</i></button>`).join(""):"";
   const rows=plRows(), shown=rows.slice(0,PS.n);
   $("plCnt").textContent=`Заявлено: ${rows.length} · всего в этой дисциплине: ${PL.rows.filter(x=>x.d===PS.d).length} · обновлено ${d.updated}`;
-  $("plList").innerHTML=(shown.length?`<table class="pl-tbl"><thead><tr><th class="no">№</th><th>Участник</th><th>Г.р.</th><th>Разряд</th><th>Команда</th><th>Тренер</th></tr></thead><tbody>${shown.map((x,i)=>`<tr><td class="no">${i+1}</td><td class="nm">${esc(x.n)}</td><td>${esc(x.y)}</td><td>${esc(x.r)}</td><td>${esc(x.t)}</td><td>${esc(x.c)}</td></tr>`).join("")}</tbody></table>`
+  $("plList").innerHTML=(shown.length?`<table class="pl-tbl"><thead><tr><th class="no">№</th><th>Участник</th><th>Год рождения</th><th>Тренер</th></tr></thead><tbody>${shown.map((x,i)=>`<tr><td class="no">${i+1}</td><td class="nm">${esc(x.n)}</td><td>${esc(x.y)}</td><td>${esc(x.c)}</td></tr>`).join("")}</tbody></table>`
     :'<div class="muted" style="padding:12px 0">Никого не найдено. Если спортсмена нет в списке, заявка ещё не одобрена секретарём или не подана.</div>')
     +(rows.length>shown.length?`<button type="button" class="ghost" id="plMore" style="margin-top:10px">Показать ещё (${rows.length-shown.length})</button>`:"")
     +(d.relays&&d.relays.length&&!PS.q?`<h3 class="pl-h3">Эстафетные команды</h3><ul class="pl-rel">${d.relays.filter(x=>!PS.d||x.discipline===PS.d).map(x=>`<li><b>${esc(x.team)}</b> <span class="muted">· ${esc(x.discipline)}</span></li>`).join("")}</ul>`:"");
