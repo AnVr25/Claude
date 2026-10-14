@@ -1577,7 +1577,7 @@ def main() -> int:
         _hd = os.path.dirname(os.path.abspath(args.hub))
         ext_re = re.compile(r"""(<script[^>]+src=["']?(?:https?:)?//|<link[^>]+href=["']?(?:https?:)?//|@import\s+(?:url\()?["']?(?:https?:)?//|url\(\s*["']?(?:https?:)?//|<img[^>]+src=["']?https?://|<iframe[^>]+src=["']?https?://|loadScript\(|fetch\(\s*["'`]https?://|src\s*=\s*["']https?://)""", re.I)
         ext_hits = []
-        for f_ in sorted(_gl.glob(os.path.join(_hd, "*.html")) + _gl.glob(os.path.join(_hd, "assets", "*.css")))   # calendar.js — виджет для внешнего сайта fla65.ru, на стадионе не используется:
+        for f_ in sorted(_gl.glob(os.path.join(_hd, "*.html")) + _gl.glob(os.path.join(_hd, "assets", "*.css"))):   # calendar.js — виджет для внешнего сайта fla65.ru, на стадионе не используется
             for n_, ln_ in enumerate(open(f_, encoding="utf-8").read().splitlines(), 1):
                 if ext_re.search(ln_):
                     ext_hits.append(f"{os.path.basename(f_)}:{n_}")
