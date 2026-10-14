@@ -199,7 +199,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.3.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.3.0", r.stdout + r.stderr)
+    check("версия сервера 7.3.5 (--version)", r.returncode == 0 and r.stdout.strip() == "7.3.5", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -390,7 +390,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.3.0" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.3.5" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -403,7 +403,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.3.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.3.5", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1278,7 +1278,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.3.0 и дата сборки 14.10.2026", st3["version"] == "7.3.0" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.3.5 и дата сборки 14.10.2026", st3["version"] == "7.3.5" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -2052,6 +2052,9 @@ def main() -> int:
         pg14 = pub("GET", f"/r/{s14}")[1]
         check("7.2: страница события содержит модуль «Заявленные участники» с выбором дисциплины, полом и возрастами, поиском и «Показать ещё»",
               "Заявленные участники" in pg14 and "pDisc" in pg14 and "data-ps" in pg14 and "data-pg" in pg14 and "plMore" in pg14 and 'name="robots"' in pg14, "")
+        c_, pgp, _ = pub("GET", f"/r/{s14}/participants")
+        check("7.3.5: отдельное окно /r/<slug>/participants открывается, в нём модуль участников и ссылка «Участники соревнований» на главной странице; главная не рисует таблицу",
+              c_ == 200 and "participantsPage" in pgp and "Участники соревнований" in pg14 and "participantsLink" in pg14 and "loadParticipants();\n  if(d.open)" not in pg14, str(c_))
         # согласие без пункта о публикации → «Фамилия И.» без года, разряда, команды и тренера
         c_, e15v = api("POST", "/api/events", {"name": "Закрытая форма", "date": "2026-10-21", "kind": "stadium", "timing": "manual"})
         e15 = e15v["id"]

@@ -22,6 +22,7 @@ h1,h2,h3{font-family:var(--head);font-weight:600;letter-spacing:.1px;margin:0}
 a{color:inherit}
 #root{flex:1 0 auto;padding-bottom:28px}
 #root>*:not(.band){width:min(640px,calc(100% - 32px));margin-left:auto;margin-right:auto}
+#root.wide>*:not(.band),#root.wide .band .in{width:min(1100px,calc(100% - 32px))}
 
 /* шапка: тёмно-синяя полоса с логотипами и названием старта */
 .band{background:var(--night);color:#fff;border-bottom:3px solid var(--track)}
@@ -198,6 +199,8 @@ h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
 .tile.hot{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
 .tile .live,.list .run{display:inline-flex;align-items:center;gap:7px;color:var(--bad);font-weight:700}
 .tile .live::before,.list .run::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--track);animation:pulse 1.6s ease-out infinite}
+.pbtn{display:flex;flex-direction:column;align-items:flex-start;width:100%;margin:14px 0;font-size:18px;gap:2px;padding:14px 18px}.pbtn small{font-weight:500;font-size:13px;opacity:.85}
+.back{display:inline-block;margin:12px 0 4px;font-weight:600}.pl-wide{max-width:1100px;margin-left:auto;margin-right:auto;padding:22px}.pl-wide .pl-tbl{font-size:15px}.pl-wide .pl-tbl td,.pl-wide .pl-tbl th{padding:6px 10px}
 .pl h2{font-size:22px;margin:0 0 10px}.pl-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;margin-bottom:10px}
 .pl input#pQ{display:block;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--field-line);border-radius:var(--r);padding:11px 12px;min-height:48px;width:100%;box-sizing:border-box}
 .pl .pl-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
@@ -208,7 +211,7 @@ h2.sect{font-size:22px;line-height:1.2;margin-top:26px}
 .pl .pl-tabs.ages button{font-weight:500;min-height:34px;padding:5px 12px}
 .pl-cnt{margin:8px 0 4px;font-size:14px}.pl-tbl{width:100%;border-collapse:collapse;font-size:14px;line-height:1.25}.pl-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
 .pl-tbl td{padding:4px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:top}.pl-tbl .no{width:32px;color:var(--muted);font-variant-numeric:tabular-nums}.pl-tbl .nm{font-weight:700;color:var(--ink)}
-@media(max-width:700px){.pl-tbl thead{display:none}.pl-tbl,.pl-tbl tbody{display:block}.pl-tbl tr{display:grid;grid-template-columns:28px 1fr;column-gap:6px;padding:5px 0;border-top:1px solid var(--line)}.pl-tbl td{display:none;border:0;padding:0}.pl-tbl td.no,.pl-tbl td.nm{display:block;font-size:15px}.pl-tbl td:nth-child(n+3){grid-column:2;display:inline;font-size:13px;color:var(--muted)}.pl-tbl td:nth-child(n+3):empty{display:none}}
+@media(max-width:700px){.pl-tbl thead{display:none}.pl-tbl,.pl-tbl tbody{display:block}.pl-tbl tr{display:block;position:relative;padding:6px 0 6px 36px;border-top:1px solid var(--line)}.pl-tbl td{border:0;padding:0}.pl-tbl td.no{position:absolute;left:0;top:6px;width:30px}.pl-tbl td.nm{display:block;font-size:15px}.pl-tbl td:nth-child(n+3){display:inline;margin-right:10px;font-size:13px;color:var(--muted)}.pl-tbl td:nth-child(n+3):empty{display:none}}
 .pl-h3{margin:16px 0 6px;font-size:16px}.pl-rel{list-style:none;margin:0;padding:0}.pl-rel li{padding:8px 0;border-top:1px solid var(--line)}
 .pl #plMore{width:auto;padding:10px 18px;min-height:44px;margin-top:10px}
 .docs{margin-top:12px;scroll-margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
@@ -484,9 +487,20 @@ async function main(){
     const r=await fetch(`/r/${slug}/info`); const d=await r.json();
     if(!r.ok) throw new Error(d.error||"ошибка");
     INFO=d; CARD=d.card&&typeof d.card==="object"?d.card:null;
+    if(location.hash==="#participants"&&parts[3]!=="participants"){ location.replace(`/r/${slug}/participants`); return; }
+    if(parts[3]==="participants") return participantsPage();
     if(CARD){ document.title=d.name; layout(); }
     else { document.title="Регистрация — "+d.name; render(); }
   }catch(e){ $("root").innerHTML=band()+`<div class="card state"><span class="ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><div><b>Регистрация не найдена.</b><div class="muted">Проверьте ссылку у организатора.</div></div></div>`; }
+}
+// 7.3.5: список участников — отдельное окно /r/<slug>/participants, форма заявки его не содержит
+function participantsPage(){
+  const d=INFO;
+  document.title="Участники — "+d.name; $("root").classList.add("wide");
+  $("root").innerHTML=band(`<h1>${esc(d.name)}</h1>`)+`<a class="back" href="/r/${esc(slug)}">← К странице соревнования</a>
+    <section class="card pl pl-wide" id="participants" aria-labelledby="plH"><h2 id="plH">👥 Участники соревнований</h2>
+    <div id="plBody" class="muted">${d.regs_public?"Загружаю список…":"Список заявленных участников пока не опубликован организатором."}</div></section>`;
+  if(d.regs_public) loadParticipants();
 }
 async function listOpen(){
   const year=new Date().getFullYear();
@@ -567,13 +581,12 @@ function layout(){
   else if(c.status==="planned"&&c.ours!==false) reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>Приём заявок пока не открыт</b><div class="muted">Регистрация появится на этой странице — следите за новостями федерации.</div></div></div>`;
   else if(c.reg&&c.status!=="finished") reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`;
   const about=aboutBlock();
-  const part=d.regs_public?'<section class="card pl" id="participants" aria-labelledby="plH"><h2 id="plH">👥 Заявленные участники</h2><div id="plBody" class="muted">Загружаю список…</div></section>':"";
+  const part=d.regs_public?`<a class="btn pbtn" id="participantsLink" href="/r/${esc(slug)}/participants">👥 Участники соревнований<small>кто уже заявился: по дисциплинам, полу и возрасту</small></a>`:"";
   const empty=!ev&&!reg&&!about&&!d.regs_public?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
   const cov=href(c.cover);
   $("root").innerHTML=headerCard()+(cov?`<div class="cover"><img src="${esc(cov)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>`:"")
     +(regFirst?reg+part+ev:part+ev+reg)+about+empty;
   lockHint();
-  if(d.regs_public) loadParticipants();
   if(d.open) render();
 }
 // 7.2: открытый модуль «Заявленные участники» (по образцу списков MyRace): дисциплина → пол → возрастная группа → сквозной список

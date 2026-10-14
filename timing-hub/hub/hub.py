@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.3.0"
+VERSION = "7.3.5"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2704,7 +2704,7 @@ class Hub:
                              ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
             v = self._event_view(self.store.get_event(eid))
             return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "pub_regs": v["pub_regs"], "url": v["page_url"],
-                       "registered_url": f"{self.public_base()}/r/{slug}#participants",
+                       "registered_url": f"{self.public_base()}/r/{slug}/participants",
                        "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
         if action == "resetheats":
@@ -5483,7 +5483,7 @@ class Hub:
                                 "deadline": e.get("reg_deadline"), "slug": e["reg_slug"]})
             return js({"events": out})
         m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json"
-                         r"|/protocol|/participants\.json|/files/\d+)?/?", path)
+                         r"|/protocol|/participants\.json|/participants|/files/\d+)?/?", path)
         if not m:
             return 404, "text/plain; charset=utf-8", "нет такой страницы", None
         ev = self.store.event_by_slug(m.group(1))
