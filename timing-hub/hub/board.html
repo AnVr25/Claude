@@ -152,12 +152,12 @@ function renderAuto(r,hasW){
   SC.on=false; lastKey=""; document.body.dataset.tech="";
   $("title").textContent="Последние результаты — новые сверху";
   $("hdPlace").textContent=hasW?"Место в забеге":"Место"; $("hdD").textContent="Дисциплина";
-  // свежие сверху: финиш по чипу/судье или время ввода результата с сектора (метания, прыжки, секундомеры)
+  // свежие сверху: финиш по судье или время ввода результата с сектора (метания, прыжки, секундомеры)
   const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,PER_PAGE);
   $("hd").classList.toggle("hide",!last.length);
-  $("track").innerHTML=last.map(x=>{const k=(x.chip||x.bib)+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
+  $("track").innerHTML=last.map(x=>{const k=x.bib+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
     const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
-    return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||(x.chip||"").slice(-6))}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
+    return `<div class="r ${isNew?"new":""}"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"")}</span><span class="n">${esc(x.name||"")}</span><span class="d">${esc(disc)}${hasW&&x.wave&&disc!==x.wave?`<br>${esc(x.wave)}`:""}</span><span class="t">${esc(x.result||x.time)}</span></div>`;}).join("");
 }
 // таблица лидеров одной группы: от 1-го места до последнего; не влезает — плавная автопрокрутка (frame)
 function renderGroup(r,key,suffix){

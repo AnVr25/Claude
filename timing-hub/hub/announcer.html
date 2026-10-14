@@ -104,7 +104,7 @@ async function load(){
     const r=await get(`/api/events/${encodeURIComponent(eid)}/results`);
     const ev=r.event; startMs=ev.start_epoch_ms; $("name").textContent=ev.name;
     const fin=r.finished.slice().sort((a,b)=>b.finish_epoch_ms-a.finish_epoch_ms);
-    $("stat").textContent=`финишировали ${r.finished.length} · на трассе ${r.on_course.length}`;
+    $("stat").textContent=`финишировали ${r.finished.length}`;
     if(!fin.length)return;
     const h=fin[0], key=h.bib+"|"+h.finish_epoch_ms;
     const meta=[h.team,h.wave].filter(Boolean).map(esc).join(" · ");

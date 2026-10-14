@@ -27,12 +27,7 @@ a{color:inherit}
 .evbtn .n{font:600 16px var(--head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .evbtn .m{font-size:12px;color:var(--night-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .evbtn svg{grid-column:2;grid-row:1/3;color:var(--night-muted)}
-.health{margin-left:auto;display:flex;gap:6px}
-.h{font-size:13px;padding:4px 10px 4px 22px;border-radius:99px;background:var(--night-2);position:relative;color:#d5deeb;text-decoration:none;white-space:nowrap}
-.h::before{content:"";position:absolute;left:9px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:#8aa0bf}
-.h.ok::before{background:#3ED48A}.h.warn::before{background:var(--start)}.h.bad::before{background:var(--track)}
-.h.bad{color:#fff;background:#E71E2540}
-.clock{font:500 18px var(--head);letter-spacing:.5px;color:#d5deeb;min-width:78px;text-align:right}
+.clock{margin-left:auto;font:500 18px var(--head);letter-spacing:.5px;color:#d5deeb;min-width:78px;text-align:right}
 .gear{color:var(--night-muted);display:flex;padding:7px;border-radius:var(--r);position:relative}
 .gear:hover,.gear.on{color:#fff;background:var(--night-2)}
 .gear .dot{position:absolute;right:4px;top:4px;margin:0}
@@ -239,33 +234,16 @@ body[data-view=wizard] main{max-width:1680px;padding:14px 18px 60px}
 .wzp-goto{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:12px 14px;margin:0 0 12px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
 .wzp-body{min-width:0}.wzp-body .tbl{max-width:100%;overflow-x:auto}
 @media (max-width:640px){.wzp-steps button{flex:1 1 100%}.wzp-disc select{min-width:0;width:100%}.wzp-top{display:grid}}
-.bibin{width:64px;min-height:0;padding:4px 6px;font-weight:700;text-align:center}
-.heats{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
-.heat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.heat .hh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 12px;border-bottom:2px solid var(--line)}
-.heat .hh b{font:600 17px var(--head)}
-.heat td{padding:6px 8px;font-size:13.5px}
-.heat td input.lane{width:46px;padding:3px 5px;text-align:center}
-.heat td select{width:auto;padding:3px 5px;font-size:12.5px}
-
-/* ── чипы ── */
+/* ── выдача номеров ── */
 .progress{min-width:240px;font-size:14px;color:var(--muted)}
 .progress b{font:600 24px var(--head);color:var(--ink)}
 .pbar{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
 .pbar i{display:block;height:100%;background:var(--ok);transition:width .3s}
-.checkbig{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:var(--r);text-align:center;padding:26px 16px}
-.checkbig.ok{border-top-color:var(--ok)}.checkbig.bad{border-top-color:var(--track)}
-.checkbig .num{font:700 clamp(84px,15vw,170px)/1 var(--head)}
-.checkbig .num.unknown{color:var(--track);font-size:clamp(36px,7vw,72px)}
-.checkbig .sub{color:var(--muted);margin-top:8px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
 table.pick td{padding:8px 10px;vertical-align:middle}
 table.pick td.b{font:600 22px/1 var(--head,inherit);width:70px}
 table.pick tr.got td{opacity:.6}
 table.pick tr.got td.act{opacity:1}
 table.pick td.act{text-align:right;white-space:nowrap}
-.chips span{font:600 15px var(--head);padding:3px 11px;border-radius:4px;background:var(--panel);border:1px solid var(--line)}
-#chkUnk span{border-color:var(--track);color:var(--track)}
 
 /* ── экран гонки ── */
 body[data-view=timing]{background:var(--night)}
@@ -325,8 +303,6 @@ body[data-view=timing] main{max-width:none;padding:0}
 .wclock{font:600 26px var(--head)}
 tr.fin td{background:#17905A10}
 tr.wrun td{background:#E71E250c}
-.feed tr.new td{animation:flash 1.4s ease-out}
-.feed tr.fin td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
 
 /* ── результаты ── */
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -364,8 +340,6 @@ html{scrollbar-gutter:stable}
 .subnav a{font:600 16px var(--head);text-decoration:none;color:var(--muted);padding:6px 12px;border-bottom:3px solid transparent}
 .subnav a.on{color:var(--ink);border-bottom-color:var(--track)}
 .hwgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.datalinks{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;font-weight:700;margin-top:10px}
-.datalinks a{color:var(--ink);text-underline-offset:3px}
 
 /* формат соревнования, сайт, ввод результатов, пользователи */
 /* 3.1: выбор дисциплин из справочника */
@@ -381,28 +355,19 @@ html{scrollbar-gutter:stable}
 .dp-g h4{display:flex;align-items:baseline;gap:8px;margin:0 0 6px;font:600 16px var(--head)}
 .dp-g h4 small{font:400 13px var(--body);color:var(--muted)}
 .dp-g h4 .dp-n{margin-left:auto;font:600 13px var(--head);color:var(--track)}
-.dp-chips{display:flex;flex-wrap:wrap;gap:6px}
-.dp-chip{border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink);white-space:nowrap}
-.dp-chip:hover{border-color:var(--track)}
-.dp-chip.on{background:var(--track);border-color:var(--track);color:#fff}
-.dp-chip i{font-style:normal;font-size:12px;opacity:.75;margin-left:6px}
+.dp-pills{display:flex;flex-wrap:wrap;gap:6px}
+.dp-pill{border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink);white-space:nowrap}
+.dp-pill:hover{border-color:var(--track)}
+.dp-pill.on{background:var(--track);border-color:var(--track);color:#fff}
+.dp-pill i{font-style:normal;font-size:12px;opacity:.75;margin-left:6px}
 .dp-sum{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:14px;color:var(--muted)}
 .dp-empty{padding:10px 0;color:var(--muted);font-size:14px}
-/* 3.0: Мастер подбора соревнования, панели направлений */
-.hpick{margin:0 0 18px;padding:14px;border-radius:12px;transition:box-shadow .3s}
-.hpick .wl-k{margin:0 0 8px}
-.hpick.ask{box-shadow:0 0 0 3px var(--track)}
-.hp-card{min-height:0;padding:18px 20px}
-.hp-card b{font-size:21px}
-.hp-card.on{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track)}
-@media (max-width:720px){.hp-cards{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){.hpick{transition:none}}
 .welcome{max-width:880px;margin:4vh auto 0;text-align:center}
 .wl-k{font:600 14px var(--head);letter-spacing:.8px;text-transform:uppercase;color:var(--track);margin:0 0 8px}
 .welcome h1{font-size:40px;margin:0 0 8px}
 .wl-lead{color:var(--muted);font-size:17px;margin:0 auto 24px;max-width:560px}
 .wl-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;text-align:left}
-.wl-card{display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:100%;min-width:0;white-space:normal;box-sizing:border-box;min-height:260px;padding:26px 24px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:400;cursor:pointer;box-shadow:0 1px 2px rgba(11,29,55,.06);transition:border-color .15s,box-shadow .15s,transform .15s}
+.wl-card{text-align:left;display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:100%;min-width:0;white-space:normal;box-sizing:border-box;min-height:260px;padding:26px 24px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:400;cursor:pointer;box-shadow:0 1px 2px rgba(11,29,55,.06);transition:border-color .15s,box-shadow .15s,transform .15s}
 .wl-card:hover{border-color:var(--track);box-shadow:0 4px 18px rgba(11,29,55,.12);transform:translateY(-2px)}
 .wl-card:focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
 .wl-ic{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:50%;background:#E71E250F;color:var(--track);margin-bottom:6px}
@@ -411,29 +376,11 @@ html{scrollbar-gutter:stable}
 .wl-card small{font-size:15px;color:var(--muted);line-height:1.4}
 .wl-go{margin-top:auto;font:600 16px var(--head);color:var(--track)}
 .wl-more{margin:22px 0 0;font-size:15px}
-.dir-chip{display:inline-flex;align-items:center;gap:8px;margin:0 0 6px;font:600 13px var(--head);letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
-.dir-chip b{color:var(--track)}
-.dir-chip a{font-weight:400;text-transform:none;letter-spacing:0}
-.ipico-block{border-left:4px solid var(--track);margin-bottom:16px}
-.ib-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
-.ib-head h2{font-size:22px;margin:0}
-.ib-st{font:600 14px var(--head);padding:6px 12px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
-.ib-st.ok{background:#17905A1A;color:var(--ok)}.ib-st.warn{background:#F3481D1A;color:#C23A14}.ib-st.bad{background:#E71E251A;color:#C8161C}
-.ib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.ib-it{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);color:inherit;text-decoration:none;min-height:64px}
-.ib-it:hover{border-color:var(--track)}
-.ib-it b{font:600 17px var(--head)}.ib-it small{color:var(--muted);font-size:13px}
-.stadium-block{margin-bottom:16px}
-.stadium-block h2{font-size:22px;margin:0}
-.sb-steps{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
-.sb-steps span{font-size:14px;padding:6px 12px;border-radius:999px;background:var(--ice);border:1px solid var(--line);color:var(--muted)}
-.ipico-nav{display:none;flex-direction:column;justify-content:center;padding:4px 12px;border-radius:var(--r);background:var(--track);color:#fff;text-decoration:none;line-height:1.1;min-height:40px;white-space:nowrap}
-.ipico-nav b{font:600 14px var(--head);letter-spacing:.3px}.ipico-nav small{font-size:11px;opacity:.9}
-.ipico-nav:hover{background:#C8161C}
-body[data-dir=ipico]:not([data-view=welcome]):not([data-adm="0"]) .ipico-nav{display:flex}
-body[data-dir=stadium] .health,body[data-dir=stadium] .ipico-only,body[data-dir=stadium] #hVpn{display:none!important}
-body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!important}
-@media (max-width:640px){.wl-cards{grid-template-columns:1fr}.wl-card{min-height:0}.welcome h1{font-size:30px}.ib-grid{grid-template-columns:1fr}.ipico-nav small{display:none}}
+.wl-card.wl-off,.wl-card.wl-off:hover{cursor:not-allowed;background:var(--ice);color:var(--muted);border-style:dashed;box-shadow:none;transform:none}
+.wl-card.wl-off b,.wl-card.wl-off .wl-sub{color:var(--muted)}
+.wl-card.wl-off .wl-ic{background:var(--line);color:var(--muted)}
+.wl-badge{margin-top:auto;font:600 14px var(--head);padding:6px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+@media (max-width:640px){.wl-cards{grid-template-columns:1fr}.wl-card{min-height:0}.welcome h1{font-size:30px}}
 .wiz{max-width:760px;margin-bottom:18px;padding:20px 22px}
 .wz-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .wz-step{font:600 14px var(--head);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
@@ -453,9 +400,9 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 .wz-form .full{grid-column:1/-1}
 .wz-form input,.wiz textarea{font-size:16px;min-height:44px}
 .wiz :focus-visible{outline:3px solid #E71E2566;outline-offset:2px}
-.wz-chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
-.wz-chip{border:1px solid var(--line);border-radius:999px;padding:8px 16px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink)}
-.wz-chip.on{background:var(--track);border-color:var(--track);color:#fff}
+.wz-pills{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+.wz-pill{border:1px solid var(--line);border-radius:999px;padding:8px 16px;min-height:44px;background:var(--panel);cursor:pointer;font-size:15px;color:var(--ink)}
+.wz-pill.on{background:var(--track);border-color:var(--track);color:#fff}
 .wz-err{color:var(--bad,#c8161c);font-weight:700;margin-top:8px;min-height:1.2em}
 .wz-nav{margin-top:16px}
 .wz-nav button{min-height:46px;padding:0 20px;font-size:16px}
@@ -486,6 +433,7 @@ body[data-view=welcome] .health,body[data-view=welcome] .ipico-nav{display:none!
 .bibtbl input.bibin2.err{border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track);color:var(--track)}
 .bibtbl tr.nobib input.bibin2{background:#FFF6E5;border-color:#F2C46D}
 .bibtbl tr.dirty td{background:rgba(243,72,29,.06)}
+.bibtbl tr.mismatch td{background:#FFF6E5}.bibwarn{color:#8A5A00;font-weight:600}
 #bibStat .bad{color:var(--track);font-weight:700}#bibStat .warn{color:var(--start);font-weight:700}
 .bibctl{position:sticky;bottom:0;background:var(--ice);padding:10px 0;z-index:2;border-top:1px solid var(--line)}
 button.big{font-size:17px;padding:12px 22px;min-height:50px}
@@ -522,7 +470,6 @@ a.btn.xls:hover{background:#E9F5EE}
 .pubchk{margin:0;font-size:13px}
 .addone{border-bottom:1px solid var(--line);margin-bottom:12px}
 @media (max-width:1100px){
-  .health .h:not(.bad){display:none}
   .st{max-width:none}
   .st small{display:none}
 }
@@ -536,8 +483,6 @@ a.btn.xls:hover{background:#E9F5EE}
   .bar .scr .lbl{display:none}
   .bar .ev{order:10;flex:1 1 100%;min-width:0}
   .evbtn{max-width:none;width:100%}
-  .health{order:11;margin-left:0;flex:1 1 100%}
-  .health:not(:has(.h.bad)){display:none}
   .usr{padding:6px 8px}
   .menu{max-width:calc(100vw - 24px)}
   .bar .scr .menu,.bar .usrwrap .menu{position:fixed;left:12px;right:12px;top:54px;min-width:0;max-width:none}
@@ -547,7 +492,6 @@ a.btn.xls:hover{background:#E9F5EE}
   .st b{font-size:14px}
   .split,.race-main{grid-template-columns:1fr}
   .side{position:static}
-  .heats{grid-template-columns:1fr}
   .evrow{grid-template-columns:52px minmax(0,1fr)}.evrow .state,.evrow .evacts{grid-column:2}
   .arow{grid-template-columns:1fr}
   h1{font-size:26px}
@@ -557,10 +501,10 @@ a.btn.xls:hover{background:#E9F5EE}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body data-view="welcome">
+<body data-view="welcome" data-dir="stadium">
 
 <header class="bar">
-  <a class="logos" href="#welcome" title="Мастер подбора соревнования">
+  <a class="logos" href="#welcome" title="На стартовый экран">
     <img class="lg-sakh" src="/assets/sakhalin-light.png" alt="Сахалин — маяк России">
     <img class="lg-flaso" src="/assets/flaso-dark.png" alt="ФЛАСО">
     <span class="lg-sep"></span>
@@ -573,12 +517,6 @@ a.btn.xls:hover{background:#E9F5EE}
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
     </button>
     <div class="menu" id="evMenu"></div>
-  </div>
-  <a class="ipico-nav" id="ipicoNav" href="#hw-timing" title="Ридеры, порты, Wiclax, проверка чипов"><b>Оборудование IPICO</b><small id="ipicoNavSt">ридеры</small></a>
-  <div class="health" id="healthBar">
-    <a class="h" id="hReaders" href="#hw-timing" title="Ридеры на связи">Ридеры —</a>
-    <a class="h" id="hWiclax" href="#hw-timing" title="Подключение Wiclax">Wiclax</a>
-    <a class="h" id="hVpn" href="#hw-net" title="Устройства в VPN">VPN —</a>
   </div>
   <span class="clock" id="hdrClock">--:--:--</span>
   <div class="evswitch scr">
@@ -602,7 +540,7 @@ a.btn.xls:hover{background:#E9F5EE}
       <button class="mi" id="usrOut"><b>Выйти</b></button>
     </div>
   </div>
-  <a class="gear" id="gear" href="#hw" title="Система: оборудование, обновление, журнал">
+  <a class="gear" id="gear" href="#hw" title="Система: обновление, журнал">
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.4 13a7.5 7.5 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L14 3.3h-4l-.4 2.6a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L5.6 11a7.5 7.5 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.8 1.7 1l.4 2.6h4l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
     <span class="dot hide" id="hwDot"></span>
   </a>
@@ -612,7 +550,7 @@ a.btn.xls:hover{background:#E9F5EE}
   <a href="#prep" data-step="prep" class="st" id="stPrep"><span class="pin">1</span><b>Подготовка</b><small></small></a>
   <a href="#reg" data-step="reg" class="st" id="stReg"><span class="pin">2</span><b>Регистрация</b><small></small></a>
   <a href="#wizard" data-step="wizard" class="st" id="stWiz"><span class="pin">3</span><b>Протоколы</b><small>мастер</small></a>
-  <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">4</span><b>Чипы</b><small></small></a>
+  <a href="#check" data-step="check" class="st" id="stCheck"><span class="pin">4</span><b>Выдача номеров</b><small></small></a>
   <a href="#timing" data-step="timing" class="st" id="stTiming"><span class="pin">5</span><b>Старт и финиш</b><small></small></a>
   <a href="#results" data-step="results" class="st" id="stResults"><span class="pin">6</span><b>Результаты</b><small></small></a>
   <a href="#files" data-step="files" class="st" id="stFiles"><span class="pin">7</span><b>Документы</b><small></small></a>
@@ -621,67 +559,37 @@ a.btn.xls:hover{background:#E9F5EE}
 <main>
 <div class="finbar hide" id="finBar" role="status" aria-live="polite"></div>
 
-<!-- СТАРТ: Мастер подбора соревнования -->
+<!-- СТАРТ: выбор направления -->
 <section id="tab-welcome" class="hide">
   <div class="welcome">
-    <p class="wl-k">Мастер подбора соревнования</p>
+    <p class="wl-k">SakhStart</p>
     <h1 id="wlTitle">Что будем проводить?</h1>
-    <p class="wl-lead">Выберите направление — откроется панель с нужными инструментами. Сменить направление можно в любой момент.</p>
+    <p class="wl-lead">Выберите направление — откроется панель с нужными инструментами.</p>
     <div class="wl-cards" role="group" aria-label="Направление работы">
-      <button type="button" class="wl-card" data-dir="ipico" id="wlIpico">
+      <button type="button" class="wl-card wl-off" id="wlIpico" disabled aria-disabled="true" tabindex="-1">
         <span class="wl-ic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c0-6 4-11 8-11s8 5 8 11"/><path d="M8 18c0-3 2-6 4-6s4 3 4 6"/><path d="M3 20h18"/></svg></span>
-        <b>Массовый забег с хронометражем</b>
-        <span class="wl-sub">Система IPICO</span>
-        <small>Кроссы, полумарафоны, городские забеги. Чипы и ридеры на финише, автоматический результат, Wiclax.</small>
-        <span class="wl-go">Выбрать →</span>
+        <b>Массовый забег IPICO</b>
+        <span class="wl-sub">Кроссы, полумарафоны, городские забеги</span>
+        <small>Электронный хронометраж по чипам.</small>
+        <span class="wl-badge">Перенесено в отдельный модуль IPICO-Тайминг</span>
       </button>
       <button type="button" class="wl-card" data-dir="stadium" id="wlStadium">
         <span class="wl-ic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="5"/><rect x="7" y="10" width="10" height="4" rx="2"/></svg></span>
-        <b>Соревнования на стадионе</b>
+        <b>Стадион / Манеж</b>
         <span class="wl-sub">Трек / Лёгкая атлетика</span>
-        <small>Манеж и стадион. Дисциплины, возрастные группы, онлайн-заявки; результаты ведёт судья или секретарь.</small>
-        <span class="wl-go">Выбрать →</span>
+        <small>Судейско-секретарская работа: заявки, нагрудные номера, стартовые и итоговые протоколы, ввод результатов.</small>
+        <span class="wl-go">Открыть →</span>
       </button>
     </div>
     <p class="wl-more"><a href="#home" id="wlAll">Показать все соревнования и архив</a></p>
   </div>
 </section>
 
-<!-- ГЛАВНАЯ: панель направления, соревнования и архив -->
+<!-- ГЛАВНАЯ: соревнования и архив -->
 <section id="tab-home" class="hide">
   <div class="pagehead">
-    <div><p class="dir-chip" id="dirChip"></p><h1 id="homeTitle">Соревнования</h1><p class="lead" id="homeLead">Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.</p></div>
-    <div class="row"><button class="hide" id="calImport" title="Перенести календарь федерации 2026 года с сайта fla65.ru">Загрузить календарь ФЛАСО 2026</button><button class="primary" id="btnNew">Новое соревнование</button></div>
-  </div>
-  <div class="hpick" id="homePick">
-    <p class="wl-k">Мастер подбора соревнования</p>
-    <div class="wl-cards hp-cards" role="group" aria-label="Что проводим">
-      <button type="button" class="wl-card hp-card" data-pick="ipico" id="hpIpico">
-        <b>Массовый забег с электронным хронометражем</b><span class="wl-sub">Система IPICO · Wiclax</span>
-        <small>Кроссы, полумарафоны, городские забеги. Открывает оборудование: ридеры, порты, Wiclax, проверку чипов.</small>
-        <span class="wl-go">Открыть оборудование IPICO →</span>
-      </button>
-      <button type="button" class="wl-card hp-card" data-pick="stadium" id="hpStadium">
-        <b>Соревнования на стадионе и в манеже</b><span class="wl-sub">Мастер формирования · World Athletics</span>
-        <small>Дисциплины из справочника и готовые программы, возрастные группы, онлайн-заявки. Чиповое оборудование скрыто.</small>
-        <span class="wl-go">Создать соревнование по шагам →</span>
-      </button>
-    </div>
-  </div>
-  <div class="panel ipico-block hide" id="ipicoBlock">
-    <div class="ib-head"><div><h2>Настройка оборудования IPICO</h2><p class="small muted" style="margin:2px 0 0">Всё, что нужно проверить до старта: ридеры, порты, Wiclax и связь с чипами.</p></div><span class="ib-st" id="ibSt">—</span></div>
-    <div class="ib-grid">
-      <a href="#hw-timing" class="ib-it adm"><b>Ридеры и порты</b><small id="ibReaders">подключение ридеров к серверу</small></a>
-      <a href="#hw-timing" class="ib-it adm"><b>Wiclax</b><small id="ibWiclax">передача отметок в Wiclax</small></a>
-      <a href="#check" class="ib-it" id="ibChips"><b>Проверка чипов</b><small>проносите чип над ковриком — экран покажет, чей он</small></a>
-    </div>
-    <div class="row" style="margin-top:12px"><button class="primary" id="ibNew">Создать массовый забег</button></div>
-  </div>
-  <div class="panel stadium-block hide" id="stadiumBlock">
-    <h2>Мастер формирования соревнования</h2>
-    <p class="small muted" style="margin:2px 0 10px">Пять коротких шагов: как ведём время, название и дата, дисциплины, возрастные группы, онлайн-заявки.</p>
-    <div class="sb-steps"><span>1 Хронометраж</span><span>2 Название и дата</span><span>3 Дисциплины</span><span>4 Возрастные группы</span><span>5 Онлайн-заявки</span></div>
-    <button class="primary" id="sbStart">Создать соревнование по шагам</button>
+    <div><h1 id="homeTitle">Соревнования</h1><p class="lead">Выберите соревнование — откроется нужный этап. Прошедшие — в архиве ниже.</p></div>
+    <div class="row"><button class="hide" id="calImport" title="Перенести календарь федерации 2026 года с сайта fla65.ru">Загрузить календарь ФЛАСО 2026</button><button class="primary" id="btnNew">➕ Новое соревнование</button></div>
   </div>
   <div id="evFormHome"></div>
   <div class="panel wiz hide" id="wizard" role="region" aria-labelledby="wzTitle">
@@ -707,11 +615,6 @@ a.btn.xls:hover{background:#E9F5EE}
   <div id="evFormPrep"></div>
   <div id="evForm" class="panel hide">
     <h3 id="evFormTitle">Новое соревнование</h3>
-    <label style="margin-top:4px">Формат</label>
-    <div class="kinds">
-      <label class="kind"><input type="radio" name="fKind" value="mass"><span><b>Массовый старт</b><small>Забеги, кроссы, полумарафоны: чипы IPICO, ридеры на финише и отсечках, Wiclax.</small></span></label>
-      <label class="kind"><input type="radio" name="fKind" value="stadium"><span><b>Стадион</b><small>Манеж и стадион: забеги по дорожкам, судья с телефоном или ручной секундомер.</small></span></label>
-    </div>
     <div class="form">
       <div><label for="fName">Название *</label><input id="fName" placeholder="Кубок Сахалинской области"></div>
       <div><label for="fTiming">Хронометраж</label><select id="fTiming"></select></div>
@@ -719,16 +622,12 @@ a.btn.xls:hover{background:#E9F5EE}
       <div><label for="fDateEnd">Дата окончания <span class="muted">(если несколько дней)</span></label><input id="fDateEnd" type="date"></div>
       <div><label for="fPlace">Место (объект)</label><input id="fPlace" list="venueList" placeholder="пусто — по сезону: манеж / «Спартак» / «Триумф»"><datalist id="venueList"><option>Легкоатлетический манеж<option>Стадион «Спартак»<option>ЛБК «Триумф»</datalist></div>
       <div><label for="fCity">Город</label><input id="fCity" placeholder="Южно-Сахалинск"></div>
-      <div class="chips-only"><label for="fFinish">Точка финиша (код ридера)</label><select id="fFinish"></select></div>
-      <div class="chips-only"><label for="fMin">Не считать финишем раньше, сек</label><input id="fMin" type="number" min="0" step="1" value="0"></div>
-      <div class="chips-only"><label for="fSilence">Предупреждать, если точка молчит, мин</label><input id="fSilence" type="number" min="0" step="1" value="10"></div>
       <div><label for="fStartClock">Начало соревнований (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
       <div><label for="fOrg">Организатор (шапка протокола)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
       <div><label for="fJudge">Главный судья</label><input id="fJudge" placeholder="Иванов И. И."></div>
       <div><label for="fSecr">Главный секретарь</label><input id="fSecr" placeholder="Петрова А. А."></div>
     </div>
     <label for="fNotes">Заметки для своих</label><input id="fNotes" placeholder="дистанции, круги, особенности">
-    <label class="check chips-only"><input id="fPush" type="checkbox" checked> Отправлять старт в Wiclax</label>
     <label class="check judge-only"><input id="fSeq" type="checkbox"> Забеги идут по очереди: старт следующего забега сам завершает предыдущий</label>
     <label for="fTeam" style="margin-top:12px">Командный зачёт</label>
     <select id="fTeam" style="max-width:420px"><option value="">нет</option><option value="1">1 лучший участник команды в каждой категории</option><option value="2">2 лучших в каждой категории</option><option value="3">3 лучших в каждой категории</option><option value="4">4 лучших в каждой категории</option><option value="5">5 лучших в каждой категории</option><option value="6">6 лучших в каждой категории</option><option value="20">все участники команды</option></select>
@@ -751,7 +650,7 @@ a.btn.xls:hover{background:#E9F5EE}
         <label class="switch"><input type="checkbox" id="sOurs"><i></i>Проводим мы — своя страница, регистрация, протоколы</label>
       </div>
       <div class="sitegrid">
-        <div><label for="sLevel">Уровень</label><select id="sLevel"><option value="region">Область</option><option value="interregion">Межрегион</option><option value="dfo">ДФО</option><option value="russia">Россия</option><option value="mass">Забег (массовый)</option></select></div>
+        <div><label for="sLevel">Уровень</label><select id="sLevel"><option value="region">Область</option><option value="interregion">Межрегион</option><option value="dfo">ДФО</option><option value="russia">Россия</option><option value="mass">Муниципальный, массовый</option></select></div>
         <div><label for="sNote">Коротко о событии</label><input id="sNote" maxlength="300" placeholder="Открытый забег для всех желающих"></div>
         <div><label for="sLive">Трансляция (ссылка)</label><input id="sLive" placeholder="https://vk.com/video…"></div>
         <div><label for="sPhoto">Фото (ссылка на альбом)</label><input id="sPhoto" placeholder="https://disk.yandex.ru/…"></div>
@@ -790,7 +689,7 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="sect">
     <h2>Забеги</h2>
     <div class="panel">
-      <p class="small muted" style="margin-top:0">Забег — группа с общим стартом, у каждого своя категория и дистанция. По ним строится протокол: место в забеге и общее место в категории. Старт один на всех — забеги не нужны. На стадионе забеги удобнее сформировать из заявок на этапе «Регистрация».</p>
+      <p class="small muted" style="margin-top:0">Забег — группа с общим стартом, у каждого своя категория и дистанция. По ним строится протокол: место в забеге и общее место в категории. Старт один на всех — забеги не нужны. Обычно забеги формирует мастер протоколов (шаг 3); здесь их можно переименовать или добавить вручную.</p>
       <div class="tbl"><table>
         <thead><tr><th>Забег</th><th>Категория</th><th>Дистанция</th><th>Участников</th><th>Состояние</th><th></th></tr></thead>
         <tbody id="wavesList"></tbody>
@@ -809,32 +708,9 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="sect">
     <h2>Стартовый список</h2>
     <div class="panel">
-      <div class="addone">
-        <label style="margin-top:0">Добавить спортсмена</label>
-        <div class="regform">
-          <input id="nBib" placeholder="№" inputmode="numeric" aria-label="Стартовый номер">
-          <input id="nName" placeholder="Фамилия Имя" aria-label="Фамилия и имя" style="grid-column:span 2">
-          <input id="nYear" placeholder="Год рожд." inputmode="numeric" aria-label="Год рождения">
-          <input id="nTeam" placeholder="Команда" aria-label="Команда">
-          <input id="nChip" placeholder="Чип (если есть)" aria-label="Чип">
-          <select id="nWave" aria-label="Забег"></select>
-          <select id="nRank" aria-label="Разряд или звание (обязательно)" title="Разряд или звание — обязательно; нет разряда — Б/р"></select>
-          <button class="primary" id="nAdd">Добавить</button>
-        </div>
-        <p class="small muted" style="margin:6px 0 12px">Или списком: вставьте строки ниже, перетащите Excel / CSV, загрузите файл Wiclax.</p>
-      </div>
-      <div class="drop" id="drop">Перетащите сюда CSV или Excel со стартовым списком — или нажмите, чтобы выбрать файл. Можно и вставить строки ниже.</div>
-      <details class="small muted" style="margin-bottom:8px"><summary>Какие колонки нужны</summary>
-        <p>Порядок: <span class="mono">номер;чип;забег;ФИО;год;команда;категория</span> — лишние справа можно не писать. Если первая строка — заголовки (Номер, Чип, Забег, ФИО, Год, Команда, Категория), колонки берутся по ним в любом порядке: можно вставить таблицу из Excel как есть. Чип можно не указывать (<span class="mono">15;;Забег 1;Иванов Иван</span>) — тогда отметки только от судьи. Категорию можно не писать — возьмётся из забега. ФИО, год и команда нужны для протокола; храните их с согласия участников.</p><p><b>Старт уже прошёл</b> (протокол из другой системы или с бумаги)? Добавьте колонки <span class="mono">Дистанция</span>, <span class="mono">Результат</span> (1:50,5 · 12,84 · DNF · DNS) и <span class="mono">Очки</span> — места посчитаются сами, а с настройкой «Командный зачёт» — и места команд. Список без колонки «Результат» уже введённые итоги не стирает.</p></details>
-      <textarea id="dEntries" placeholder="Номер;Чип;Забег;ФИО;Год;Команда;Категория&#10;101;E2801160600002084A5C1234;Забег 1;Иванов Иван;2008;СШОР им. Комнацкого;Юноши&#10;15;;Забег 2;Петрова Анна;2009;Холмск"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button class="primary" id="btnEntries">Сохранить список</button>
-        <span id="dEntriesInfo" class="small muted"></span>
-        <span class="spacer"></span>
-        <button id="btnClax" title="Загрузить участников, дистанции и чипы из файла соревнования Wiclax">Загрузить из Wiclax (.clax)</button>
-        <a class="btn" id="lnkClax" title="Готовый файл соревнования: дистанции, старты, участники, чипы">Файл для Wiclax (.clax)</a>
-        <a class="btn" id="lnkWiclax" title="Стартовый список для импорта в Wiclax">Список для Wiclax (CSV)</a>
-      </div>
+      <p style="margin-top:0">Участники попадают в список из подтверждённых заявок. Подтвердите заявки на этапе «Регистрация», затем впишите нагрудные номера и сформируйте протокол в мастере.</p>
+      <p class="small muted" id="dEntriesInfo" style="margin:0 0 12px"></p>
+      <div class="row"><a class="btn primary" href="#reg">Открыть заявки</a><a class="btn" href="#wizard">Открыть мастер протоколов</a></div>
     </div>
   </div>
 </section>
@@ -842,7 +718,7 @@ a.btn.xls:hover{background:#E9F5EE}
 <!-- 2. РЕГИСТРАЦИЯ -->
 <section id="tab-reg" class="hide">
   <div class="pagehead">
-    <div><h1>Регистрация</h1><p class="lead">Участники подают заявки по ссылке. Проверьте и подтвердите их, затем сформируйте забеги — получится стартовый протокол.</p></div>
+    <div><h1>Регистрация</h1><p class="lead">Участники подают заявки по ссылке. Проверьте и подтвердите их — подтверждённые заявки сразу попадают в «Протоколы».</p></div>
   </div>
   <div class="split">
     <div>
@@ -850,16 +726,15 @@ a.btn.xls:hover{background:#E9F5EE}
       <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
       <div class="tbl scroll" style="max-height:620px"><table>
-        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th><th>Ст. №</th></tr></thead>
+        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
         <tbody id="gBody"></tbody>
       </table></div>
       <datalist id="gCats"></datalist>
       <div class="rowacts">
         <button class="primary" id="gApproveAll">Подтвердить все ожидающие</button>
-        <button id="gImport" title="Загрузить заполненный шаблон — заявки сразу подтверждены">Загрузить из Excel</button>
+        <button id="gImport" title="Загрузить заявки из Excel или CSV — они сразу подтверждены">Загрузить из Excel</button>
         <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
         <span class="spacer"></span>
-        <a class="btn sm" id="gTpl" title="Отдать тренеру: он заполнит и загрузит сам через форму или пришлёт вам">Шаблон Excel</a>
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
       </div>
       <details class="panel" style="margin-top:12px"><summary><b>Внести заявку вручную</b> <span class="small muted">— без формы, сразу подтверждена</span></summary>
@@ -888,7 +763,6 @@ a.btn.xls:hover{background:#E9F5EE}
         <label for="gDist">Дистанции — по одной в строке *</label><textarea id="gDist" style="min-height:110px" placeholder="60 м&#10;100 м | лимит 40&#10;1000 м | номера с 300&#10;4×200 м | эстафета 4"></textarea>
         <div class="small muted">Через «|»: <span class="mono">лимит 40</span> — мест; <span class="mono">номера с 300</span> — диапазон номеров; <span class="mono">эстафета 4</span> — команда на 4 этапа.</div>
         <label for="gRules">Категории: название;пол;год с;год по · <a href="#" id="gRulesDefault" style="color:var(--track)">образец</a></label><textarea id="gRules" style="min-height:110px" placeholder="Юноши;М;2010;2011&#10;Девушки;Ж;2010;2011&#10;Мужчины;М;;2009"></textarea>
-        <label for="gLanes">Дорожек на стадионе</label><input id="gLanes" type="number" min="1" max="50" value="8">
         <label for="gInfo">Пояснение для участников</label><input id="gInfo" placeholder="Выдача номеров с 9:30 у секретариата.">
         <details style="margin-top:10px"><summary class="small">Текст согласия на обработку персональных данных</summary>
           <textarea id="gConsent" style="min-height:110px;font-family:inherit"></textarea>
@@ -898,38 +772,13 @@ a.btn.xls:hover{background:#E9F5EE}
     </aside>
   </div>
 
-  <div class="sect">
-    <div class="pagehead" style="margin-bottom:10px">
-      <div><h2 style="margin:0">Забеги и стартовый протокол</h2>
-        <p class="lead small">По категории и дистанции, посев по лучшему результату: сильнейшие — в последнем забеге, внутри забега — на центральных дорожках. Без результата — в первых забегах. Потом можно переносить вручную.</p></div>
-      <div class="row" id="gGridCtl"><button class="primary" id="gHeats">⚡ Сформировать забеги</button><button class="danger" id="gResetHeats">❌ Сбросить сетку / Удалить забеги</button><a class="btn" id="gStartList" target="_blank">Стартовый протокол ↗</a></div>
-    </div>
-    <div class="wzp-goto hide" id="gWizGo">Сетка, стартовые и итоговые протоколы стадиона формируются в одном месте — <b>«Протоколы» (мастер)</b>: отдельно бег и техника, отдельный лист на каждую категорию.
-      <a class="btn primary" href="#wizard">Открыть мастер протоколов →</a></div>
-    <div class="heats" id="gHeatsBox"></div>
-    <div id="gLoose"></div>
-  </div>
 </section>
 
-<!-- 3. ЧИПЫ -->
+<!-- 4. ВЫДАЧА НОМЕРОВ -->
 <section id="tab-check" class="hide">
-  <div id="chipSect">
-  <div class="pagehead">
-    <div><h1>Проверка чипов</h1><p class="lead">Проносите чип над ковриком при выдаче номера — экран покажет, чей он. Неизвестные чипы подсвечиваются красным.</p></div>
-    <div class="progress"><b id="chkDone">0 / 0</b> проверено<div class="pbar"><i id="chkBar" style="width:0"></i></div></div>
-  </div>
-  <div class="row" style="margin-bottom:12px">
-    <button class="primary" id="btnCheckStart">Начать проверку</button>
-    <button id="btnCheckStop">Остановить</button>
-    <label class="check" style="margin:0 0 0 8px"><input type="checkbox" id="chkSound" checked> звук</label>
-  </div>
-  <div class="checkbig" id="chkBig"><div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div></div>
-  <h2>Ещё не проверены</h2><div class="chips" id="chkLeft"></div>
-  <h2>Чипы не из списка <span class="small muted" id="chkUnknown"></span></h2><div class="chips" id="chkUnk"></div>
-  </div>
-  <div class="sect" id="pickSect">
+  <div id="pickSect">
     <div class="pagehead">
-      <div><h2 style="margin:0" id="pkTitle">Выдача стартовых пакетов</h2><p class="lead small">Найдите участника по номеру или фамилии и нажмите «Выдать». Enter — выдать, если найден один. Отметки видят все компьютеры на выдаче.</p></div>
+      <div><h1 id="pkTitle">Выдача номеров</h1><p class="lead small">Найдите участника по номеру или фамилии и нажмите «Выдать». Enter — выдать, если найден один. Отметки видят все компьютеры на выдаче.</p></div>
       <div class="progress"><b id="pkDone">0 / 0</b> выдано<div class="pbar"><i id="pkBar" style="width:0"></i></div></div>
     </div>
     <div class="row" style="margin-bottom:10px">
@@ -965,8 +814,7 @@ a.btn.xls:hover{background:#E9F5EE}
       <div class="muted small" id="tStartInfo" style="color:var(--night-muted)"></div>
       <div class="counts4" style="margin-top:14px">
         <div><b id="tFin">0</b><span>финишировали</span></div>
-        <div><b id="tCourse">0</b><span>на дистанции</span></div>
-        <div><b id="tNot">0</b><span>не отмечены</span></div>
+        <div><b id="tNot">0</b><span>без отметки</span></div>
         <div><b id="tPend">0</b><span>отметок без номера</span></div>
       </div>
       <div class="race-actions" id="singleStart">
@@ -979,10 +827,9 @@ a.btn.xls:hover{background:#E9F5EE}
     </div>
     <div class="manual">
       <h3>Ручная отметка</h3>
-      <p class="hint">Чип не считался — введите номер и нажмите Enter. Пустое время — сейчас. В результатах отметка помечается ✋.</p>
+      <p class="hint">Введите номер участника и нажмите Enter. Пустое время — сейчас. В результатах отметка помечается ✋.</p>
       <div class="manrow">
         <input id="mBib" placeholder="№" inputmode="numeric" aria-label="Номер участника">
-        <select id="mDev" aria-label="Точка"></select>
         <input id="mTime" placeholder="время (пусто = сейчас)">
         <button class="primary" id="btnMark">Отметить</button>
       </div>
@@ -994,13 +841,6 @@ a.btn.xls:hover{background:#E9F5EE}
     <div style="overflow:auto"><table>
       <thead><tr><th>Забег</th><th>Участников</th><th>Время забега</th><th>Старт · финиш</th><th></th></tr></thead>
       <tbody id="wavesBody"></tbody>
-    </table></div>
-  </div>
-  <div class="light">
-    <div class="lh"><h3>Отметки ридеров</h3><span class="small muted">новые сверху · зелёная полоса — финиш</span></div>
-    <div class="scroll" style="overflow:auto"><table class="feed">
-      <thead><tr><th>Время</th><th>С начала</th><th>Номер</th><th>Чип</th><th>Точка</th></tr></thead>
-      <tbody id="feedBody"></tbody>
     </table></div>
   </div>
  </div>
@@ -1029,13 +869,11 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="alerts" id="rAlerts"></div>
   <div class="filters">
     <select id="rWave" aria-label="Забег"></select>
-    <input id="rSearch" placeholder="Номер или чип" style="max-width:220px">
+    <input id="rSearch" placeholder="Номер или фамилия" style="max-width:220px">
     <span class="small muted">Место — в забеге, «Общее» — среди всех забегов той же категории и дистанции. ✋ — ручная отметка (время округлено вверх до 0,1 с).</span>
   </div>
   <div class="tbl"><table><thead id="rHead"></thead><tbody id="rBody"></tbody></table></div>
-  <h2>На дистанции</h2>
-  <div class="tbl"><table><thead id="cHead"></thead><tbody id="cBody"></tbody></table></div>
-  <h2>Не отмечены ни на одной точке</h2>
+  <h2>Нет отметки о финише</h2>
   <p id="nList" class="mono small"></p>
 </section>
 
@@ -1055,7 +893,6 @@ a.btn.xls:hover{background:#E9F5EE}
     <a id="dlProto" target="_blank"><b>Протокол результатов ↗</b><small>для печати и сайта</small></a>
     <a id="dlStart" target="_blank"><b>Стартовый протокол ↗</b><small>забеги и дорожки</small></a>
     <a id="dlCsv"><b>Результаты CSV</b><small>для Excel</small></a>
-    <a id="dlClax"><b>Файл для Wiclax</b><small>.clax: дистанции, участники, чипы</small></a>
   </div>
   <div class="folders" id="fFolders"></div>
   <div class="panel" style="margin-top:12px">
@@ -1093,82 +930,8 @@ a.btn.xls:hover{background:#E9F5EE}
     <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
   </div>
 
-  </div>
-  <!-- 2. Хронометраж и оборудование: ридеры IPICO, Wiclax, отметки -->
-  <div class="syspane" data-pane="timing">
-  <div class="row between">
-    <h2 style="margin:0">Ридеры</h2>
-    <div class="row"><button class="sm" id="rdSimBtn" title="Виртуальный ридер: прогоняет участников соревнования через сервер в Wiclax">Симулятор</button><button class="sm" id="rdScanBtn">Найти ридеры</button><button class="sm primary" id="rdAddBtn">+ Добавить ридер</button><button class="sm" id="rdBulkBtn">Загрузить список</button></div>
-  </div>
-  <div id="rdScan" class="panel hide" style="margin-top:10px">
-    <div class="row" style="align-items:flex-end">
-      <div><label for="scNet">Сеть ящика</label><input id="scNet" placeholder="10.19.1" style="width:130px"></div>
-      <div><label for="scPort">Порт ридеров</label><input id="scPort" type="number" value="10000" style="width:100px"></div>
-      <div><label for="scBox">Ящик (подпись)</label><input id="scBox" placeholder="Финишный ящик" style="width:180px"></div>
-      <button class="primary sm" id="scGo">Найти</button><button class="sm" id="scClose">Закрыть</button>
-    </div>
-    <p class="small muted" style="margin:8px 0 0">Сервер проверит адреса от .1 до .254 в сети ящика (через VPN) и покажет, где отвечает ридер. Ящик должен быть включён и на связи.</p>
-    <div id="scRes" style="margin-top:8px"></div>
-  </div>
-  <div id="rdForm" class="panel hide" style="margin-top:10px">
-    <div class="form">
-      <div><label for="rdId">Название ридера *</label><input id="rdId" placeholder="IPICO1" maxlength="32"></div>
-      <div><label for="rdHost">IP-адрес *</label><input id="rdHost" placeholder="10.19.1.61"></div>
-      <div><label for="rdPort">Порт</label><input id="rdPort" type="number" value="10000" min="1" max="65535"></div>
-      <div><label for="rdDev">Где стоит (точка)</label><input id="rdDev" placeholder="FINISH" list="rdDevList"><datalist id="rdDevList"></datalist></div>
-      <div><label for="rdBox">Ящик / место</label><input id="rdBox" placeholder="Финишный ящик 1"></div>
-      <div><label for="rdParser">Формат</label><select id="rdParser"><option value="ipico">IPICO</option><option value="auto">Другой (автоопределение)</option><option value="wiclax">Готовые строки Wiclax</option><option value="sim">Симулятор (тренировка без железа)</option></select></div>
-    </div>
-    <input type="hidden" id="rdOrig">
-    <div class="row" style="margin-top:12px"><button class="primary" id="rdSaveOn">Сохранить и подключить</button><button id="rdSave">Только сохранить</button><button id="rdCancel">Отмена</button></div>
-    <p class="small muted" style="margin-bottom:0">Сервер сам подключается к ридеру через VPN и переподключается при обрывах. У каждого ридера свой постоянный порт для Wiclax — он в таблице. Точку («Цель») и дублирующую линию задаёте в Wiclax.</p>
-  </div>
-  <div id="rdBulk" class="panel hide" style="margin-top:10px">
-    <label for="rdBulkText" style="margin-top:0">Список ридеров — по строке на ридер: <b>название; IP; порт; точка; ящик</b>. Можно скопировать прямо из Excel.</label>
-    <textarea id="rdBulkText" rows="6" placeholder="IPICO1;10.19.1.61;10000;FINISH;Финишный ящик 1&#10;IPICO2;10.19.1.62;10000;FINISH;Финишный ящик 1&#10;ELITE1;10.19.2.61;10000;KM5;Ящик 2 — 5 км"></textarea>
-    <div class="row" style="margin-top:10px"><button class="primary" id="rdBulkSave">Загрузить</button><button id="rdBulkCancel">Отмена</button></div>
-  </div>
-  <div class="tbl" style="margin-top:10px"><table>
-    <thead><tr><th>Ридер</th><th>Адрес</th><th>В Wiclax («Общий», 10.66.0.1)</th><th>Точка</th><th>Связь</th><th>Отметок</th><th>Часы ридера</th><th></th></tr></thead>
-    <tbody id="readersBody"></tbody>
-  </table></div>
-  <p class="small muted">«Часы ридера» — насколько время в отметке отличается от времени сервера. Перед стартом проверяйте тестовым чипом: больше ±2 с — синхронизируйте часы ридера.</p>
-
-  <h2>Wiclax</h2>
-  <div class="tbl"><table><thead><tr><th>Компьютер</th><th>Порт</th><th>Подключён с</th><th>Отправлено отметок</th><th>Режим</th></tr></thead><tbody id="hwWiclax"></tbody></table></div>
-  <div class="panel" style="margin-top:10px">
-    <div class="small"><b>Как подключать Wiclax.</b> Один ридер на финише — одно устройство «Общий»: 10.66.0.1, <b id="wxMain">порт 9854</b> (все отметки сразу).</div>
-    <div class="small" style="margin-top:4px">Несколько ридеров (отсечки, дублирующий финиш) — в Wiclax по устройству «Общий» <b>на каждый ридер</b>, порт ридера из таблицы выше. «Цель» и «Бэкап линию» выставляете в Wiclax. Шаблон устройств сохраняется один раз, перед гонкой меняете только «Цель».</div>
-  </div>
-  <details style="margin-top:8px"><summary class="small muted">Дополнительно: порты по точкам (старый способ)</summary>
-  <div class="panel" style="margin-top:6px">
-    <div class="small muted">Порт 9855–9860 отдаёт отметки всех ридеров с указанной точкой.</div>
-    <div class="tbl" style="margin-top:8px"><table><thead><tr><th>Порт</th><th>Точки</th><th>Для чего</th><th>Состояние</th><th></th></tr></thead><tbody id="wxPorts"></tbody></table></div>
-    <div class="row" style="margin-top:8px;align-items:flex-end">
-      <div><label for="wxPort">Порт</label><input id="wxPort" type="number" min="9855" max="9860" placeholder="9855" style="width:110px"></div>
-      <div><label for="wxDevs">Точки (через запятую)</label><input id="wxDevs" placeholder="KM5" list="rdDevList" style="width:180px"></div>
-      <div><label for="wxName">Для чего</label><input id="wxName" placeholder="Отсечка 5 км" style="width:200px"></div>
-      <button class="sm" id="wxAdd">Добавить порт</button>
-    </div>
-  </div></details>
-
-  <h2>Последние отметки <span class="small muted" id="stReads"></span></h2>
-  <div class="tbl"><table>
-    <thead><tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th></tr></thead>
-    <tbody id="lastBody"></tbody>
-  </table></div>
-  <div class="datalinks"><a href="/export.csv">Все отметки (CSV)</a><a href="/export.csv?filtered=1">Только прохождения (CSV)</a><a href="/raw">Сырые строки</a><a href="/simple">Простая страница</a></div>
-  </div>
-  <!-- 3. Сетевые доступы и VPN -->
-  <div class="syspane" data-pane="net">
-  <h2 style="margin-top:0">VPN-доступы</h2>
-  <div class="tbl"><table><thead><tr><th>Устройство (профиль)</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда (внешний IP)</th><th>На связи с</th><th>Трафик</th></tr></thead><tbody id="hwVpn"></tbody></table></div>
-  <div id="hwWgBox" class="hide"><h2>VPN-доступы (WireGuard)</h2>
-  <div class="tbl"><table><thead><tr><th>Устройство</th><th>Состояние</th><th>Адрес в VPN</th><th>Откуда</th><th>Трафик</th></tr></thead><tbody id="hwWg"></tbody></table></div></div>
-  <p class="small muted">Новые доступы и отзыв: <span class="mono">sudo timing-ovpn add ИМЯ</span> / <span class="mono">sudo timing-ovpn remove ИМЯ</span>. Называйте профили понятно: judge-petrova, wiclax-laptop, router-finish.</p>
-  <h2>Кто открывал сервер за последний час</h2>
-  <div class="tbl"><table><thead><tr><th>Адрес</th><th>VPN-профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
-
+  <h2 style="margin-top:20px">Кто открывал сервер за последний час</h2>
+  <div class="tbl"><table><thead><tr><th>Адрес</th><th>Профиль</th><th>Устройство</th><th>Экран</th><th>Последний раз</th></tr></thead><tbody id="hwClients"></tbody></table></div>
   </div>
 </section>
 
@@ -1176,9 +939,9 @@ a.btn.xls:hover{background:#E9F5EE}
 <section id="tab-users" class="hide">
   <div class="pagehead"><div><h1>Система</h1></div></div>
   <nav class="subnav sysnav" aria-label="Разделы системы"></nav>
-  <p class="small muted syshead" style="margin:0">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>. VPN для этого не нужен.</p>
+  <p class="small muted syshead" style="margin:0">Кто может входить в панель через браузер по адресу <b id="uLoginUrl">/login</b>.</p>
   <div class="roles2">
-    <div><b>👑 Администратор</b><span>Всё без ограничений: сервер и обновления, хронометраж IPICO и Wiclax, VPN и WireGuard, пользователи, удаление соревнований.</span></div>
+    <div><b>👑 Администратор</b><span>Всё без ограничений: сервер и обновления, пользователи, удаление соревнований.</span></div>
     <div><b>⚖️ Судья</b><span>Вся спортивная работа: Мастер протоколов на всех шагах, забеги и сетки, ввод результатов (3 секундомера, 6 попыток, разряды), корзина печати, пульт табло, экраны судьи на финише и на секторе. Без «Системы» и удаления соревнований.</span></div>
   </div>
   <p class="small muted" style="margin:0 0 10px">Имя, роль и примечание сохраняются сразу.</p>
@@ -1199,7 +962,7 @@ a.btn.xls:hover{background:#E9F5EE}
     <p class="small muted" style="margin-bottom:0">Пароль придумается сам и будет показан один раз — передайте его человеку лично. Сменить свой пароль можно в меню с вашим логином вверху справа.</p>
   </div>
   <h2 style="margin-top:24px">🧑‍🏫 Тренеры <span class="small muted" id="trCount"></span></h2>
-  <p class="small muted" style="margin:0 0 10px">Тренеры регистрируются сами на странице <b id="trUrl">/r/trainer</b> и подтверждают почту кодом из письма. После этого им открыты стартовые и итоговые протоколы, которые вы выложили, — без чипов и без заявок. <span id="trMail"></span></p>
+  <p class="small muted" style="margin:0 0 10px">Тренеры регистрируются сами на странице <b id="trUrl">/r/trainer</b> и подтверждают почту кодом из письма. После этого им открыты стартовые и итоговые протоколы, которые вы выложили, — без заявок. <span id="trMail"></span></p>
   <div class="tbl"><table class="utbl">
     <thead><tr><th>Тренер</th><th>Школа / клуб</th><th>Почта</th><th>Статус</th><th>Последний вход</th><th></th></tr></thead>
     <tbody id="trBody"></tbody>
@@ -1230,7 +993,7 @@ a.btn.xls:hover{background:#E9F5EE}
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const store = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
-let offset = 0, events = [], curId = null, lastId = 0, lastRes = null, devices = [];
+let offset = 0, events = [], curId = null, lastRes = null;
 const statusName = {planned:"запланировано", running:"идёт", finished:"завершено"};
 const curEvent = () => events.find(e => e.id === curId);
 
@@ -1264,42 +1027,10 @@ const alertsHtml = (list) => (list||[]).map(a => `<div class="alert ${a.level}">
 const STEPS = ["prep","reg","wizard","check","timing","results","files"];
 const ALIAS = {overview:"home", events:"home", archive:"home", "":"welcome", "protocol-master":"wizard"};
 function tabName(){ const t = (location.hash||"#welcome").slice(1); return ALIAS[t] ?? t; }
-/* Направление работы (3.0): «ipico» — массовый забег с чипами, «stadium» — стадион. Запоминается в браузере. */
-let DIR = store.get("ss.dir"); if (DIR !== "ipico" && DIR !== "stadium") DIR = null;
-let dirAll = false;
-const DIR_NAME = {ipico:"Массовый забег · IPICO", stadium:"Стадион · лёгкая атлетика"};
-const inDir = (e) => !DIR || dirAll || (DIR === "stadium" ? e.kind === "stadium" : e.kind !== "stadium");
-function setDir(d){ DIR = d; dirAll = false; store.set("ss.dir", d || ""); applyDir(); }
-function applyDir(){ document.body.dataset.dir = DIR || ""; }
-function renderHome(){
-  const filt = DIR && !dirAll;
-  $("dirChip").innerHTML = DIR ? `Направление: <b>${esc(DIR_NAME[DIR])}</b> · <a href="#welcome">сменить</a> · ${filt ? '<a href="#home" id="dirAllLink">показать все</a>' : '<a href="#home" id="dirOnlyLink">только это направление</a>'}` : "";
-  $("homeTitle").textContent = !filt ? "Соревнования" : DIR === "ipico" ? "Массовые забеги" : "Соревнования на стадионе";
-  $("homeLead").textContent = DIR === "ipico" && filt ? "Сначала проверьте оборудование, затем выберите старт — откроется нужный этап." : DIR === "stadium" && filt ? "Создайте соревнование по шагам или выберите готовое — откроется нужный этап." : "Выберите старт — откроется нужный этап. Прошедшие соревнования — в архиве ниже.";
-  $("ipicoBlock").classList.toggle("hide", DIR !== "ipico");
-  $("stadiumBlock").classList.toggle("hide", DIR !== "stadium");
-  document.querySelectorAll(".hp-card").forEach(c => { const on = c.dataset.pick === DIR; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
-  const lk = $("dirAllLink") || $("dirOnlyLink"); if (lk) lk.onclick = (e) => { e.preventDefault(); dirAll = !dirAll; renderHome(); renderEvents(); renderArchive(); };
-}
-function updateIpico(){
-  const r = $("hReaders"), w = $("hWiclax"), cls = (r.className.match(/\b(ok|warn|bad)\b/) || [])[1] || "";
-  $("ibSt").textContent = r.textContent; $("ibSt").className = "ib-st " + cls; $("ipicoNavSt").textContent = r.textContent;
-  $("ibReaders").textContent = /\d+\/\d+/.test(r.textContent) ? "на связи: " + r.textContent.replace(/\D*(\d+\/\d+)\D*/, "$1") : "подключение ридеров к серверу";
-  $("ibWiclax").textContent = w.classList.contains("ok") ? "подключён, отметки передаются" : "пока не подключён";
-}
-$("ibChips").onclick = (e) => { if (!curEvent()) { e.preventDefault(); toast("Сначала выберите соревнование в списке ниже"); } };
-document.querySelectorAll(".wl-card[data-dir]").forEach(c => c.onclick = () => { setDir(c.dataset.dir); location.hash = "#home"; });
-// карточки на главной: IPICO — оборудование; стадион — сразу пошаговое создание (сценарий задаёт карточка, а не память браузера)
-document.querySelectorAll(".hp-card").forEach(c => c.onclick = () => {
-  const d = c.dataset.pick; dirAll = false; setDir(d); renderHome(); renderEvents(); renderArchive();
-  if (d === "stadium") wzOpen("stadium"); else wzClose();
-});
-$("wlAll").onclick = () => { if (DIR) dirAll = true; };
-$("sbStart").onclick = () => wzOpen("stadium");
-$("ibNew").onclick = () => wzOpen("mass");
-// «Система»: вкладки общие · хронометраж · сети · пользователи · журнал
-const SYS_TABS = [["hw", "⚙️ Система и обновления", 1], ["hw-timing", "📟 Хронометраж IPICO и Wiclax", 1],
-  ["hw-net", "🔒 Сетевые доступы и VPN", 1], ["users", "👥 Пользователи", 1], ["log", "Журнал действий", 0]];
+/* Направление одно — стадион и манеж; массовые забеги вынесены в отдельный модуль. */
+document.querySelectorAll(".wl-card[data-dir]").forEach(c => c.onclick = () => { location.hash = "#home"; });
+// «Система»: общие · пользователи · журнал
+const SYS_TABS = [["hw", "⚙️ Система и обновления", 1], ["users", "👥 Пользователи", 1], ["log", "Журнал действий", 0]];
 function renderSysNav(active){
   const adm = !ME || ME.role === "admin";
   document.querySelectorAll(".sysnav").forEach(n => { n.innerHTML = SYS_TABS.filter(t => adm || !t[2])
@@ -1309,11 +1040,11 @@ function showTab(){
   let tab = tabName(), pane = "";
   // 6.0: у стадиона с ручным вводом один экран ввода — шаг 4 Мастера (этап «5. Ввод результатов»); старая закладка #timing ведёт туда же
   if (tab === "timing" && isEntryMode(curEvent())) { wzp.setStep(4); history.replaceState(null, "", "#wizard"); tab = "wizard"; }
-  if (/^hw-(timing|net)$/.test(tab)) { pane = tab.slice(3); tab = "hw"; } else if (tab === "hw") pane = "gen";
+  if (/^hw-/.test(tab)) tab = "hw"; if (tab === "hw") pane = "gen";      // старые закладки «хронометраж» и «сети» ведут в общую «Систему»
   if (!document.getElementById("tab-"+tab)) tab = "home";
   if ((tab === "hw" || tab === "users") && ME && ME.role !== "admin") tab = "log";
   if (STEPS.includes(tab) && !curEvent()) tab = "home";
-  document.body.dataset.view = tab; applyDir();
+  document.body.dataset.view = tab;
   document.querySelectorAll("main>section").forEach(s => s.classList.toggle("hide", s.id !== "tab-"+tab));
   markLane();
   const onStep = document.querySelector(".lane .st.on"), lane = $("lane");
@@ -1331,10 +1062,10 @@ function showTab(){
   if (tab === "users") { loadUsers(); loadTrainers(); loadConsents(); }
   if (tab === "prep") renderSite();
   if (tab === "files") renderPub();
-  if (tab === "check") { loadCheck(); loadPickup(); }
+  if (tab === "check") loadPickup();
   if (tab === "log") loadLog();
-  if (tab === "hw") { document.querySelectorAll("#tab-hw .syspane").forEach(p => p.classList.toggle("hide", p.dataset.pane !== pane)); loadHw(); loadReaders(); loadUpdate(); loadLast(); }
-  if (tab === "hw" || tab === "users" || tab === "log") renderSysNav(tab === "hw" ? (pane === "gen" ? "hw" : "hw-" + pane) : tab);
+  if (tab === "hw") { document.querySelectorAll("#tab-hw .syspane").forEach(p => p.classList.toggle("hide", p.dataset.pane !== pane)); loadHw(); loadUpdate(); }
+  if (tab === "hw" || tab === "users" || tab === "log") renderSysNav(tab);
   if (tab === "files") renderFilesTab();
   if (tab === "reg") { renderRegHead(true); loadRegs(); }
   if (tab === "wizard") wzp.open();
@@ -1348,7 +1079,6 @@ function markLane(){ const act = laneActive(); document.querySelectorAll(".lane 
 window.addEventListener("hashchange", showTab);
 function defaultStep(ev){ return !ev ? "home" : ev.status==="running" ? (isEntryMode(ev) ? "wizard" : "timing") : ev.status==="finished" ? "results" : (ev.reg_open || ev.regs_pending) ? "reg" : "prep"; }
 function openEvent(id){
-  const e0 = events.find(x => x.id === id); if (e0) setDir(e0.kind === "stadium" ? "stadium" : "ipico");
   selectEvent(id);
   const t = tabName(), step = STEPS.includes(t) ? t : defaultStep(curEvent());
   if (location.hash !== "#"+step) location.hash = "#"+step; else showTab();
@@ -1369,10 +1099,9 @@ $("cpSector").onclick = async (e) => { e.stopPropagation(); const url = new URL(
 document.addEventListener("click", (e) => { if (!e.target.closest(".menu") && !e.target.closest(".more")) closeMenus(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
 $("evMenu").addEventListener("click", (e) => {
-  if (e.target.closest('a[href="#home"]') && DIR) dirAll = true;
   const b = e.target.closest("[data-id],[data-new]"); if (!b) return;
   closeMenus();
-  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => wzOpen(""), 0); return; }
+  if (b.dataset.new) { location.hash = "#home"; setTimeout(() => wzOpen("stadium"), 0); return; }
   openEvent(+b.dataset.id);
 });
 const MON_S = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
@@ -1380,31 +1109,14 @@ const MON_G = ["января","февраля","марта","апреля","ма
 const fmtDate = (d) => { if (!d) return ""; const p = d.split("-"); return p.length===3 ? `${+p[2]} ${MON_G[+p[1]-1]} ${p[0]}` : d; };
 const plural = (n, f) => f[(n%10===1 && n%100!==11) ? 0 : (n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20)) ? 1 : 2];
 function localDate(){ const d = new Date(nowMs()); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function setPill(id, text, cls){ const e = $(id); e.textContent = text; e.className = "h " + (cls||""); }
 
 /* ---------- обзор ---------- */
 async function loadStatus(){
-  try{
-    const st = await api("/api/status");
-    offset = st.server_epoch_ms - Date.now();
-    $("stReads").textContent = "· всего в базе " + st.totals.reads;
-    const live = st.sources.filter(s => s.mode !== "http"), on = live.filter(s=>s.connected).length;
-    setPill("hReaders", `Ридеры ${on}/${live.length}`, !live.length ? "" : on === live.length ? "ok" : on ? "warn" : "bad");
-    setPill("hWiclax", "Wiclax", st.wiclax_clients.length ? "ok" : ""); updateIpico();
-    if (tabName()==="hw-timing") loadReaders();
-  }catch(e){ console.warn(e); }
-}
-async function loadLast(){
-  try{
-    const r = await api("/api/live?limit=15");
-    $("lastBody").innerHTML = r.reads.slice().reverse().map(x =>
-      `<tr><td class="mono">${esc(x.time)}</td><td class="mono">${esc(x.chip)}</td><td>${esc(x.device)}</td><td class="muted">${esc(x.source)}</td></tr>`
-    ).join("") || '<tr><td colspan="4" class="empty">Отметок пока нет</td></tr>';
-  }catch(e){}
+  try{ const st = await api("/api/status"); offset = st.server_epoch_ms - Date.now(); }
+  catch(e){ console.warn(e); }
 }
 
 /* ---------- соревнования ---------- */
-async function loadDevices(){ try{ devices = (await api("/api/devices")).devices; }catch(e){ devices = []; } }
 async function loadEvents(){
   const r = await api("/api/events");
   const sig = JSON.stringify(r.events);
@@ -1429,20 +1141,19 @@ function evRow(e, td){
     e.regs_pending ? `заявок ждут: ${e.regs_pending}` : ""].filter(Boolean).join(" · ");
   return `<div class="evrow ${esc(e.status)} ${e.date===td?"today":""} ${e.id===curId?"sel":""}" data-id="${e.id}" tabindex="0" role="button" aria-label="Открыть ${esc(e.name)}">
     <div class="date">${d ? `<b>${+d[2]}</b><span>${MON_S[+d[1]-1]}</span>` : "<b>—</b><span>без даты</span>"}</div>
-    <div><div class="t">${esc(e.name)}${e.pub_site?'<span class="tag" title="Показывается в календаре fla65.ru">на сайте</span>':""}</div><div class="m">${esc([e.kind==="stadium"?"стадион":"массовый старт", meta].filter(Boolean).join(" · ") || "нет участников")}</div></div>
+    <div><div class="t">${esc(e.name)}${e.pub_site?'<span class="tag" title="Показывается в календаре fla65.ru">на сайте</span>':""}</div><div class="m">${esc(meta || "нет участников")}</div></div>
     <div class="state ${cls}">${esc(txt)}</div>
     <div class="evacts">${e.status==="finished" ? '<button class="sm" data-act="arch">В архив</button><button class="sm quiet" data-act="reopen">↩️ Возобновить</button>' : ""}${!ME || ME.role === "admin" ? '<button class="sm quiet danger" data-act="del">Удалить</button>' : ""}</div>
   </div>`;
 }
 function renderEvents(){
-  const td = localDate(), active = events.filter(e => !e.archived && inDir(e));
-  renderHome();
+  const td = localDate(), active = events.filter(e => !e.archived);
   const now = active.filter(e => e.status === "running" || (e.date && e.date <= td && (e.date_end || e.date) >= td));
   const soon = active.filter(e => !now.includes(e) && e.date && e.date > td).sort((a,b) => a.date.localeCompare(b.date));
   const rest = active.filter(e => !now.includes(e) && !soon.includes(e));
   const grp = (t, l) => l.length ? `<h2 class="group">${t}</h2>` + l.map(e => evRow(e, td)).join("") : "";
   $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Прошли — ещё не в архиве", rest)
-    || `<div class="panel empty">${events.length ? (DIR && !dirAll && events.some(e => !e.archived) ? "В этом направлении соревнований пока нет — создайте новое кнопкой выше или нажмите «показать все»." : "Все соревнования в архиве. Создайте новое или верните из архива.") : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
+    || `<div class="panel empty">${events.length ? "Все соревнования в архиве. Создайте новое или верните из архива." : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
   $("calImport").classList.toggle("hide", events.some(e => e.pub_site));
   const ev = curEvent();
   $("evBtnName").textContent = ev ? ev.name : "Выберите соревнование";
@@ -1461,26 +1172,19 @@ function renderEvents(){
   if (tabName()==="home") renderArchive();
   if (STEPS.includes(tabName()) && !ev && document.body.dataset.view !== "home") showTab();
 }
-let chkCache = null;
 function setStep(id, cls, text){ const a = $(id); const hid = a.classList.contains("hide"); a.className = "st " + (cls||"") + (a.dataset.step === laneActive() ? " on" : "") + (hid ? " hide" : ""); a.querySelector("small").textContent = text || ""; }
 function renderLane(){
   const ev = curEvent(); if (!ev) return;
-  const stadium = ev.kind === "stadium", entry = isEntryMode(ev);
-  $("stCheck").querySelector("b").textContent = stadium ? "Выдача номеров" : "Номера и чипы";
-  $("chipSect").classList.toggle("hide", stadium);
-  $("stTiming").querySelector("b").textContent = entry ? "Ввод результатов" : stadium ? "Забеги" : "Старт и финиш";
-  $("stWiz").classList.toggle("hide", !stadium);
+  const entry = isEntryMode(ev);
+  $("stTiming").querySelector("b").textContent = entry ? "Ввод результатов" : "Забеги";
   let n = 0; document.querySelectorAll(".lane .st").forEach(a => { if (!a.classList.contains("hide")) a.querySelector(".pin").textContent = ++n; });
   const w = ev.waves.length, rp = ev.regs_pending || 0, rc = ev.regs_count || 0;
-  setStep("stPrep", ev.finish_device && (ev.entries_count || rc) ? "done" : "",
+  setStep("stPrep", ev.entries_count || rc ? "done" : "",
     [ev.entries_count ? `${ev.entries_count} в списке` : "список пуст", w ? `${w} ${plural(w, ["забег","забега","забегов"])}` : ""].filter(Boolean).join(" · "));
   setStep("stReg", rp ? "warn" : rc ? "done" : "", rp ? `${rp} ждут проверки` : rc ? `${rc} ${plural(rc, ["заявка","заявки","заявок"])}` : ev.reg_open ? "приём открыт" : "приём не открыт");
-  const c = chkCache && chkCache.ev === ev.id ? chkCache : null;
   const pk = pkCache && pkCache.ev === ev.id ? pkCache : null;
-  if (stadium || (pk && pk.picked && !(c && c.since))) setStep("stCheck", pk && pk.total && pk.picked >= pk.total ? "done" : "",
+  setStep("stCheck", pk && pk.total && pk.picked >= pk.total ? "done" : "",
     pk && pk.total ? (pk.picked ? `выдано ${pk.picked} из ${pk.total}` : "номера не выданы") : "перед стартом");
-  else setStep("stCheck", c && c.total ? (c.checked >= c.total ? "done" : c.since ? "warn" : "") : "",
-    c && c.total ? (c.checked >= c.total ? "все проверены" : `${c.total - c.checked} не проверены`) : "перед стартом");
   const run = ev.waves.filter(x => x.state === "running").map(x => x.name);
   setStep("stTiming", ev.status === "running" ? "live" : ev.status === "finished" ? "done" : "",
     entry ? (ev.status === "finished" ? "завершено" : "ручной секундомер") :
@@ -1498,9 +1202,6 @@ $("lane").addEventListener("click", (e) => {
 const heatState = {planned:"ждёт старта", running:"идёт", finished:"завершён"};
 function renderWaves(){
   const ev = curEvent(); if (!ev) return;
-  const wsel = $("nWave"), wprev = wsel.value;
-  wsel.innerHTML = '<option value="">— без забега</option>' + ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("");
-  wsel.value = ev.waves.some(w => w.name === wprev) ? wprev : (ev.waves[0] ? ev.waves[0].name : "");
   $("wavesList").innerHTML = ev.waves.map(w => `<tr data-wave="${esc(w.name)}">
       <td><input data-f="name" value="${esc(w.name)}" style="width:130px"></td>
       <td><input data-f="category" list="catList" value="${esc(w.category||"")}" style="width:140px"></td>
@@ -1531,9 +1232,8 @@ $("btnAddWave").onclick = async () => {
 };
 function selectEvent(id){
   if (id === curId) return;
-  curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; chkCache = null; lastRes = null;
-  lastId = 0; $("feedBody").innerHTML = "";
-  uiSync().catch(() => {}); renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") { loadCheck(); loadPickup(); }
+  curId = id; store.set("timing.event", String(id)); filesEv = id; filesFolder = ""; lastRes = null; pkCache = null;
+  uiSync().catch(() => {}); renderEvents(); loadEntries(); loadFiles(); loadResults(); loadManual(); if (tabName()==="check") loadPickup();
   regLoaded = null; renderRegHead(true); if (tabName()==="reg") loadRegs();
   if (tabName()==="prep") openForm(curEvent(), "prep");
 }
@@ -1543,22 +1243,14 @@ async function openForm(ev, where){
   $(where === "prep" ? "evFormPrep" : "evFormHome").appendChild($("evForm"));
   $("evFormTitle").textContent = ev ? "Параметры соревнования" : "Новое соревнование";
   $("btnCancel").textContent = ev ? "Вернуть как было" : "Отмена";
-  await loadDevices();
-  const devs = devices.slice(); ["JUDGE"].forEach(d => devs.includes(d) || devs.push(d));
-  if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.push(ev.finish_device);
-  $("fFinish").innerHTML = '<option value="">— выберите —</option>' + devs.map(x=>`<option>${esc(x)}</option>`).join("") + '<option value="__other">другая… (ввести)</option>';
   $("fName").value = ev?.name||""; $("fDate").value = ev?.date||new Date(nowMs()).toISOString().slice(0,10);
-  $("fPlace").value = ev?.place||""; $("fFinish").value = ev?.finish_device||(devs.includes("FINISH")?"FINISH":"");
-  $("fMin").value = ev?.min_time_sec||0; $("fSilence").value = ev?.alert_silence_min ?? 10;
-  $("fPush").checked = ev ? !!ev.push_wiclax : true; $("fNotes").value = ev?.notes||"";
+  $("fPlace").value = ev?.place||""; $("fNotes").value = ev?.notes||"";
   $("fStartClock").value = ev?.start_clock||""; $("fOrg").value = ev?.organizer||(events.find(x=>x.organizer)||{}).organizer||"";
   $("fJudge").value = ev?.chief_judge||""; $("fSecr").value = ev?.chief_secretary||"";
   $("fSeq").checked = ev ? !!ev.heats_sequential : false;
   $("fTeam").value = ev && ev.team_best ? String(ev.team_best) : "";
   $("fDateEnd").value = ev?.date_end||""; $("fCity").value = ev?.city||"";
-  const kind = ev?.kind || "mass";
-  document.querySelectorAll('input[name=fKind]').forEach(r => r.checked = r.value === kind);
-  setTimingOptions(kind, ev?.timing);
+  setTimingOptions(ev?.timing);
   $("btnCopy").classList.toggle("hide", !ev);
   $("evForm").classList.remove("hide"); if (!ev) $("fName").focus();
 }
@@ -1569,36 +1261,23 @@ $("btnCopy").onclick = async () => {
     toast(`Создано: ${n.name}${n.date ? " · " + fmtDate(n.date) : ""}`); location.hash = "#prep"; }
   catch(e){ toast("Ошибка: "+e.message); }
 };
-const TIMINGS = {
-  mass: [["chips", "Чипы IPICO и ридеры"], ["judge", "Судья с телефоном"]],
-  stadium: [["judge", "Судья с телефоном"], ["manual", "Ручной секундомер"], ["lynx", "FinishLynx (скоро)"]]};
+const TIMINGS = [["judge", "Судья на финише"], ["manual", "Ручной секундомер"], ["lynx", "FinishLynx (скоро)"]];
 const TIMING_HINT = {
-  chips: "Нужны ридеры на финише (и отсечках) и подключение к серверу через VPN. Проверьте их в «Системе» и на этапе «Чипы».",
   judge: "Судья открывает «Экраны → Судья на финише» на телефоне: даёт старт и отмечает финиш, номера вписывает он же или секретарь.",
-  manual: "Чипы и ридеры не нужны. После забега секретарь вписывает результаты на этапе «Ввод результатов».",
+  manual: "После забега секретарь вписывает результаты на этапе «Ввод результатов».",
   lynx: "Подключение FinishLynx появится в следующей версии. Пока результаты можно вписать вручную."};
-function setTimingOptions(kind, cur){
-  const opts = TIMINGS[kind] || TIMINGS.mass;
-  $("fTiming").innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
-  $("fTiming").value = opts.some(o => o[0] === cur) ? cur : opts[0][0];
+function setTimingOptions(cur){
+  $("fTiming").innerHTML = TIMINGS.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
+  $("fTiming").value = TIMINGS.some(o => o[0] === cur) ? cur : TIMINGS[0][0];
   updateFormVis();
 }
 function updateFormVis(){
   const t = $("fTiming").value;
-  document.querySelectorAll("#evForm .chips-only").forEach(x => x.classList.toggle("hide", t !== "chips"));
   document.querySelectorAll("#evForm .judge-only").forEach(x => x.classList.toggle("hide", t !== "judge"));
   $("fTimingHint").textContent = TIMING_HINT[t] || "";
 }
-document.querySelectorAll('input[name=fKind]').forEach(r => r.addEventListener("change", () => setTimingOptions(r.value, $("fTiming").value)));
 $("fTiming").onchange = updateFormVis;
-$("fFinish").onchange = () => {
-  if (!editId) $("fSeq").checked = $("fFinish").value === "JUDGE";
-  if ($("fFinish").value !== "__other") return;
-  const v = (prompt("Код точки финиша (латиницей, как device в настройках):")||"").trim();
-  if (v) { const o=document.createElement("option"); o.textContent=v; $("fFinish").insertBefore(o, $("fFinish").lastChild); $("fFinish").value=v; }
-  else $("fFinish").value="";
-};
-$("btnNew").onclick = () => wzOpen("");
+$("btnNew").onclick = () => wzOpen("stadium");
 /* ---------- справочник дисциплин лёгкой атлетики и выбор дисциплин ---------- */
 let DISC = null, discLoading = null;
 const discKey = (n) => String(n || "").toLowerCase().replace(/(\d)[xх*](\d)/g, "$1×$2").replace(/[\s.\-]+/g, "").replace(/ё/g, "е");
@@ -1632,9 +1311,9 @@ async function discPicker(root, api2){
         && (!q || discKey(d.name).includes(q) || (d.aliases || []).some(a => discKey(a).includes(q))));
       if (!items.length) return "";
       const n = items.filter(d => on.has(d.id)).length;
-      return `<div class="dp-g"><h4>${esc(g.name)} <small>${esc(g.hint || "")}</small>${n ? `<span class="dp-n">выбрано ${n}</span>` : ""}</h4><div class="dp-chips">${items.map(d => {
+      return `<div class="dp-g"><h4>${esc(g.name)} <small>${esc(g.hint || "")}</small>${n ? `<span class="dp-n">выбрано ${n}</span>` : ""}</h4><div class="dp-pills">${items.map(d => {
         const tip = [d.note, ...(d.specs || []).map(x => x.who + ": " + x.text)].filter(Boolean).join("\n");
-        return `<button type="button" class="dp-chip${on.has(d.id) ? " on" : ""}" data-did="${esc(d.id)}" aria-pressed="${on.has(d.id)}"${tip ? ` title="${esc(tip)}"` : ""}>${esc(d.name)}${RT_BADGE[d.result] ? `<i>${RT_BADGE[d.result]}</i>` : ""}</button>`; }).join("")}</div></div>`; }).join("");
+        return `<button type="button" class="dp-pill${on.has(d.id) ? " on" : ""}" data-did="${esc(d.id)}" aria-pressed="${on.has(d.id)}"${tip ? ` title="${esc(tip)}"` : ""}>${esc(d.name)}${RT_BADGE[d.result] ? `<i>${RT_BADGE[d.result]}</i>` : ""}</button>`; }).join("")}</div></div>`; }).join("");
     list.innerHTML = html || '<div class="dp-empty">Ничего не найдено. Свою дисциплину можно дописать в поле ниже.</div>';
   }
   const toggle = (id, force) => {
@@ -1653,27 +1332,19 @@ async function discPicker(root, api2){
   return draw;
 }
 
-/* ---------- мастер «Новое соревнование»: шаги зависят от направления ---------- */
+/* ---------- мастер «Новое соревнование»: стадион и манеж ---------- */
+const STADIUM_DISTS = ["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"];
 const WZ_TYPES = [
-  {id:"mass", b:"Забег на улице", small:"Кроссы, полумарафоны, массовые старты. Время считают чипы и ридеры на финише.", kind:"mass", timing:"chips", dists:["1 км","3 км","5 км","10 км","21,1 км","42,2 км"]},
-  {id:"judge", b:"Стадион: судья с телефоном", small:"Манеж и стадион. Судья на финише нажимает на телефоне — время идёт само.", kind:"stadium", timing:"judge", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]},
-  {id:"manual", b:"Стадион: результаты впишем вручную", small:"Секундомер или готовый протокол. Секретарь вводит результаты после забега.", kind:"stadium", timing:"manual", dists:["60 м","100 м","200 м","400 м","800 м","1500 м","3000 м","60 м с/б","110 м с/б"]}];
+  {id:"judge", b:"Судья на финише", small:"Судья на финише нажимает на телефоне — время идёт само.", kind:"stadium", timing:"judge"},
+  {id:"manual", b:"Ручной секундомер", small:"Секундомер или готовый протокол. Секретарь вводит результаты после забега.", kind:"stadium", timing:"manual"}];
 const WZ_TITLES = {type:"Как ведём время", base:"Название и дата", dists:"Дисциплины", groups:"Возрастные группы", reg:"Онлайн-заявки"};
-const wz = {kind:"", i:0, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true};
+const wz = {kind:"stadium", i:0, type:null, name:"", date:"", place:"", city:"Южно-Сахалинск", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true};
 function wzType(){ return WZ_TYPES.find(t => t.id === wz.type); }
-function wzTypes(){ return wz.kind === "stadium" ? WZ_TYPES.filter(t => t.kind === "stadium") : wz.kind === "mass" ? WZ_TYPES.filter(t => t.kind === "mass") : WZ_TYPES; }
-// стадион и манеж: хронометраж → название и дата → дисциплины (справочник World Athletics, готовые программы) → группы → заявки;
-// массовый забег (IPICO): название и дата → дистанции
-function wzFlow(){
-  const t = wzType();
-  if (wz.kind === "mass" || (t && t.kind === "mass")) return ["base", "dists"];
-  return ["type", "base", "dists", "groups", "reg"];
-}
-// kind: «stadium» | «mass»; пусто — направление ещё не выбрано: сначала карточки «Мастера подбора»
-function wzOpen(kind){
-  if (!kind) { wzClose(); location.hash = "#home"; const p = $("homePick"); p.classList.add("ask");
-    setTimeout(() => p.classList.remove("ask"), 2400); toast("Выберите, что проводим: массовый забег или соревнования на стадионе"); return; }
-  Object.assign(wz, {kind, i:0, type:kind === "mass" ? "mass" : null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
+function wzTypes(){ return WZ_TYPES; }
+// хронометраж → название и дата → дисциплины (справочник World Athletics, готовые программы) → группы → заявки
+function wzFlow(){ return ["type", "base", "dists", "groups", "reg"]; }
+function wzOpen(){
+  Object.assign(wz, {kind:"stadium", i:0, type:null, name:"", date:new Date(nowMs()).toISOString().slice(0,10), place:"", dists:[], extra:"", open:true, deadline:"", site:true, rules:null, rulesYear:null, sel:null, customRules:"", focus:true});
   $("evForm").classList.add("hide"); $("wizard").classList.remove("hide"); wzDraw();
 }
 function wzClose(){ $("wizard").classList.add("hide"); }
@@ -1691,26 +1362,26 @@ function wzPairs(){   // правила идут парами «мужской, 
 }
 async function wzDraw(){
   const flow = wzFlow(), id = flow[Math.min(wz.i, flow.length - 1)], n = wz.i + 1, b = $("wzBody");
-  $("wzStep").textContent = `${wz.kind === "mass" ? "Массовый забег" : "Стадион и манеж"} · шаг ${n} из ${flow.length}`;
+  $("wzStep").textContent = `Стадион и манеж · шаг ${n} из ${flow.length}`;
   $("wzDots").innerHTML = flow.map((_, k) => `<i class="${k < n ? "on" : ""}"></i>`).join("");
   $("wzBack").classList.toggle("hide", wz.i === 0); $("wzNext").textContent = n === flow.length && wz.type ? "Создать соревнование" : "Далее →";
-  if (id === "type") b.innerHTML = `<h2 id="wzTitle">${wz.kind === "stadium" ? "Как ведём время?" : "Что за соревнование?"}</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
+  if (id === "type") b.innerHTML = `<h2 id="wzTitle">Как ведём время?</h2><p class="wz-sub">От этого зависит, как считаем время. Потом можно поменять.</p>
     <div class="wz-cards" role="radiogroup" aria-label="Тип соревнования">${wzTypes().map(t => `<button type="button" role="radio" aria-checked="${wz.type === t.id}" class="wz-card${wz.type === t.id ? " on" : ""}" data-t="${t.id}"><b>${esc(t.b)}</b><small>${esc(t.small)}</small></button>`).join("")}</div><div class="wz-err" id="wzErr"></div>`;
   if (id === "base") b.innerHTML = `<h2 id="wzTitle">Как называется и когда проходит?</h2><p class="wz-sub">Так увидят участники на сайте и в протоколе.</p>
-    <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="${wzType() && wzType().kind === "mass" ? "Ночной забег по набережной" : "Кубок Сахалинской области"}" value="${esc(wz.name)}"></div>
+    <div class="wz-form"><div class="full"><label for="wzName">Название *</label><input id="wzName" maxlength="120" placeholder="Кубок Сахалинской области" value="${esc(wz.name)}"></div>
     <div><label for="wzDate">Дата *</label><input id="wzDate" type="date" value="${esc(wz.date)}"></div>
     <div><label for="wzCity">Город</label><input id="wzCity" value="${esc(wz.city)}"></div>
     <div class="full"><label for="wzPlace">Где проходит <span class="muted">(необязательно)</span></label><input id="wzPlace" list="venueList" placeholder="Легкоатлетический манеж" value="${esc(wz.place)}"></div></div><div class="wz-err" id="wzErr"></div>`;
-  if (id === "dists") { const t = wzType(), last = flow[flow.length - 1] === "dists";
-    b.innerHTML = `<h2 id="wzTitle">${t.kind === "mass" ? "Какие дистанции?" : "Какие дисциплины в программе?"}</h2><p class="wz-sub">${t.kind === "mass" ? "Нажмите на нужные — они попадут в форму регистрации." : "Бег, ходьба, прыжки, метания, многоборья, эстафеты. Выберите готовую программу или отметьте нужные дисциплины."} Своих можно дописать ниже.</p>
-    ${t.kind === "mass" ? `<div class="wz-chips">${t.dists.map(d => `<button type="button" class="wz-chip${wz.dists.includes(d) ? " on" : ""}" data-d="${esc(d)}" aria-pressed="${wz.dists.includes(d)}">${esc(d)}</button>`).join("")}</div>` : '<div id="wzPicker"></div>'}
+  if (id === "dists") { const last = flow[flow.length - 1] === "dists";
+    b.innerHTML = `<h2 id="wzTitle">Какие дисциплины в программе?</h2><p class="wz-sub">Бег, ходьба, прыжки, метания, многоборья, эстафеты. Выберите готовую программу или отметьте нужные дисциплины. Своих можно дописать ниже.</p>
+    <div id="wzPicker"></div>
     <label for="wzExtra">Свои <span class="muted">— по одной в строке</span></label><textarea id="wzExtra" style="min-height:64px" placeholder="400 м с/б">${esc(wz.extra)}</textarea>
     ${last ? `<label class="check" style="margin-top:12px"><input type="checkbox" id="wzOpen"${wz.open ? " checked" : ""}> Сразу открыть приём заявок и показать на сайте fla65.ru</label>` : ""}
     <p class="small muted" style="margin:2px 0 0">Лимит мест и номера настроите потом на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`;
-    if (t.kind !== "mass") discPicker($("wzPicker"), {get: () => wz.dists.slice(), set: (l) => { wz.dists = l; }}); }
+    discPicker($("wzPicker"), {get: () => wz.dists.slice(), set: (l) => { wz.dists = l; }}); }
   if (id === "groups") { b.innerHTML = '<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Загружаю…</p>'; await wzLoadRules(); const pairs = wzPairs();
     b.innerHTML = `<h2 id="wzTitle">Возрастные группы</h2><p class="wz-sub">Группы по годам рождения для ${esc(wz.rulesYear)} года, как в положениях ВФЛА. Уберите лишние.</p>
-    <div class="wz-chips">${pairs.map((p, k) => `<button type="button" class="wz-chip${p.idx.every(i => wz.sel.includes(i)) ? " on" : ""}" data-g="${k}" aria-pressed="${p.idx.every(i => wz.sel.includes(i))}">${esc(p.label)}</button>`).join("")}</div>
+    <div class="wz-pills">${pairs.map((p, k) => `<button type="button" class="wz-pill${p.idx.every(i => wz.sel.includes(i)) ? " on" : ""}" data-g="${k}" aria-pressed="${p.idx.every(i => wz.sel.includes(i))}">${esc(p.label)}</button>`).join("")}</div>
     <label for="wzRules">Свои категории <span class="muted">— название; пол; год рождения с; по</span></label><textarea id="wzRules" style="min-height:64px" placeholder="Ветераны;М;;1976">${esc(wz.customRules)}</textarea>
     <p class="small muted" style="margin:2px 0 0">Участник попадёт в группу по году рождения и полу автоматически. Без групп можно обойтись и добавить их позже на этапе «Регистрация».</p><div class="wz-err" id="wzErr"></div>`; }
   if (id === "reg") b.innerHTML = `<h2 id="wzTitle">Онлайн-заявки</h2><p class="wz-sub">Участники и тренеры запишутся сами по ссылке. Открыть и закрыть приём можно в любой момент.</p>
@@ -1718,7 +1389,7 @@ async function wzDraw(){
     <div class="wz-form" style="margin-top:8px"><div><label for="wzDeadline">Принимать до <span class="muted">(необязательно)</span></label><input id="wzDeadline" type="datetime-local" value="${esc(wz.deadline)}"></div></div>
     <label class="check" style="margin-top:8px"><input type="checkbox" id="wzSite"${wz.site ? " checked" : ""}> Показать соревнование в календаре на fla65.ru</label>
     <div class="wz-err" id="wzErr"></div>`;
-  if (wz.focus) { const f = id === "type" ? (b.querySelector(".wz-card.on") || b.querySelector(".wz-card")) : id === "base" ? $("wzName") : id === "reg" ? $("wzOpen") : (b.querySelector(".wz-chip.on") || b.querySelector(".wz-chip")); f && f.focus({preventScroll:true}); }
+  if (wz.focus) { const f = id === "type" ? (b.querySelector(".wz-card.on") || b.querySelector(".wz-card")) : id === "base" ? $("wzName") : id === "reg" ? $("wzOpen") : (b.querySelector(".wz-pill.on") || b.querySelector(".wz-pill")); f && f.focus({preventScroll:true}); }
   wz.focus = true;
 }
 function wzRead(){
@@ -1730,7 +1401,6 @@ function wzRead(){
 }
 $("wzBody").addEventListener("click", (e) => {
   const c = e.target.closest("[data-t]"); if (c) { wz.type = c.dataset.t; wz.dists = []; wz.focus = false; wzDraw(); const el = $("wzBody").querySelector(`[data-t="${wz.type}"]`); el && el.focus(); return; }
-  const d = e.target.closest("[data-d]"); if (d) { const v = d.dataset.d; wz.dists = wz.dists.includes(v) ? wz.dists.filter(x => x !== v) : [...wz.dists, v]; wz.extra = $("wzExtra").value; if ($("wzOpen")) wz.open = $("wzOpen").checked; wz.focus = false; wzDraw(); [...$("wzBody").querySelectorAll("[data-d]")].find(x => x.dataset.d === v).focus(); return; }
   const g = e.target.closest("[data-g]"); if (g) { const p = wzPairs()[+g.dataset.g], on = p.idx.every(i => wz.sel.includes(i));
     wz.sel = on ? wz.sel.filter(i => !p.idx.includes(i)) : [...new Set([...wz.sel, ...p.idx])]; wz.customRules = $("wzRules").value; g.classList.toggle("on", !on); g.setAttribute("aria-pressed", String(!on)); }
 });
@@ -1747,16 +1417,16 @@ $("wzNext").onclick = async () => {
   const dists = [...wz.dists, ...wz.extra.split("\n").map(x => x.trim()).filter(Boolean)].filter((x, k, a) => a.indexOf(x) === k);
   if (id === "dists" && flow[flow.length - 1] !== "dists" && !dists.length) return err("Выберите хотя бы одну дисциплину — иначе участникам нечего выбирать");
   if (wz.i < flow.length - 1) { wz.i++; return wzDraw(); }
-  if (wz.open && !dists.length) return err("Выберите хотя бы одну дистанцию — иначе участникам нечего выбирать. Или уберите галочку про приём заявок");
+  if (wz.open && !dists.length) return err("Выберите хотя бы одну дисциплину — иначе участникам нечего выбирать. Или уберите галочку про приём заявок");
   const t = wzType(); $("wzNext").disabled = true;
   try{
-    const body = {name:wz.name, date:wz.date, place:wz.place, city:wz.city, kind:t.kind, timing:t.timing, finish_device:t.timing === "chips" ? "FINISH" : "JUDGE",
-      push_wiclax:t.timing === "chips", heats_sequential:t.timing === "judge", organizer:(events.find(x => x.organizer) || {}).organizer || ""};
+    const body = {name:wz.name, date:wz.date, place:wz.place, city:wz.city, kind:"stadium", timing:t.timing, finish_device:"JUDGE",
+      heats_sequential:t.timing === "judge", organizer:(events.find(x => x.organizer) || {}).organizer || ""};
     const ev = await api("/api/events", body);
     const upd = {reg_distances:dists.join("\n")};
     const rules = [...(wz.rules || []).filter((_, k) => (wz.sel || []).includes(k)).map(r => r.line), ...wz.customRules.split("\n").map(x => x.trim()).filter(Boolean)];
     if (rules.length) upd.reg_rules = rules.join("\n");
-    if (wz.open) Object.assign(upd, {reg_open:true, pub_site:wz.site, level:t.kind === "mass" ? "mass" : "region"});
+    if (wz.open) Object.assign(upd, {reg_open:true, pub_site:wz.site, level:"region"});
     else if (flow.includes("reg")) upd.pub_site = wz.site;
     if (wz.deadline) upd.reg_deadline = wz.deadline;
     await api(`/api/events/${ev.id}`, upd);
@@ -1768,13 +1438,11 @@ $("wzNext").onclick = async () => {
 $("btnCancel").onclick = () => { if (editId && tabName()==="prep") openForm(curEvent(), "prep"); else $("evForm").classList.add("hide"); };
 $("btnSave").onclick = async () => {
   const body = {name:$("fName").value.trim(), date:$("fDate").value||null, place:$("fPlace").value.trim(),
-    finish_device:$("fFinish").value||null, min_time_sec:Number($("fMin").value||0), alert_silence_min:Number($("fSilence").value||0),
-    push_wiclax:$("fPush").checked, notes:$("fNotes").value.trim(),
+    finish_device:"JUDGE", notes:$("fNotes").value.trim(),
     start_clock:$("fStartClock").value.trim(), organizer:$("fOrg").value.trim(),
     chief_judge:$("fJudge").value.trim(), chief_secretary:$("fSecr").value.trim(), heats_sequential:$("fSeq").checked, team_best:$("fTeam").value || null,
-    kind:(document.querySelector('input[name=fKind]:checked')||{}).value||"mass", timing:$("fTiming").value,
+    kind:"stadium", timing:$("fTiming").value,
     date_end:$("fDateEnd").value||null, city:$("fCity").value.trim()};
-  if (body.timing !== "chips") { body.finish_device = "JUDGE"; body.push_wiclax = false; }
   if (body.timing === "manual" || body.timing === "lynx") body.heats_sequential = false;
   if (!body.name) return toast("Укажите название");
   try{
@@ -1792,7 +1460,7 @@ $("evList").onclick = async (e) => {
     if (act === "reopen") return reopenEv(id);
     if (act === "arch") { await api(`/api/events/${id}/archive`, {}); toast("Перенесено в архив"); loadEvents._sig = null; return loadEvents(); }
     if (act === "del") {
-      if (!confirm(`Удалить «${ev.name}»? Отметки ридеров в архиве останутся; удалятся карточка, забеги, список участников и ручные отметки.`)) return;
+      if (!confirm(`Удалить «${ev.name}»? Удалятся карточка, забеги, список участников и ручные отметки.`)) return;
       await api(`/api/events/${id}/delete`, {}); if (curId===id) curId=null; loadEvents._sig = null; await loadEvents(); return toast("Удалено");
     }
   }catch(err){ return toast("Ошибка: "+err.message); }
@@ -1801,76 +1469,9 @@ $("evList").onclick = async (e) => {
 $("evList").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("evrow")) { e.preventDefault(); openEvent(+e.target.dataset.id); } });
 async function loadEntries(){
   if (curId == null) return;
-  try{ const r = await api(`/api/events/${curId}/entries`); $("dEntries").value = r.text; $("dEntriesInfo").textContent = `в списке: ${r.count}`; }catch(e){}
+  try{ const r = await api(`/api/events/${curId}/entries`); $("dEntriesInfo").textContent = r.count ? `Сейчас в списке: ${r.count}` : "Список пока пуст — участники появятся после подтверждения заявок."; }catch(e){}
 }
-$("btnClax").onclick = () => {
-  const ev = curEvent(); if (!ev) return;
-  const i = document.createElement("input"); i.type = "file"; i.accept = ".clax,.xml";
-  i.onchange = async () => {
-    const f = i.files[0]; if (!f) return;
-    const blob = await f.arrayBuffer();
-    const post = async (q) => { const r = await fetch(`/api/events/${ev.id}/clax${q}`, {method:"POST",
-      headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}, body:blob});
-      const d = await r.json().catch(()=>({})); if (!r.ok) throw new Error(d.error||r.status); return d; };
-    try{
-      const c = await post("?check=1");
-      if (!confirm(`Файл Wiclax «${c.source}» (${c.dates}):\n• участников: ${c.entries}\n• с чипами: ${c.with_chip}\n• дистанций: ${c.parcours.length}\n\nТекущий список участников и забеги «${ev.name}» будут заменены. Продолжить?`)) return;
-      const d = await post("");
-      toast(`Загружено: ${d.entries} участников, чипов ${d.with_chip}, дистанций ${d.parcours}`);
-      await loadEvents(); loadEntries();
-    }catch(err){ toast("Ошибка: " + err.message); }
-  };
-  i.click();
-};
-$("nAdd").onclick = async () => {
-  const bib = $("nBib").value.trim(), name = $("nName").value.trim().replace(/;/g, " ");
-  if (!bib || !name) { (bib ? $("nName") : $("nBib")).focus(); return toast("Укажите номер и фамилию с именем"); }
-  const lines = $("dEntries").value.split("\n").filter(l => l.trim());
-  if (lines.some(l => l.split(";")[0].trim() === bib) && !confirm(`Номер ${bib} уже есть в списке. Добавить ещё одного с этим номером?`)) return;
-  const clean = (v) => v.trim().replace(/;/g, " ");
-  if (!$("nRank").value) { $("nRank").focus(); return toast("Укажите разряд или звание; если разряда нет — «Б/р»"); }
-  lines.push([bib, clean($("nChip").value), $("nWave").value, name, clean($("nYear").value), clean($("nTeam").value), "", "", "", "", "", "", $("nRank").value].join(";").replace(/;+$/, ""));
-  try{
-    const r = await api(`/api/events/${curId}/entries`, {text: lines.join("\n")});
-    $("dEntriesInfo").textContent = `в списке: ${r.count}`;
-    ["nBib", "nName", "nYear", "nChip"].forEach(i => $(i).value = ""); $("nRank").value = "";
-    await loadEntries(); loadEvents._sig = null; await loadEvents(); $("nBib").focus(); toast(`${name} добавлен(а)`);
-  }catch(e){ toast("Ошибка: " + e.message); }
-};
-["nBib", "nName", "nYear", "nTeam", "nChip"].forEach(i => $(i).addEventListener("keydown", (e) => { if (e.key === "Enter") $("nAdd").click(); }));
-$("btnEntries").onclick = async () => {
-  try{
-    const r = await api(`/api/events/${curId}/entries`, {text:$("dEntries").value});
-    $("dEntriesInfo").textContent = `сохранено: ${r.count}` + (r.bad_lines.length ? ` · пропущены строки: ${r.bad_lines.join(", ")}` : "");
-    await loadEvents(); toast("Список сохранён");
-  }catch(e){ toast("Ошибка: "+e.message); }
-};
-/* загрузка файла: CSV/TXT сразу, Excel — через SheetJS */
-const drop = $("drop");
-["dragover","dragenter"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave","drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
-drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) readFile(f); });
-drop.addEventListener("click", () => { const i=document.createElement("input"); i.type="file"; i.accept=".csv,.txt,.xlsx,.xls"; i.onchange=()=>i.files[0]&&readFile(i.files[0]); i.click(); });
 function loadScript(src){ return new Promise((ok,fail)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=fail; document.head.appendChild(s); }); }
-async function readFile(f){
-  try{
-    let text;
-    if (/\.xlsx?$/i.test(f.name)) {
-      if (!window.XLSX) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
-      const wb = XLSX.read(await f.arrayBuffer(), {type:"array"});
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
-      text = rows.filter(r => r && r.some(c => String(c??"").trim())).map(r => Array.from(r, c => String(c??"").replace(/;/g,",").trim()).join(";").replace(/;+$/,"")).join("\n");
-    } else {
-      const buf = await f.arrayBuffer();
-      text = new TextDecoder("utf-8").decode(buf);
-      if (text.includes("�")) text = new TextDecoder("windows-1251").decode(buf);
-    }
-    // строку заголовков оставляем — сервер сам поймёт колонки по названиям
-    const lines = text.split(/\r?\n/);
-    $("dEntries").value = lines.join("\n").trim();
-    toast(`Загружено строк: ${lines.filter(Boolean).length}. Проверьте и нажмите «Сохранить список»`);
-  }catch(e){ toast("Не удалось прочитать файл: " + e.message + (/xls/i.test(f.name)?" (сохраните Excel как CSV)":"")); }
-}
 
 /* ---------- регистрация ---------- */
 // дистанции из настроек: «5 км | лимит 300 | номера с 1» → «5 км»; solo — без эстафет
@@ -1890,7 +1491,7 @@ function renderRegHead(force){
   if (!force && regLoaded === ev.id && regBusy()) return;
   if (force || regLoaded !== ev.id) {
     $("gOpen").checked = !!ev.reg_open; $("gDeadline").value = (ev.reg_deadline||"").slice(0,16);
-    $("gLanes").value = ev.reg_lanes || 8; $("gDist").value = ev.reg_distances||""; $("gRules").value = ev.reg_rules||"";
+    $("gDist").value = ev.reg_distances||""; $("gRules").value = ev.reg_rules||"";
     $("gInfo").value = ev.reg_info||""; $("gConsent").value = ev.reg_consent||"";
     $("gSettings").open = !(ev.reg_distances||"").trim();
   }
@@ -1901,10 +1502,6 @@ function renderRegHead(force){
     : "⚠️ Публичный адрес не настроен: эта ссылка работает только через VPN. Настройка домена — <span class=\"mono\">reg-setup.sh</span> в README.";
   drawQr(ev.reg_url || "");
   $("gCsv").href = `/api/events/${ev.id}/regs.csv`;
-  $("gTpl").href = `/api/events/${ev.id}/template.xlsx`;
-  $("lnkWiclax").href = `/api/events/${ev.id}/wiclax.csv`;
-  $("lnkClax").href = `/api/events/${ev.id}/event.clax`;
-  setStartLink(ev);
   const dists = distNames(ev, true);
   $("mDist").innerHTML = dists.map(d => `<option>${esc(d)}</option>`).join("") || "<option value=\"\">сначала задайте дистанции</option>";
 }
@@ -1929,19 +1526,18 @@ $("gRulesDefault").onclick = (e) => { e.preventDefault(); if ($("gRules").value.
 $("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select(); try{ document.execCommand("copy"); toast("Ссылка скопирована"); }catch(e){ toast("Скопируйте вручную: Ctrl+C"); } };
 $("gSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
-  const body = {reg_open:$("gOpen").checked, reg_deadline:$("gDeadline").value||null, reg_lanes:+$("gLanes").value||8,
-    reg_distances:$("gDist").value.trim(), reg_rules:$("gRules").value.trim(), reg_info:$("gInfo").value.trim(), reg_consent:$("gConsent").value.trim()};
+  const body = {reg_open:$("gOpen").checked, reg_deadline:$("gDeadline").value||null, reg_distances:$("gDist").value.trim(), reg_rules:$("gRules").value.trim(), reg_info:$("gInfo").value.trim(), reg_consent:$("gConsent").value.trim()};
   if (body.reg_open && !body.reg_distances) return toast("Укажите хотя бы одну дистанцию");
   try{ await api(`/api/events/${ev.id}`, body); await loadEvents(); renderRegHead(true); $("gSaved").textContent = "сохранено " + new Date().toLocaleTimeString("ru-RU",{hour12:false}); toast("Сохранено"); }
   catch(e){ toast("Ошибка: "+e.message); }
 };
 async function loadRegs(){
-  const ev = curEvent(); if (!ev) { $("gBody").innerHTML = '<tr><td colspan="11" class="empty">Выберите соревнование</td></tr>'; return; }
+  const ev = curEvent(); if (!ev) { $("gBody").innerHTML = '<tr><td colspan="10" class="empty">Выберите соревнование</td></tr>'; return; }
   if (regBusy() && regLoaded === ev.id) return;
   try{
-    const [r, sl] = await Promise.all([api(`/api/events/${ev.id}/regs`), api(`/api/events/${ev.id}/startlist`)]);
+    const r = await api(`/api/events/${ev.id}/regs`);
     regData = r; regDefaults = r.default_rules; $("gConsent").placeholder = r.consent; regLoaded = ev.id;
-    renderRegs(); renderHeats(sl);
+    renderRegs();
   }catch(e){ console.warn(e); }
 }
 function renderRegs(){
@@ -1950,7 +1546,7 @@ function renderRegs(){
   const fcur = $("gFilter").value;
   $("gTabs").innerHTML = [["", "Все", c.pending + c.approved + c.rejected], ["pending", "Ждут проверки", c.pending], ["approved", "Подтверждены", c.approved], ["rejected", "Отклонены", c.rejected]]
     .map(([v, t, n]) => `<button data-f="${v}" class="${v===fcur?"on":""}">${t}<i>${n}</i></button>`).join("");
-  $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "") + (r.unassigned ? `<span>подтверждены, но не в забеге: ${r.unassigned}</span>` : "")
+  $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "")
     + (r.dist_info||[]).filter(d => d.limit || d.legs).map(d => `<span${d.left === 0 ? ' style="color:var(--track)"' : ""}>${esc(d.name)}: ${d.taken}${d.limit ? " из " + d.limit : ""}${d.legs ? " команд" : ""}${d.left === 0 ? " — мест нет" : ""}</span>`).join("");
   const dists = distNames(ev);
   const cats = [...new Set(((ev.reg_rules||"").split("\n").map(l=>l.split(";")[0].trim()).filter(Boolean)).concat(r.regs.map(x=>x.category).filter(Boolean)))];
@@ -1970,15 +1566,14 @@ function renderRegs(){
     <td class="small">${esc(x.team||"")}<div class="muted">${esc(x.coach||"")}</div></td>
     <td><span class="st-pill ${x.status}">${stName[x.status]}</span></td>
     <td style="white-space:nowrap">${x.status!=="approved"?'<button class="sm ok" data-st="approved" title="Подтвердить">✓ Подтвердить</button>':""}${x.status!=="rejected"?' <button class="sm danger" data-st="rejected" title="Отклонить">✕</button>':""}${x.status!=="pending"?' <button class="sm" data-st="pending" title="Вернуть на рассмотрение">↺</button>':""}</td>
-    <td class="small">${x.entry_bib?`<b>${esc(x.entry_bib)}</b><div class="muted">${esc(x.entry_wave||"")}${x.entry_lane?" · дор. "+x.entry_lane:""}</div>`:"—"}</td>
-  </tr>`).join("") || `<tr><td colspan="11" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
+  </tr>`).join("") || `<tr><td colspan="10" class="empty">${r.regs.length?"Ничего не найдено":"Заявок пока нет. Откройте приём и разошлите ссылку."}</td></tr>`;
 }
 $("gFilter").onchange = renderRegs; $("gSearch").oninput = renderRegs;
 $("gTabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (!b) return; $("gFilter").value = b.dataset.f; renderRegs(); });
 $("gBody").addEventListener("click", async (e) => {
   const st = e.target.dataset.st; if (!st) return;
   const id = e.target.closest("tr").dataset.id;
-  if (st === "rejected" && !confirm("Отклонить заявку? Если участник уже в забеге — он будет убран из стартового списка.")) return;
+  if (st === "rejected" && !confirm("Отклонить заявку? Если участник уже в стартовом списке — он будет из него убран.")) return;
   try{ await api(`/api/events/${curId}/regs/${id}`, {status:st}); regLoaded = null; await loadRegs(); loadEvents(); }catch(err){ toast("Ошибка: "+err.message); }
 });
 $("gBody").addEventListener("change", async (e) => {
@@ -2031,45 +1626,6 @@ $("gImport").onclick = () => {
   };
   i.click();
 };
-// стадион: сетка и протоколы — только в мастере; здесь — одна ссылка туда (без дублей кнопок)
-function setStartLink(ev){
-  ev = ev || curEvent(); if (!ev) return;
-  $("gStartList").href = `/protocol?event=${ev.id}&kind=start`;
-  const stadium = ev.kind === "stadium";
-  $("gGridCtl").classList.toggle("hide", stadium); $("gWizGo").classList.toggle("hide", !stadium);
-}
-$("gResetHeats").onclick = async () => {
-  const ev = curEvent(); if (!ev) return;
-  if (!confirm("Сбросить сетку и удалить все забеги этого соревнования? Номера участников сохранятся, а распределение по забегам и дорожкам — нет. Это действие нельзя отменить.")) return;
-  try{ const r = await api(`/api/events/${ev.id}/resetheats`, {}); toast(`Сетка сброшена: забегов ${r.waves}, участников в нераспределённых ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
-  catch(err){ toast("Ошибка: "+err.message); }
-};
-async function genHeats(mode){
-  const ev = curEvent(); if (!ev) return;
-  const lanes = +$("gLanes").value || 8;
-  if (regData && regData.counts.pending && !confirm(`${regData.counts.pending} заявок ещё на рассмотрении — они не попадут в ${mode==="list"?"список":"забеги"}. Продолжить?`)) return;
-  if (ev.waves.length && !confirm(mode==="list" ? "Забеги уже есть. Заменить их одним общим списком? Номера участников сохранятся." : "Забеги уже есть. Сформировать заново? Текущие забеги и стартовый список будут заменены (номера участников сохранятся).")) return;
-  try{ const r = await api(`/api/events/${ev.id}/heats`, {lanes, mode}); toast(mode==="list" ? `Общий список сформирован, участников: ${r.entries}` : `Сформировано забегов: ${r.heats.length}, участников: ${r.entries}`); await loadEvents(); regLoaded = null; await loadRegs(); }
-  catch(err){ toast("Ошибка: "+err.message); }
-}
-$("gHeats").onclick = () => genHeats("heats");
-function renderHeats(sl){
-  const names = sl.heats.map(h => h.name);
-  const opt = (cur) => `<option value="">— без забега</option>` + names.map(n => `<option ${n===cur?"selected":""}>${esc(n)}</option>`).join("");
-  $("gHeatsBox").innerHTML = sl.heats.map(h => `<div class="heat"><div class="hh"><b>${esc(h.name)}</b><span class="small muted">${esc([h.category,h.distance].filter(Boolean).join(" · "))} · ${h.entries.length} чел.${h.state!=="planned"?" · "+({running:"идёт",finished:"завершён"})[h.state]:""}</span></div>
-    <table><thead><tr><th>Дор.</th><th>№</th><th>Участник</th><th>Заявл.</th><th>Перенести</th></tr></thead><tbody>
-    ${h.entries.map(e => `<tr data-bib="${esc(e.bib)}"><td>${h.name==="Общий список"?'<span class="muted">—</span>':`<input class="lane mono" value="${e.lane??""}" ${h.state!=="planned"?"disabled":""}>`}</td><td><input class="bibin mono" value="${esc(e.bib)}" title="Нагрудный номер — можно изменить" aria-label="Нагрудный номер"></td>
-      <td>${esc(e.name||"")}<div class="small muted">${esc([e.birth_year,e.team].filter(Boolean).join(" · "))}</div></td><td class="mono">${esc(e.seed||"")}</td>
-      <td><select class="mv" ${h.state!=="planned"?"disabled":""}>${opt(h.name)}</select></td></tr>`).join("") || '<tr><td colspan="5" class="empty">пусто</td></tr>'}
-    </tbody></table></div>`).join("") || '<div class="card empty">Забегов пока нет — подтвердите заявки и нажмите «Сформировать забеги».</div>';
-  const loose = regData ? regData.regs.filter(x => x.status==="approved" && !x.entry_bib) : [];
-  const noHeat = sl.no_heat || [];
-  $("gLoose").innerHTML = (loose.length || noHeat.length) ? `<h2>Не распределены</h2><div class="tbl"><table><tbody>
-    ${noHeat.map(e => `<tr data-bib="${esc(e.bib)}"><td><input class="bibin mono" value="${esc(e.bib)}" aria-label="Нагрудный номер"></td><td>${esc(e.name||"")}</td><td class="small muted">${esc(e.category||"")}</td><td>в списке без забега</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
-    ${loose.map(x => `<tr data-reg="${x.id}"><td><input class="bibin mono" placeholder="авто" title="Можно вписать номер самому; пусто — выдастся следующий" aria-label="Нагрудный номер"></td><td>${esc(x.last_name)} ${esc(x.first_name)} <span class="small muted">${esc(x.birth_year)}</span></td><td class="small muted">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td><td class="small">подтверждена после формирования забегов</td><td><select class="mv">${opt("")}</select></td></tr>`).join("")}
-    </tbody></table></div>` : "";
-  renderCart();
-}
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
 const sexOfE = (e) => { const x = String(e.sex||"").toUpperCase(); if (x==="М"||x==="Ж") return x; const c = String(e.category||"").toLowerCase();
   if (/юнош|мальч|мужч|^муж/.test(c)) return "М"; if (/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return ""; };
@@ -2128,14 +1684,17 @@ document.addEventListener("change", (e) => {
   cartOp({op: "toggle", id: c.dataset.cs, on: c.checked});
 });
 
-/* ---------- Мастер протоколов: бег и техника — две ветки по пять шагов ---------- */
+/* ---------- Мастер протоколов: бег и техника — одни и те же пять шагов ---------- */
 const wzp = (() => {
   const W = {disc: "", step: 1, ages: [], sex: "", lanes: 8, regs: [], sl: null, ev: null};
   // границы возрастных групп — только из справочника seed/disciplines.json (ages[].min/max), в коде их нет
   const ageBy = (id) => (DISC.ages || []).find(a => a.id === id);
-  const STEP_T = {
-    run:   ["Фильтр участников", "Нагрудные номера", "Забеги и стартовый протокол", "Ввод на финише", "Итоговый протокол"],
-    tech:  ["Фильтр участников", "Нагрудные номера", "Общий список и стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
+  // названия шагов одинаковы для бега и техники; различия — в уточнениях (подписях) шагов 3 и 4
+  const STEP_T = ["Дисциплина и фильтр", "Нагрудные номера", "Стартовый протокол", "Ввод результатов", "Итоговый протокол"];
+  const STEP_NOTE = {
+    run:  {3: "забеги, 3 секундомера, лист книжный", 4: "на финише"},
+    tech: {3: "общий список, 6 попыток, лист альбомный", 4: "с сектора"}};
+  const stepHead = (n, k) => `<h2>Шаг ${n}. ${STEP_T[n - 1]}${STEP_NOTE[k][n] ? ` <small class="muted" style="font:400 15px var(--body)">— ${STEP_NOTE[k][n]}</small>` : ""}</h2>`;
   // автоопределение: попытки или расстояние/высота — техника; время — бег; прочее (очки) ведём по беговой ветке
   const kindOf = (name) => { const d = discBy(name); if (!d) return "run"; if (d.attempts || d.result === "distance" || d.result === "height") return "tech"; return "run"; };
   const isPoints = (name) => { const d = discBy(name); return !!d && d.result === "points"; };
@@ -2151,7 +1710,7 @@ const wzp = (() => {
       if ((e.distance || h.distance) !== W.disc) return;
       if (W.sex && sexOfE(e) !== W.sex) return;
       if (!ageOk({birth_year: e.birth_year})) return;
-      out.push(Object.assign({}, e, {_heat: h.name})); }));
+      out.push(Object.assign({}, e, {_heat: h.name, distance: e.distance || h.distance})); }));
     return out;
   };
   const myHeats = () => W.sl ? W.sl.heats.filter(h => h.distance === W.disc || h.entries.some(e => e.distance === W.disc)) : [];
@@ -2159,7 +1718,7 @@ const wzp = (() => {
     const e0 = ev(); if (!e0) return;
     // судье на секторе заявки (личные данные) не нужны и не выдаются — работает по стартовому списку
     try{ const [r, sl, rs] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
-      W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
+      W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib + "|" + (x.distance || "")] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
   }
   async function open(){
     const e0 = ev(); if (!e0) { $("wzpBody").innerHTML = '<p class="muted">Выберите соревнование в меню вверху.</p>'; return; }
@@ -2167,7 +1726,7 @@ const wzp = (() => {
     await loadDisc();
     if (W.evId !== e0.id) {
       // 6.0: активная дисциплина, шаг и фильтры — общие для всех секретарей, лежат в базе (таблица ui_state), а не в браузере
-      W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; W.uiRev = -1;
+      W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; W.uiRev = -1; W.lanes = e0.reg_lanes || 8;
       try{ await uiSync(true); }catch(x){ console.warn(x); }
       if (W.forceStep) { W.step = W.forceStep; W.forceStep = 0; save(); }
     }
@@ -2175,7 +1734,7 @@ const wzp = (() => {
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
     if (!names.includes(W.disc)) W.disc = names[0] || "";
-    $("wzpDisc").value = W.disc; render();
+    $("wzpDisc").value = W.disc; render(); renderCart();
   }
   // запись общего состояния на сервер; ответ с номером версии запоминаем, чтобы собственное эхо не принимать за чужое
   function save(){
@@ -2205,7 +1764,10 @@ const wzp = (() => {
   function applyDraw(){ const sel = $("wzpDisc"); if (sel && [...sel.options].some(o => o.value === W.disc)) sel.value = W.disc; render(); }
   function go(n){
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Уйти с шага без сохранения?")) return;
-    W.bibDirty = false; W.deferred = false; W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+    W.bibDirty = false; W.deferred = false; W.step = Math.max(1, Math.min(5, n)); save(); render();
+    if (W.step === 2 || W.step === 3) bgReload(W.step); }
+  // на шагах 2 и 3 заявки и список перезагружаем в фоне (их мог изменить другой секретарь); экран перерисовываем, только если человек ничего не вводит
+  async function bgReload(step){ await load(); if (W.step === step && !busyEditing() && document.body.dataset.view === "wizard") render(); }
   // перерисовка тела Мастера без прыжков: высота держится до конца отрисовки, прокрутка не трогается, фокус возвращается в ту же ячейку
   const focusKey = () => { const a = document.activeElement, b = $("wzpBody"); if (!a || !b.contains(a) || a === b) return null;
     const tr = a.closest("tr[data-bib]"); return {id: a.id || "", bib: tr ? tr.dataset.bib : "", cls: a.className || "", i: a.dataset.i ?? "", pos: a.selectionStart}; };
@@ -2220,9 +1782,9 @@ const wzp = (() => {
     requestAnimationFrame(() => { bd.style.minHeight = ""; });
   }
   function draw(){
-    const k = kind(), t = STEP_T[k];
+    const k = kind(), t = STEP_T;
     $("wzpKind").className = "wzp-kind " + k;
-    $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника · попытки · общий список" : "Бег · забеги и дорожки" + (isPoints(W.disc) ? " (очки)" : "");
+    $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
     const body = $("wzpBody");
     if (!W.disc) { body.innerHTML = '<p class="muted">В этом соревновании пока нет дисциплин. Добавьте их на этапе «Подготовка» и примите заявки.</p>'; return; }
@@ -2233,12 +1795,12 @@ const wzp = (() => {
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
     const ages = (DISC.ages || []);
-    body.innerHTML = `<h2>Шаг 1. Кого включаем</h2>
-      <p class="small muted" style="margin:0">Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
+    body.innerHTML = `${stepHead(1, k)}
+      <p class="small muted" style="margin:0">Дисциплина выбрана вверху. Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
       <fieldset class="pmode"><legend>Возрастная группа</legend><div class="wzp-opts">${ages.map(a => `<label><input type="checkbox" data-age="${esc(a.id)}" ${W.ages.includes(a.id) ? "checked" : ""}> ${esc(a.name)}</label>`).join("")}</div><span class="small muted">Ничего не отмечено — все возрасты.</span></fieldset>
       <fieldset class="pmode"><legend>Пол</legend><div class="wzp-opts">${[["", "Все"], ["М", "Мальчики / юноши / мужчины"], ["Ж", "Девочки / девушки / женщины"]].map(([v, t]) => `<label><input type="radio" name="wzpSex" value="${v}" ${W.sex === v ? "checked" : ""}> ${t}</label>`).join("")}</div></fieldset>
       <p><b>Подходит участников: ${cnt("")}</b> <span class="small muted">· мальчиков ${cnt("М")} · девочек ${cnt("Ж")}${pend ? ` · ещё ${pend} заявок ждут проверки во вкладке «Регистрация»` : ""}</span></p>
-      ${nav(false, "К сетке")}`;
+      ${nav(false, "К нагрудным номерам")}`;
   }
   function heatsTable(){
     const hs = myHeats();
@@ -2253,14 +1815,15 @@ const wzp = (() => {
   async function loadBibs(){ W.bibs = await api(`/api/events/${ev().id}/bibs?${bibQ()}`); return W.bibs; }
   function step2(body, k){
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
-    body.innerHTML = `<h2>Шаг 2. Регистрация нагрудных номеров</h2>
+    body.innerHTML = `${stepHead(2, k)}
       <p class="small muted" style="margin:0">${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))}.
         Впишите нагрудный номер каждому участнику с клавиатуры (Enter — к следующему) и нажмите «Сохранить нагрудные номера». Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните снова: стартовый список, отметки и результаты переедут на новый номер.</p>
+      <p class="small" style="margin:0"><b>Номер спортсмена, заявленного на несколько видов, один на все виды:</b> впишите его один раз — он запишется во все дисциплины.</p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary big" type="button" id="bibSave" disabled>💾 Сохранить нагрудные номера</button>
         <span class="wzp-sync" id="bibSync" role="status" aria-live="polite"></span></div>
-      ${nav(true, k === "tech" ? "К общему списку" : "К забегам")}`;
+      ${nav(true, "К стартовому протоколу")}`;
     loadBibs().then(renderBibs).catch(err => { $("bibBox").innerHTML = `<p class="wzp-lock">Не удалось загрузить участников: ${esc(err.message)}</p>`; });
   }
   function renderBibs(){
@@ -2268,10 +1831,15 @@ const wzp = (() => {
     if (!d.rows.length) { box.innerHTML = '<div class="card empty">Подтверждённых участников по фильтру шага 1 нет. Подтвердите заявки во вкладке «Регистрация» или измените фильтр.</div>'; return; }
     let last = null;
     const rows = d.rows.map((r, i) => { const c = r.category || "без категории", hd = c !== last ? `<tr class="wzp-cat"><td colspan="7">${esc(c)}</td></tr>` : ""; last = c;
-      return hd + `<tr data-ids="${r.ids.join(",")}" data-orig="${esc(r.bib)}">
+      const also = r.also || [], other = also.map(a => a.distance).join(", ");
+      const from = r.inherited ? (also.find(a => a.bib && a.bib === r.bib) || {}).distance : "";
+      const alsoHtml = also.length ? `<div class="small muted">также: ${esc(other)}</div>` : "";
+      const note = r.mismatch ? `<div class="small bibwarn">В других видах номер другой (${esc(also.map(a => a.distance + " — " + (a.bib || "без номера")).join("; "))}) — при сохранении выровняется</div>`
+        : r.inherited ? `<div class="small muted">Номер подставлен${from ? " из «" + esc(from) + "»" : " из другой дисциплины"}</div>` : "";
+      return hd + `<tr data-ids="${r.ids.join(",")}" data-orig="${esc(r.bib)}"${r.mismatch || r.inherited ? ' data-pending="1"' : ""}${r.mismatch ? ' class="mismatch"' : ""}>
         <td class="n">${i + 1}</td>
         <td><input class="bibin2" value="${esc(r.bib)}" maxlength="10" inputmode="numeric" autocomplete="off" aria-label="Нагрудный номер: ${esc(r.name)}" placeholder="№"></td>
-        <td><b>${esc(r.name)}</b>${r.members ? `<div class="small muted">${esc(r.members)}</div>` : ""}</td><td>${esc(r.birth_year)}</td><td class="small">${esc(r.rank)}</td><td class="small">${esc(r.team)}</td>
+        <td><b>${esc(r.name)}</b>${r.members ? `<div class="small muted">${esc(r.members)}</div>` : ""}${alsoHtml}${note}</td><td>${esc(r.birth_year)}</td><td class="small">${esc(r.rank)}</td><td class="small">${esc(r.team)}</td>
         <td class="small muted">${r.has_result ? "есть результат" : r.in_grid ? "в сетке" : ""}</td></tr>`; }).join("");
     box.innerHTML = `<p class="small" id="bibStat"></p>
       <div class="tbl"><table class="wzp-grid bibtbl"><thead><tr><th>№ п/п</th><th>Нагрудный номер</th><th>Фамилия, имя</th><th>Год рожд.</th><th>Разряд</th><th>Команда</th><th></th></tr></thead><tbody id="bibRows">${rows}</tbody></table></div>`;
@@ -2281,14 +1849,14 @@ const wzp = (() => {
   function bibCheck(){
     const trs = [...document.querySelectorAll("#bibRows tr[data-ids]")]; if (!trs.length) return;
     const cnt = {}; trs.forEach(tr => { const v = tr.querySelector("input").value.trim(); if (v) cnt[v] = (cnt[v] || 0) + 1; });
-    let empty = 0, dup = 0, dirty = 0;
+    let empty = 0, dup = 0, dirty = 0, changed = 0; const mism = trs.filter(tr => tr.classList.contains("mismatch")).length;
     trs.forEach(tr => { const i = tr.querySelector("input"), v = i.value.trim();
-      const isDup = v && cnt[v] > 1, isDirty = v !== tr.dataset.orig;
+      const isDup = v && cnt[v] > 1, isDirty = v !== tr.dataset.orig || tr.dataset.pending === "1";   // расхождение или подставленный номер тоже нужно сохранить
       i.classList.toggle("err", !!isDup); tr.classList.toggle("dirty", isDirty); tr.classList.toggle("nobib", !v);
-      if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; });
-    $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
+      if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; if (v !== tr.dataset.orig) changed++; });
+    $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${mism ? ` · <span class="warn">разные номера в видах: ${mism}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
     $("bibSave").disabled = !dirty || dup > 0;
-    W.bibDirty = dirty > 0;
+    W.bibDirty = changed > 0;          // предупреждение при уходе — только если человек что-то изменил руками
   }
   async function saveBibs(){
     const rows = [...document.querySelectorAll("#bibRows tr.dirty")].map(tr => ({ids: tr.dataset.ids.split(",").map(Number), bib: tr.querySelector("input").value.trim()}));
@@ -2308,14 +1876,14 @@ const wzp = (() => {
   // шаг 3: сетка и стартовый протокол на одном экране — ровно две кнопки управления сеткой, ниже бланк с вкладками групп
   function step3(body, k){
     const tech = k === "tech", n = regsIn().length, q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
-    body.innerHTML = `<h2>Шаг 3. ${tech ? "Общий список и стартовый протокол" : "Забеги и стартовый протокол"}</h2>
-      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожки заблокированы. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
+    body.innerHTML = `${stepHead(3, k)}
+      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
         : `<p class="small muted" style="margin:0">Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3».</p>
            <label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
       <div id="bibWarn"></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "⚡ Сформировать общий список" : "⚡ Сформировать забеги"}</button>
         <button class="danger" type="button" id="wzpReset" ${myHeats().length ? "" : "disabled"}>❌ Сбросить сетку / Удалить забеги</button>
-        <span class="small muted">${n} участников по фильтру шага 1</span></div>
+        <span class="small muted">${n} подтверждённых участников по фильтру шага 1</span></div>
       ${myHeats().length ? `<div class="row xlsrow"><a class="btn xls" id="wzpXlsx" href="/api/events/${ev().id}/startlist.xlsx?${bibQ()}">📊 Выгрузить стартовый протокол в Excel (.xlsx)</a>
         <span class="small muted">${tech ? "Порядок выполнения, 6 попыток и «Лучший результат» — пустые графы для записи ручкой на секторе." : "Забег, дорожка и три пустые графы «Секундомер 1–3» — для записи времени ручкой на финише."}</span></div>` : ""}
       ${myHeats().length ? `<p class="small muted" style="margin:0">Над бланком — вкладки: «Все участники», «Мальчики», «Девочки» и каждая категория. Нужную вкладку можно сразу положить в корзину печати.</p>
@@ -2324,9 +1892,9 @@ const wzp = (() => {
         : '<div class="card empty">Сетки по этой дисциплине пока нет — нажмите «⚡ Сформировать…».</div>'}
       ${nav(true, "К вводу результатов")}`;
     // без ручных номеров сетку не построить: показываем, сколько не хватает, и ведём на шаг 2
+    // кнопка «Сформировать» доступна всегда, когда есть подтверждённые участники; нехватку номеров только показываем
     loadBibs().then(d => { const miss = d.total - d.with_bib, w = $("bibWarn"); if (!w) return;
-      w.innerHTML = miss ? `<div class="wzp-lock">✍️ У ${miss} из ${d.total} участников нет нагрудного номера — сетку не сформировать. <button type="button" class="sm" data-s="2">Вписать номера на шаге 2</button></div>` : "";
-      const g = $("wzpGen"); if (g && miss) g.disabled = true; }).catch(() => {});
+      w.innerHTML = miss ? `<div class="wzp-lock">✍️ У ${miss} из ${d.total} участников нет нагрудного номера. <button type="button" class="sm" data-s="2">Вписать номера на шаге 2</button></div>` : ""; }).catch(() => {});
   }
   async function gen(){
     const e0 = ev(), tech = kind() === "tech";
@@ -2340,15 +1908,15 @@ const wzp = (() => {
   }
   async function reset(){
     const e0 = ev();
-    if (!confirm(`Сбросить сетку дисциплины «${W.disc}» и удалить все её забеги и списки? Номера участников сохранятся. Это действие нельзя отменить.`)) return;
-    try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves}, участников ${r.entries}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
+    if (!confirm(`Сбросить сетку дисциплины «${W.disc}»? Время старта будет обнулено, забеги удалены. Введённые результаты и номера сохранятся. После этого список можно сформировать заново — в него войдут все подтверждённые участники.`)) return;
+    try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves ?? 0}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
-    body.innerHTML = `<h2>Шаг 5. Итоговый протокол</h2>
+    body.innerHTML = `${stepHead(5, k)}
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -2357,6 +1925,7 @@ const wzp = (() => {
         <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол на сайте</b><span class="small muted"> — места, результаты и разряды</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
+      <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
       <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>
       <div class="row wzp-ctl" style="margin-top:14px"><button type="button" id="wzpFinish" class="${ev().status === "finished" ? "primary" : ""}">${ev().status === "finished" ? "↩️ Возобновить соревнование" : "🏁 Завершить соревнование"}</button>
@@ -2364,7 +1933,7 @@ const wzp = (() => {
   }
   // «Вып. разряд»: пусто — считает система по нормам ЕВСК (видно в подписи); «—» — вручную «не выполнен»; иначе — разряд секретаря
   const DONE_RANKS = ["МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн."];
-  const drSel = (r) => { const cur = r.done_rank || "", auto = (W.auto || {})[r.bib] || "";
+  const drSel = (r) => { const cur = r.done_rank || "", auto = (W.auto || {})[r.bib + "|" + W.disc] || "";
     const opts = [["", auto ? `Авто: ${auto}` : "Авто: нет"], ["—", "Не выполнен"], ...[...new Set([...DONE_RANKS, ...(cur && cur !== "—" ? [cur] : [])])].map(x => [x, x])];
     return `<select class="dr${cur ? " man" : ""}" aria-label="Выполненный разряд ${esc(r.bib)}" title="Авто — по нормам ЕВСК с учётом пола, возраста, хронометража и статуса соревнований. Выберите разряд, чтобы задать его вручную — он главнее расчёта.">${opts.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`; };
   /* шаг 4: экранная сетка ввода */
@@ -2383,8 +1952,8 @@ const wzp = (() => {
       || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
     let lastCat = null;
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
-    body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
-      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговый протокол идёт только официальный результат."}
+    body.innerHTML = `${stepHead(4, k)}
+      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
@@ -2407,7 +1976,7 @@ const wzp = (() => {
     catch(err){ toast("Ошибка: " + err.message); }
   }
   const rowData = (tr) => {
-    const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
+    const row = {bib: tr.dataset.bib, distance: W.disc, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
     const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
     if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
     return row; };
@@ -2452,7 +2021,7 @@ const wzp = (() => {
     document.querySelectorAll("#wzpRows tr[data-bib]").forEach(tr => {
       const e = by[tr.dataset.bib]; if (!e || tr.classList.contains("dirty") || tr.contains(document.activeElement)) return;
       const out = tr.querySelector("[data-out]"); if (out) out.textContent = e.result || "";
-      const dr = tr.querySelector("select.dr"); if (dr && dr.options[0]) { const a = (W.auto || {})[e.bib] || ""; dr.options[0].textContent = a ? `Авто: ${a}` : "Авто: нет"; }
+      const dr = tr.querySelector("select.dr"); if (dr && dr.options[0]) { const a = (W.auto || {})[e.bib + "|" + W.disc] || ""; dr.options[0].textContent = a ? `Авто: ${a}` : "Авто: нет"; }
     });
   }
   async function clearAll(){
@@ -2460,7 +2029,7 @@ const wzp = (() => {
     if (!bibs.length) return;
     const lbl = `${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
     if (!confirm(`Удалить все результаты дисциплины «${lbl}» (${bibs.length} участников)?\n\nСотрутся секундомеры, попытки, отметки DNS/DNF и ручные разряды. Участники и сетка останутся. Это действие нельзя отменить.`)) return;
-    try{ const r = await api(`/api/events/${curId}/clearresults`, {bibs, label: lbl}); toast(`Протокол очищен: ${r.cleared}`); await load(); render(); loadResults(); }
+    try{ const r = await api(`/api/events/${curId}/clearresults`, {bibs, distance: W.disc, label: lbl}); toast(`Протокол очищен: ${r.cleared}`); await load(); render(); loadResults(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
   async function setPub(kind2, on){
@@ -2513,47 +2082,7 @@ const wzp = (() => {
     W.step = n; save(); }
   return {open, setStep, go, remote, step: () => W.step};
 })();
-async function moveEntry(tr, body){
-  try{
-    if (tr.dataset.reg) await api(`/api/events/${curId}/entry`, Object.assign({reg_id:+tr.dataset.reg}, body));
-    else await api(`/api/events/${curId}/entry`, Object.assign({bib:tr.dataset.bib}, body));
-    toast("Готово"); document.activeElement && document.activeElement.blur(); regLoaded = null; await loadRegs(); loadEvents();
-  }catch(err){ toast("Ошибка: "+err.message); regLoaded = null; loadRegs(); }
-}
-["gHeatsBox","gLoose"].forEach(id => $(id).addEventListener("change", (e) => {
-  const tr = e.target.closest("tr"); if (!tr) return;
-  if (e.target.classList.contains("bibin")) { if (tr.dataset.reg) return; return moveEntry(tr, {new_bib:e.target.value}); }
-  if (e.target.classList.contains("mv")) { const bi = tr.querySelector(".bibin"); return moveEntry(tr, {wave:e.target.value, set_bib: tr.dataset.reg && bi ? bi.value : undefined}); }
-  if (e.target.classList.contains("lane")) return moveEntry(tr, {lane:e.target.value});
-}));
-
-/* ---------- проверка чипов ---------- */
-let chkSeen = 0;
-async function loadCheck(){
-  if (curId == null) return;
-  try{
-    const c = await api(`/api/events/${curId}/check`);
-    const on = !!c.since;
-    $("btnCheckStart").textContent = on ? "Начать заново" : "Начать проверку";
-    $("btnCheckStop").disabled = !on;
-    $("chkDone").textContent = `${c.checked} / ${c.total}`;
-    $("chkUnknown").textContent = c.unknown.length ? "· " + c.unknown.length : "";
-    $("chkBar").style.width = (c.total ? Math.round(100 * c.checked / c.total) : 0) + "%";
-    chkCache = Object.assign({ev: curId}, c); renderLane();
-    $("chkLeft").innerHTML = c.total === 0 ? '<span class="muted" style="background:none">в списке участников нет чипов</span>'
-      : (c.unchecked.map(b => `<span>${esc(b)}</span>`).join("") || '<span class="muted" style="background:none">все проверены ✓</span>');
-    $("chkUnk").innerHTML = c.unknown.map(x => `<span>${esc(x)}</span>`).join("") || '<span class="muted" style="background:none">нет</span>';
-    const last = c.last[0];
-    $("chkBig").className = "checkbig" + (on && last ? (last.known ? " ok" : " bad") : "");
-    if (!on) { $("chkBig").innerHTML = '<div class="num muted">—</div><div class="sub">Нажмите «Начать проверку»</div>'; return; }
-    if (!last) { $("chkBig").innerHTML = '<div class="num muted">…</div><div class="sub">Ждём чип на коврике</div>'; return; }
-    $("chkBig").innerHTML = last.known
-      ? `<div class="num">${esc(last.bib)}</div><div class="sub">✓ ${esc(last.device)} · ${esc(last.time)} · <span class="mono">${esc(last.chip)}</span></div>`
-      : `<div class="num unknown">НЕТ В СПИСКЕ</div><div class="sub mono">${esc(last.chip)} · ${esc(last.device)} · ${esc(last.time)}</div>`;
-    if (last.id !== chkSeen) { if (chkSeen && $("chkSound").checked) beep(last.known?1200:300, last.known?.1:.4); chkSeen = last.id; }
-  }catch(e){}
-}
-/* ---------- выдача стартовых пакетов ---------- */
+/* ---------- выдача номеров ---------- */
 var pkCache = null;
 async function loadPickup(){
   if (curId == null) return;
@@ -2572,7 +2101,7 @@ function renderPickup(){
   $("pkBar").style.width = (r.total ? Math.round(100 * r.picked / r.total) : 0) + "%";
   $("pkLeft").textContent = r.total ? (r.left ? `не получили: ${r.left}` : "все получили ✓") : "";
   const list = pkMatches(), shown = list.slice(0, 60);
-  $("pkBody").innerHTML = !r.total ? '<tr><td class="empty">Стартовый список пуст — сначала сформируйте забеги или загрузите участников</td></tr>'
+  $("pkBody").innerHTML = !r.total ? '<tr><td class="empty">Список пуст — сначала подтвердите заявки и впишите нагрудные номера в мастере протоколов</td></tr>'
     : shown.map(x => `<tr class="${x.picked_at ? "got" : ""}" data-bib="${esc(x.bib)}"><td class="b">${esc(x.bib)}</td>
       <td><b>${esc(x.name)}</b> <span class="small muted">${esc(x.birth_year)}</span>${x.members ? `<div class="small muted">${esc(x.members)}</div>` : ""}</td>
       <td class="small">${esc(x.team)}</td><td class="small">${esc([x.distance, x.category, x.wave].filter(Boolean).join(" · "))}</td>
@@ -2596,19 +2125,17 @@ $("pkBody").addEventListener("click", (e) => { const b = e.target.closest("[data
   const bib = b.closest("tr").dataset.bib;
   if (b.dataset.pk === "undo" && !confirm(`Отменить выдачу номера ${bib}?`)) return;
   pickGive(bib, b.dataset.pk === "undo"); });
-$("btnCheckStart").onclick = async () => { chkSeen = 0; await api(`/api/events/${curId}/check`, {}); loadCheck(); };
-$("btnCheckStop").onclick = async () => { await api(`/api/events/${curId}/check`, {stop:true}); loadCheck(); };
 
 /* ---------- хронометраж ---------- */
 function renderTimingHead(){
   const ev = curEvent();
   document.querySelectorAll(".tName").forEach(x => x.textContent = ev ? ev.name : "Выберите соревнование");
-  $("tMeta").textContent = ev ? [fmtDate(ev.date), ev.place, "финиш: "+(ev.finish_device||"не выбран"), statusName[ev.status]].filter(Boolean).join(" · ") : "";
+  $("tMeta").textContent = ev ? [fmtDate(ev.date), ev.place, statusName[ev.status]].filter(Boolean).join(" · ") : "";
   const hasWaves = ev && ev.waves.length > 0;
   $("singleStart").classList.toggle("hide", !!hasWaves);
   $("wavesStart").classList.toggle("hide", !hasWaves);
   $("wavesActs").classList.toggle("hide", !hasWaves);
-  $("tStartInfo").textContent = ev && ev.start_time ? "старт дан в " + ev.start_time.slice(11) + (ev.push_wiclax?" · отправлено в Wiclax":"") : "";
+  $("tStartInfo").textContent = ev && ev.start_time ? "старт дан в " + ev.start_time.slice(11) : "";
   ["btnStart","btnManual","btnReset","btnFinish","btnMark"].forEach(b => $(b).disabled = !ev);
   if (ev && ev.start_time) $("btnStart").disabled = true;
   if (ev && !ev.start_time) { $("btnReset").disabled = true; $("btnFinish").disabled = true; }
@@ -2625,14 +2152,9 @@ function renderTimingHead(){
       </div></td></tr>`).join("");
     $("seqInfo").textContent = ev.heats_sequential ? "старт забега автоматически завершает предыдущий" : "забеги могут идти одновременно";
   }
-  const dsel = $("mDev"), prev = dsel.value;
-  const devs = devices.slice(); if (ev && ev.finish_device && !devs.includes(ev.finish_device)) devs.unshift(ev.finish_device);
-  dsel.innerHTML = devs.map(d => `<option ${ev && d===ev.finish_device?"selected":""}>${esc(d)}</option>`).join("");
-  if (prev && devs.includes(prev)) dsel.value = prev;
   $("dlProto").href = ev ? `/protocol?event=${ev.id}` : "#";
   $("dlStart").href = ev ? `/protocol?event=${ev.id}&kind=start` : "#";
   $("dlCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
-  $("dlClax").href = ev ? `/api/events/${ev.id}/event.clax` : "#";
   $("rCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
   const ws = $("rWave"), wprev = ws.value;
   ws.innerHTML = '<option value="">все забеги</option>' + (ev ? ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("") : "");
@@ -2641,7 +2163,6 @@ function renderTimingHead(){
 }
 async function doStart(time, wave){
   const ev = curEvent(); if (!ev) return;
-  if (!ev.finish_device && !confirm("Точка финиша не выбрана — результаты не посчитаются. Всё равно дать старт?")) return;
   const others = wave && ev.heats_sequential ? ev.waves.filter(w => w.state==="running" && w.name!==wave).map(w=>w.name) : [];
   if (others.length && !confirm(`Старт «${wave}». ${others.join(", ")} будет автоматически завершён в момент старта. Продолжить?`)) return;
   try{ await api(`/api/events/${ev.id}/start`, Object.assign(time?{time}:{}, wave?{wave}:{})); await loadEvents(); beep(660,.25); toast("Старт!" + (wave?" — "+wave:"")); loadResults(); }
@@ -2693,7 +2214,7 @@ $("btnNextHeat").onclick = async () => {
 };
 /* ручные отметки */
 $("btnMark").onclick = async () => {
-  const body = {bib:$("mBib").value.trim(), device:$("mDev").value};
+  const body = {bib:$("mBib").value.trim(), device:"JUDGE"};
   if ($("mTime").value.trim()) body.time = $("mTime").value.trim();
   try{ await api(`/api/events/${curId}/manual`, body); $("mBib").value=""; $("mTime").value=""; $("mBib").focus(); toast("Отметка добавлена"); loadManual(); loadResults(); }
   catch(e){ toast("Ошибка: "+e.message); }
@@ -2737,23 +2258,6 @@ function tick(){
   if (pill._k !== key) { pill._k = key; pill.className = "state-pill" + (live ? " live" : ev && ev.status === "finished" ? " done" : ""); pill.querySelector("span").textContent = label; }
   document.querySelectorAll(".wclock[data-start]").forEach(td => { const s = +td.dataset.start, f = +td.dataset.fin; if (s) td.textContent = fmtElapsed((f||nowMs()) - s); });
 }
-async function pollFeed(){
-  try{
-    const r = await api(`/api/live?since=${lastId}&limit=100${curId?"&event="+curId:""}`);
-    const fresh = lastId > 0;
-    lastId = r.last_id;
-    if (r.reads.length){
-      const html = r.reads.slice().reverse().map(x =>
-        `<tr class="${x.finish?"fin":""} ${fresh?"new":""}"><td class="mono">${esc(x.time)}</td><td class="mono">${esc(x.elapsed||"")}</td>
-         <td class="bib">${esc(x.bib||"")}</td><td class="mono small">${esc(x.chip)}</td><td>${esc(x.device)}</td></tr>`).join("");
-      const body = $("feedBody");
-      body.insertAdjacentHTML("afterbegin", html);
-      while (body.rows.length > 300) body.deleteRow(-1);
-      if (fresh) { loadResults(); if (tabName()==="check") loadCheck(); }
-    }
-  }catch(e){}
-}
-
 /* ---------- результаты ---------- */
 async function loadResults(){
   if (curId == null) { $("rBody").innerHTML = '<tr><td class="empty">Выберите соревнование</td></tr>'; return; }
@@ -2762,28 +2266,24 @@ async function loadResults(){
 }
 function renderResults(r){
   lastRes = r;
-  $("tFin").textContent = r.finished.length; $("tCourse").textContent = r.on_course.length;
-  $("tNot").textContent = r.not_seen.length; $("tPend").textContent = r.manual_pending;
+  const fin = r.finished || [], notSeen = r.not_seen || [];
+  $("tFin").textContent = fin.length;
+  $("tNot").textContent = notSeen.length; $("tPend").textContent = r.manual_pending || 0;
   $("tAlerts").innerHTML = alertsHtml(r.alerts); $("rAlerts").innerHTML = alertsHtml(r.alerts);
-  const ev = r.event, fin = ev.finish_device, splits = r.devices.filter(d => d !== fin), hasW = ev.waves.length > 0;
-  $("rMeta").textContent = [ev.name, r.started ? `старт ${ev.start_time||""} · финишировали ${r.finished.length} · на дистанции ${r.on_course.length}` : "старт ещё не дан"].join(" · ");
+  const ev = r.event, jd = ev.finish_device || "JUDGE", hasW = ev.waves.length > 0;
+  $("rMeta").textContent = [ev.name, r.started ? `старт ${ev.start_time||""} · финишировали ${fin.length}` : "старт ещё не дан"].join(" · ");
   const q = $("rSearch").value.trim().toUpperCase(), wf = $("rWave").value;
-  const match = x => (!q || String(x.bib).toUpperCase().includes(q) || (x.chip||"").includes(q)) && (!wf || x.wave === wf);
-  const hand = (x, d) => x.manual.includes(d) ? ' <span class="hand" title="ручная отметка">✋</span>' : "";
-  const hasCat = r.finished.some(x => x.category || x.distance), hasName = r.finished.some(x => x.name);
-  $("rHead").innerHTML = `<tr>${hasCat?"<th>Категория · дист.</th>":""}${hasW?"<th>Забег</th><th>Место</th><th>Общее</th>":"<th>Место</th>"}<th>Номер</th>${hasName?"<th>Участник</th>":""}<th>Результат</th>${splits.map(d=>`<th>${esc(d)}</th>`).join("")}<th>Чип</th></tr>`;
-  const ncol = 4 + (hasCat?1:0) + (hasW?2:0) + (hasName?1:0) + splits.length;
-  $("rBody").innerHTML = r.finished.filter(match).map(x =>
+  const match = x => (!q || String(x.bib).toUpperCase().includes(q) || String(x.name || "").toUpperCase().includes(q)) && (!wf || x.wave === wf);
+  const hand = (x) => (x.manual || []).includes(jd) ? ' <span class="hand" title="ручная отметка">✋</span>' : "";
+  const hasCat = fin.some(x => x.category || x.distance), hasName = fin.some(x => x.name);
+  $("rHead").innerHTML = `<tr>${hasCat?"<th>Категория · дист.</th>":""}${hasW?"<th>Забег</th><th>Место</th><th>Общее</th>":"<th>Место</th>"}<th>Номер</th>${hasName?"<th>Участник</th>":""}<th>Результат</th></tr>`;
+  const ncol = 3 + (hasCat?1:0) + (hasW?2:0) + (hasName?1:0);
+  $("rBody").innerHTML = fin.filter(match).map(x =>
     `<tr>${hasCat?`<td class="small">${esc([x.category,x.distance].filter(Boolean).join(" · "))}</td>`:""}${hasW?`<td class="small">${esc(x.wave)}</td><td class="pl p${x.place}">${x.place}</td><td class="pl">${x.place_overall??""}</td>`:`<td class="pl p${x.place}">${x.place}</td>`}
      <td class="bib">${esc(x.bib)}</td>${hasName?`<td>${esc(x.name||"")}<div class="small muted">${esc([x.birth_year,x.team].filter(Boolean).join(" · "))}</div></td>`:""}
-     <td class="res">${esc(x.result||x.time)}${hand(x, fin)}</td>
-     ${splits.map(d=>`<td class="mono">${esc(x.splits[d]||"")}${hand(x,d)}</td>`).join("")}<td class="mono small muted">${esc(x.chip.startsWith("#")?"":x.chip)}</td></tr>`
+     <td class="res">${esc(x.result||x.time)}${hand(x)}</td></tr>`
   ).join("") || `<tr><td colspan="${ncol}" class="empty">${r.started?"Финишировавших пока нет":"Старт ещё не дан"}</td></tr>`;
-  $("cHead").innerHTML = `<tr>${hasW?"<th>Забег</th>":""}<th>Номер</th><th>Последняя точка</th><th>Время там</th><th>Чип</th></tr>`;
-  $("cBody").innerHTML = r.on_course.filter(match).map(x =>
-    `<tr>${hasW?`<td class="small">${esc(x.wave)}</td>`:""}<td><b>${esc(x.bib)}</b></td><td>${esc(x.last_point)}</td><td class="mono">${esc(x.last_time)}</td><td class="mono small muted">${esc(x.chip)}</td></tr>`
-  ).join("") || `<tr><td colspan="5" class="empty">Никого</td></tr>`;
-  $("nList").textContent = r.not_seen.filter(x => !wf || x.wave===wf).map(x => x.bib).join(", ") || "—";
+  $("nList").textContent = notSeen.filter(x => !wf || x.wave===wf).map(x => x.bib).join(", ") || "—";
   renderLane();
 }
 $("rSearch").oninput = () => lastRes && renderResults(lastRes);
@@ -2873,15 +2373,13 @@ function renderOffsite(o){
 async function loadHw(){
   try{ hwData = await api("/api/system"); }catch(e){ return; }
   const d = hwData, sv = d.server;
-  const vpnOn = d.vpn.filter(v => v.online).length + d.wireguard.filter(w => w.handshake_ago != null && w.handshake_ago < 180).length;
-  const svcBad = d.services.filter(x => x.state !== "active").length;
-  setPill("hVpn", `VPN ${vpnOn}`, vpnOn ? "ok" : "");
+  const svcBad = (d.services || []).filter(x => x.state !== "active").length;
   $("hwDot").className = "dot bad" + (svcBad ? "" : " hide");
-  $("gear").title = svcBad ? `Служб с ошибкой: ${svcBad} — откройте «Система»` : "Система: оборудование, обновление, журнал";
+  $("gear").title = svcBad ? `Служб с ошибкой: ${svcBad} — откройте «Система»` : "Система: обновление, журнал";
   if (!tabName().startsWith("hw")) return;
-  $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о VPN и службах не собираются — обновите сервер (install.sh)." :
-    sv.collector_age_sec > 120 ? `Сведения о VPN и службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Оборудование, доступы и обновление сервера. Сведения обновляются каждые 10 секунд.";
-  const cert = d.certs[0];
+  $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о службах не собираются — обновите сервер (install.sh)." :
+    sv.collector_age_sec > 120 ? `Сведения о службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Состояние и обновление сервера. Сведения обновляются каждые 10 секунд.";
+  const cert = (d.certs || [])[0];
   $("hwServer").innerHTML = [
     ["Имя", esc(sv.hostname)], ["Время сервера", esc(sv.time)], ["Часовой пояс", esc(sv.timezone)],
     ["Точное время", sv.ntp_synced == null ? "—" : sv.ntp_synced ? '<span class="dot ok"></span>синхронизировано' : '<span class="dot bad"></span>нет синхронизации'],
@@ -2899,53 +2397,13 @@ async function loadHw(){
     <div class="kv" style="margin-top:10px"><span>База отметок</span><span>${fmtBytes(sv.db_size)}</span><span>Файлы</span><span>${fmtBytes(sv.files_size)}</span>
     <span>Резервные копии</span><span>${sv.backups ? `${sv.backups} шт., последняя ${esc(sv.backup_last.at)}` : '<span style="color:var(--start)">ещё не было</span>'}</span></div>`;
   renderOffsite(d.offsite || {});
-  $("hwSvc").innerHTML = d.services.map(x => `<div class="svc">${svcState[x.state] || esc(x.state)}<span style="flex:1"></span><b>${esc(x.name)}</b></div>`).join("") || '<div class="small muted">Нет данных — после обновления сервера появятся через минуту.</div>';
-  $("hwWiclax").innerHTML = d.wiclax.map(c => `<tr><td class="mono">${esc(c.peer)}</td><td class="mono">${c.port||""}${c.devices?` <span class="small muted">(${esc(c.devices.join(", "))})</span>`:""}</td><td class="mono small">${esc((c.since||"").slice(5,19))}</td><td>${c.sent}</td><td>${c.live?"передача включена":"пауза"}</td></tr>`).join("")
-    || '<tr><td colspan="5" class="empty">Wiclax не подключён. В Wiclax: устройство «Общий», 10.66.0.1, порт 9854.</td></tr>';
-  $("hwVpn").innerHTML = d.vpn.map(v => `<tr><td><b>${esc(v.name)}</b></td><td>${v.online?'<span class="dot ok"></span>на связи':'<span class="dot"></span>не подключён'}</td>
-      <td class="mono">${esc(v.vpn_ip||"")}</td><td class="mono small">${esc(v.real||"")}</td><td class="small">${esc((v.since||"").replace("T"," ").slice(5,16))}</td>
-      <td class="small">${v.online ? "↓"+fmtBytes(v.rx)+" ↑"+fmtBytes(v.tx) : ""}</td></tr>`).join("")
-    || '<tr><td colspan="6" class="empty">Профилей нет или сведения ещё не собраны.</td></tr>';
-  $("hwWgBox").classList.toggle("hide", !d.wireguard.length);
-  $("hwWg").innerHTML = d.wireguard.map(w => { const on = w.handshake_ago != null && w.handshake_ago < 180;
-    return `<tr><td><b>${esc(w.name)}</b></td><td>${on?'<span class="dot ok"></span>на связи':'<span class="dot"></span>'+(w.handshake_ago==null?"не подключался":fmtAgo(w.handshake_ago))}</td>
-      <td class="mono">${esc(w.vpn_ip)}</td><td class="mono small">${esc(w.endpoint)}</td><td class="small">↓${fmtBytes(w.rx)} ↑${fmtBytes(w.tx)}</td></tr>`; }).join("");
-  $("hwClients").innerHTML = d.clients.map(c => `<tr><td class="mono">${esc(c.ip)}</td><td>${c.profile?`<b>${esc(c.profile)}</b>`:'<span class="muted">—</span>'}</td>
+  $("hwSvc").innerHTML = (d.services || []).map(x => `<div class="svc">${svcState[x.state] || esc(x.state)}<span style="flex:1"></span><b>${esc(x.name)}</b></div>`).join("") || '<div class="small muted">Нет данных — после обновления сервера появятся через минуту.</div>';
+  $("hwClients").innerHTML = (d.clients || []).map(c => `<tr><td class="mono">${esc(c.ip)}</td><td>${c.profile?`<b>${esc(c.profile)}</b>`:'<span class="muted">—</span>'}</td>
       <td class="small">${esc(c.device)}</td><td>${esc(c.page||"")}</td><td class="small">${c.ago < 30 ? '<span class="dot ok"></span>сейчас' : fmtAgo(c.ago)}</td></tr>`).join("")
     || '<tr><td colspan="5" class="empty">—</td></tr>';
 }
-$("hwRefresh").onclick = () => { loadHw(); loadReaders(); loadUpdate(); };
+$("hwRefresh").onclick = () => { loadHw(); loadUpdate(); };
 
-/* ---------- ридеры: добавить / подключить из браузера ---------- */
-let rdData = null;
-function rdConn(live, enabled){
-  if (!enabled) return '<span class="dot"></span><span class="muted">отключён</span>';
-  if (!live) return '<span class="dot"></span>…';
-  return live.connected ? '<span class="dot ok"></span>на связи' :
-    `<span class="dot bad"></span>нет связи${live.last_error?`<div class="small muted">${esc(rdErr(live.last_error))}</div>`:""}`;
-}
-function rdErr(e){
-  if (/Timeout/i.test(e)) return "не отвечает: ящик выключен или нет VPN";
-  if (/refused|111/i.test(e)) return "адрес есть, но порт закрыт";
-  if (/unreachable|113|101/i.test(e)) return "нет маршрута до сети ящика";
-  if (/закрыл/.test(e)) return "ридер закрыл соединение";
-  return e;
-}
-function rdWx(w){
-  if (!w || !w.port) return '<span class="muted">—</span>';
-  const st = w.error ? `<span class="dot bad"></span><span class="small">${esc(w.error)}</span>` : w.clients ? '<span class="dot ok"></span><span class="small">Wiclax подключён</span>' : '<span class="dot"></span><span class="small muted">ждёт Wiclax</span>';
-  return `<b class="mono" style="font-size:15px">${w.port}</b><div>${st}</div>`;
-}
-function rdClock(live){
-  const off = live && live.clock_offset_sec;
-  if (off == null) return "—";
-  return `<span class="mono" style="${Math.abs(off)>2?"color:var(--track);font-weight:700":""}">${off>0?"+":""}${off.toFixed(2)} с</span>`;
-}
-const RD_POINTS = ["START","FINISH","KM1","KM2","KM3","KM5","KM10","KM15","KM21","LAP","CP1","CP2","CP3"];
-function rdPointOpts(cur){
-  const all = [...new Set([...RD_POINTS, ...((rdData&&rdData.devices)||[]), cur])];
-  return all.map(x => `<option${x===cur?" selected":""}>${esc(x)}</option>`).join("") + '<option value="__new">другая…</option>';
-}
 // Обновление сервера — два клика: «Проверить обновления» → «⬇️ Установить обновление v…».
 // Одна кнопка проверки, под ней — ровно одна кнопка установки, и только когда есть что ставить.
 let upTimer = null;
@@ -3009,133 +2467,11 @@ async function installUpdate(offer){
   }catch(err){ UP.err = err.message; }
   renderUpdate(); setTimeout(loadUpdate, 1500);
 }
-async function loadReaders(){
-  try{ rdData = await api("/api/readers"); }catch(e){ return; }
-  const d = rdData;
-  $("rdDevList").innerHTML = d.devices.map(x => `<option value="${esc(x)}">`).join("");
-  let html = "", box = null;
-  for (const r of d.readers) {
-    if ((r.box||"") !== box) { box = r.box||""; html += `<tr><td colspan="8" class="small muted" style="background:var(--ice)"><b>${esc(box||"Без ящика")}</b></td></tr>`; }
-    const L = r.live;
-    html += `<tr data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b>${r.parser==="sim"?' <span class="small" style="color:var(--start)">симулятор</span>':r.parser!=="ipico"?` <span class="small muted">${esc(r.parser)}</span>`:""}</td>
-      <td class="mono small">${esc(r.host)}:${r.port}</td><td>${rdWx(r.wiclax)}</td><td><select class="rdPoint" data-id="${esc(r.id)}" title="Точка на этом старте — меняется сразу, без переподключения">${rdPointOpts(r.device)}</select></td>
-      <td>${rdConn(L, r.enabled)}</td>
-      <td class="mono">${L?L.reads:"—"}${L&&L.parse_errors?`<div class="small muted">не разобрано ${L.parse_errors}</div>`:""}</td>
-      <td>${rdClock(L)}</td>
-      <td class="row" style="gap:4px;flex-wrap:nowrap">${r.parser==="sim" && r.enabled ? (r.sim && r.sim.running
-          ? `<span class="small">идёт: ${r.sim.sent}/${r.sim.total}</span><button class="sm" data-act="simstop">■ Стоп</button>`
-          : '<button class="sm primary" data-act="sim">▶ Прогнать гонку</button>') + '<button class="sm" data-act="simclear" title="Стереть отметки симулятора">🧹</button>' : ""}
-        ${r.enabled?'<button class="sm" data-act="off">Отключить</button>':'<button class="sm primary" data-act="on">Подключить</button>'}
-        <button class="sm" data-act="edit">Изменить</button><a class="small" href="/raw?source=${encodeURIComponent(r.id)}" target="_blank">строки</a>
-        <button class="sm danger" data-act="del">✕</button></td></tr>`;
-  }
-  for (const s of d.static) {
-    html += `<tr><td><b>${esc(s.id)}</b><div class="small muted">файл настроек</div></td><td class="mono small">${esc(s.peer||s.mode)}</td><td class="small muted">через 9854</td><td><b>${esc(s.device)}</b></td>
-      <td>${s.mode==="http"?'<span class="muted">HTTP</span>':s.connected?'<span class="dot ok"></span>на связи':'<span class="dot bad"></span>нет связи'}</td>
-      <td class="mono">${s.reads}</td><td>${rdClock(s)}</td><td><a class="small" href="/raw?source=${encodeURIComponent(s.id)}" target="_blank">строки</a></td></tr>`;
-  }
-  $("readersBody").innerHTML = html || '<tr><td colspan="8" class="empty">Ридеров пока нет — нажмите «🔍 Найти ридеры», «+ Добавить ридер» или «Загрузить список».</td></tr>';
-  $("wxMain").textContent = `порт ${d.wiclax_main.port}`;
-  $("wxPorts").innerHTML = d.wiclax_ports.map(p => `<tr><td class="mono"><b>${p.port}</b></td><td>${esc(p.devices)}</td><td>${esc(p.name||"")}</td>
-    <td>${p.error?`<span class="dot bad"></span>${esc(p.error)}`:p.clients?'<span class="dot ok"></span>Wiclax подключён':p.listening?'<span class="dot"></span>ждёт Wiclax':"…"}</td>
-    <td><button class="sm danger" data-port="${p.port}">✕</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">Дополнительных портов нет — всё идёт через основной.</td></tr>';
-}
-function rdOpen(r){
-  $("rdBulk").classList.add("hide"); $("rdForm").classList.remove("hide");
-  $("rdOrig").value = r ? r.id : "";
-  $("rdId").value = r ? r.id : ""; $("rdHost").value = r ? r.host : ""; $("rdPort").value = r ? r.port : 10000;
-  $("rdDev").value = r ? r.device : "FINISH"; $("rdBox").value = r ? (r.box||"") : ""; $("rdParser").value = r ? r.parser : "ipico";
-  $("rdId").focus();
-}
-async function rdSave(connect){
-  const body = {id:$("rdId").value.trim(), host:$("rdHost").value.trim(), port:+$("rdPort").value||10000,
-    device:$("rdDev").value.trim(), box:$("rdBox").value.trim(), parser:$("rdParser").value, orig_id:$("rdOrig").value||undefined};
-  if (connect) body.enabled = true;
-  try{ await api("/api/readers", body); toast(connect ? "Сохранено, подключаюсь…" : "Сохранено"); $("rdForm").classList.add("hide"); setTimeout(loadReaders, 300); setTimeout(loadReaders, 3000); }
-  catch(e){ toast(e.message); }
-}
-$("rdAddBtn").onclick = () => rdOpen(null);
-$("rdCancel").onclick = () => $("rdForm").classList.add("hide");
-$("rdSave").onclick = () => rdSave(false);
-$("rdSaveOn").onclick = () => rdSave(true);
-$("rdBulkBtn").onclick = () => { $("rdForm").classList.add("hide"); $("rdBulk").classList.remove("hide"); $("rdBulkText").focus(); };
-$("rdBulkCancel").onclick = () => $("rdBulk").classList.add("hide");
-$("rdBulkSave").onclick = async () => {
-  try{ const r = await api("/api/readers/bulk", {text:$("rdBulkText").value}); toast(`Загружено: новых ${r.added}, обновлено ${r.updated}`);
-    $("rdBulk").classList.add("hide"); $("rdBulkText").value = ""; loadReaders(); }
-  catch(e){ toast(e.message); }
-};
-$("rdSimBtn").onclick = () => {
-  if (rdData && rdData.readers.some(r => r.parser === "sim")) { toast("Симулятор уже есть в таблице — нажмите у него «▶ Прогнать гонку»"); return; }
-  rdOpen(null); $("rdId").value = "SIM"; $("rdParser").value = "sim"; $("rdHost").value = "simulator"; $("rdBox").value = "Тренировка"; $("rdDev").value = "FINISH";
-};
-$("rdScanBtn").onclick = () => { $("rdForm").classList.add("hide"); $("rdBulk").classList.add("hide"); $("rdScan").classList.remove("hide"); $("scNet").focus(); };
-$("scClose").onclick = () => $("rdScan").classList.add("hide");
-$("scGo").onclick = async () => {
-  const net = $("scNet").value.trim(); if (!net) { toast("Укажите сеть ящика, например 10.19.1"); return; }
-  $("scRes").innerHTML = '<span class="small muted">Ищу… (до 10 секунд)</span>'; $("scGo").disabled = true;
-  try{
-    const r = await api("/api/readers/scan", {subnet: net, port: +$("scPort").value || 10000});
-    $("scRes").innerHTML = r.found.length ? `<div class="tbl"><table><thead><tr><th>Адрес</th><th>Порт</th><th></th></tr></thead><tbody>${
-      r.found.map(f => `<tr><td class="mono"><b>${esc(f.host)}</b></td><td class="mono">${f.port}</td><td>${f.known ? `<span class="small muted">уже есть: ${esc(f.known)}</span>` :
-        `<button class="sm primary" data-host="${esc(f.host)}" data-port="${f.port}">Добавить</button>`}</td></tr>`).join("")}</tbody></table></div>`
-      : `<span class="small">В сети ${esc(r.subnet)}.x на порту ${r.port} никто не ответил. Проверьте, что ящик включён и на связи (VPN), а сеть указана верно.</span>`;
-  }catch(err){ $("scRes").innerHTML = `<span class="small" style="color:var(--track)">${esc(err.message)}</span>`; }
-  $("scGo").disabled = false;
-};
-$("scRes").addEventListener("click", e => {
-  const b = e.target.closest("button[data-host]"); if (!b) return;
-  rdOpen(null);
-  const last = b.dataset.host.split(".").pop();
-  $("rdHost").value = b.dataset.host; $("rdPort").value = b.dataset.port; $("rdBox").value = $("scBox").value.trim();
-  $("rdId").value = "R" + last; $("rdId").select();
-});
-$("readersBody").addEventListener("change", async e => {
-  const sel = e.target.closest(".rdPoint"); if (!sel) return;
-  let dev = sel.value;
-  if (dev === "__new") { dev = (prompt("Название точки латиницей, например KM7 или CP4:") || "").trim().toUpperCase(); if (!dev) { loadReaders(); return; } }
-  try{ await api(`/api/readers/${encodeURIComponent(sel.dataset.id)}/point`, {device: dev}); toast(`${sel.dataset.id} → ${dev}`); }
-  catch(err){ toast(err.message); }
-  loadReaders();
-});
-$("readersBody").addEventListener("click", async e => {
-  const b = e.target.closest("button[data-act]"); if (!b) return;
-  const id = b.closest("tr").dataset.id, act = b.dataset.act, r = rdData.readers.find(x => x.id === id);
-  try{
-    if (act === "sim") {
-      const ev = curEvent();
-      const min = prompt(`Прогнать финиш участников соревнования «${ev ? ev.name : "—"}» (у кого есть чипы).\nЕсли чипов нет — 30 выдуманных.\n\nЗа сколько минут?`, "3");
-      if (min === null) return;
-      const r = await api(`/api/readers/${encodeURIComponent(id)}/simulate`, {event_id: ev ? ev.id : null, minutes: +min || 3});
-      toast(r.from_event ? `Симуляция: ${r.total} участников` : `Чипов в соревновании нет — гоню ${r.total} выдуманных`);
-      setTimeout(loadReaders, 1500); return;
-    }
-    if (act === "simstop") { await api(`/api/readers/${encodeURIComponent(id)}/sim-stop`, {}); setTimeout(loadReaders, 500); return; }
-    if (act === "simclear") { if (!confirm(`Стереть все отметки симулятора ${id}? Настоящие отметки не затрагиваются.`)) return;
-      const r = await api(`/api/readers/${encodeURIComponent(id)}/clear-reads`, {}); toast(`Стёрто отметок: ${r.deleted}`); loadReaders(); return; }
-    if (act === "on") { await api(`/api/readers/${encodeURIComponent(id)}/connect`, {}); toast(`${id}: подключаюсь…`); setTimeout(loadReaders, 3000); }
-    if (act === "off") { if (!confirm(`Отключить ${id}? Отметки с него перестанут поступать.`)) return; await api(`/api/readers/${encodeURIComponent(id)}/disconnect`, {}); }
-    if (act === "edit") return rdOpen(r);
-    if (act === "del") { if (!confirm(`Удалить ридер ${id} из списка? Уже полученные отметки останутся.`)) return; await api(`/api/readers/${encodeURIComponent(id)}/delete`, {}); }
-    loadReaders();
-  }catch(err){ toast(err.message); }
-});
-$("wxAdd").onclick = async () => {
-  try{ await api("/api/wiclax-ports", {port:+$("wxPort").value, devices:$("wxDevs").value, name:$("wxName").value});
-    toast("Порт добавлен"); $("wxPort").value = $("wxDevs").value = $("wxName").value = ""; setTimeout(loadReaders, 500); }
-  catch(e){ toast(e.message); }
-};
-$("wxPorts").addEventListener("click", async e => {
-  const b = e.target.closest("button[data-port]"); if (!b) return;
-  if (!confirm(`Закрыть порт ${b.dataset.port}? Wiclax на этом порту отключится.`)) return;
-  try{ await api(`/api/wiclax-ports/${b.dataset.port}/delete`, {}); loadReaders(); }catch(err){ toast(err.message); }
-});
-
 /* ---------- архив ---------- */
 const MONTHS = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 let archFiles = {};
 async function renderArchive(){
-  const arch = events.filter(e => e.archived && inDir(e));
+  const arch = events.filter(e => e.archived);
   const years = [...new Set(arch.map(e => (e.date||"").slice(0,4) || "без даты"))].sort().reverse();
   const ysel = $("aYear"), prev = ysel.value;
   ysel.innerHTML = '<option value="">все годы</option>' + years.map(y => `<option>${esc(y)}</option>`).join("");
@@ -3191,7 +2527,7 @@ function pageLinkHtml(ev){
 function renderSite(){
   const ev = curEvent(); if (!ev) return;
   $("sSite").checked = !!ev.pub_site; $("sOurs").checked = ev.ours !== false;
-  $("sLevel").value = ev.level || (ev.kind === "mass" ? "mass" : "region"); $("sNote").value = ev.note || "";
+  $("sLevel").value = ev.level || "region"; $("sNote").value = ev.note || "";
   $("sLive").value = ev.live_url || ""; $("sPhoto").value = ev.photo_url || ""; $("sAdaptive").checked = !!ev.adaptive;
   $("sLinks").value = ev.links || ""; $("sPubStart").checked = !!ev.pub_start; $("sPubRes").checked = !!ev.pub_results;
   $("sReg").checked = !!ev.reg_open; $("sRegTill").value = (ev.reg_deadline || "").slice(0, 16); $("sDist").value = ev.reg_distances || "";
@@ -3254,9 +2590,8 @@ async function loadMe(){
   $("usrRole").textContent = [ME.name, ME.role_name].filter(Boolean).join(" · ");
   const adm = ME.role === "admin"; document.body.dataset.adm = adm ? "1" : "0"; document.body.dataset.role = ME.role || "";
   document.querySelectorAll(".adm").forEach(x => x.classList.toggle("hide", !adm));
-  $("hVpn").classList.toggle("hide", !adm);
   $("gear").href = adm ? "#hw" : "#log";
-  $("gear").title = adm ? "Система: оборудование, пользователи, обновление, журнал" : "Журнал действий";
+  $("gear").title = adm ? "Система: пользователи, обновление, журнал" : "Журнал действий";
   $("uLoginUrl").textContent = location.origin + "/login";
 }
 $("usrBtn").onclick = (e) => { e.stopPropagation(); toggleMenu("usrMenu"); };
@@ -3347,22 +2682,19 @@ $("uSave").onclick = async () => {
 /* ---------- запуск ---------- */
 (async function init(){
   loadDisc();
-  ["nRank", "mRank"].forEach(i => $(i).innerHTML = rankOpts("", "Разряд *"));
+  $("mRank").innerHTML = rankOpts("", "Разряд *");
   await loadMe();
-  await loadStatus(); await loadDevices();
+  await loadStatus();
   try { await loadEvents(); await loadEntries(); } catch(e){ toast("Не удалось загрузить соревнования"); }
   showTab();
   setInterval(tick, 100);
   setInterval(loadStatus, 4000);
-  setInterval(() => { if (tabName()==="hw-timing") loadLast(); }, 2000);
   setInterval(() => { if (tabName()==="reg") loadRegs(); }, 10000);
   setInterval(loadHw, 10000);
   loadHw();
-  setInterval(pollFeed, 1000);
   setInterval(() => { if (!document.hidden) uiSync().catch(() => {}); }, 3000);
-  setInterval(() => { const t=tabName(); if (t==="check") { loadCheck(); loadPickup(); } if (t==="timing") loadManual(); if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
+  setInterval(() => { const t=tabName(); if (t==="check") loadPickup(); if (t==="timing") loadManual(); if ((t==="timing"||t==="results") && curEvent()?.status==="running") loadResults(); }, 3000);
   setInterval(async () => { try{ const id=curId; await loadEvents(); if (id!==curId) loadEntries(); }catch(e){} }, 15000);
-  pollFeed();
 })();
 </script>
 </body>

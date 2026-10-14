@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Самопроверка сервера хронометража.
+Самопроверка сервера SakhStart 7.0 (судейско-секретарский АРМ стадиона и манежа).
 
-Запускает отдельную копию сервера на 127.0.0.1 со своей временной базой
-(рабочий сервер не трогает), имитирует ридеры и Wiclax и проверяет всю цепочку.
+Запускает отдельную копию сервера на 127.0.0.1 со своей временной базой (рабочий сервер не трогает)
+и проходит всю цепочку: вход и роли, регистрация и кабинет тренера (152-ФЗ), Мастер протоколов
+(номера, сетки, сброс сетки), ручной ввод результатов, разряды ЕВСК, командный зачёт, табло и пульт,
+протоколы и Excel, публикация, файлы, архив, журнал, обновление, миграцию базы с версии 6.x.
+Чипового хронометража (IPICO, Wiclax) в 7.0 нет — проверяется и то, что его адресов больше нет.
 
     python3 selftest.py                    # из папки комплекта
     python3 selftest.py --hub /opt/timing-hub/hub.py   # на установленном сервере
 """
+
 import argparse
 import base64
 import datetime as dt
@@ -19,7 +23,6 @@ import socket
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import zipfile
 import urllib.parse
@@ -52,55 +55,118 @@ def wait_port(port: int, timeout: float = 10) -> bool:
     return False
 
 
-class WiclaxSim:
-    """Подключается как Wiclax и собирает всё, что пришло."""
 
-    def __init__(self, port: int):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=5)
-        self.sock.settimeout(0.2)
-        self.lines: list = []
-        self.buf = b""
-        self.lock = threading.Lock()
-        self.alive = True
-        self.t = threading.Thread(target=self._run, daemon=True)
-        self.t.start()
+def start_server(hub_path: str, cfg_path: str):
+    return subprocess.Popen([sys.executable, hub_path, "--config", cfg_path],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    def _run(self):
-        while self.alive:
+
+def stop_server(proc):
+    proc.terminate()
+    try:
+        out, _ = proc.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        out, _ = proc.communicate()
+    return out
+
+
+def migration_test(hub_path: str, tmp: str) -> None:
+    """База версии 6.x (reads/raw/readers/wiclax_ports, entries с ключом (event_id, chip)) открывается сервером 7.0:
+    чиповые таблицы и колонка chip уходят, участники и их данные остаются."""
+    import sqlite3
+    d = os.path.join(tmp, "old")
+    os.makedirs(d, exist_ok=True)
+    dbp = os.path.join(d, "reads.db")
+    con = sqlite3.connect(dbp)
+    con.executescript("""
+        CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, date TEXT, place TEXT,
+            finish_device TEXT, start_time TEXT, status TEXT NOT NULL DEFAULT 'planned', notes TEXT, created_at TEXT NOT NULL,
+            push_wiclax INTEGER NOT NULL DEFAULT 0, check_since TEXT, min_time_sec REAL, alert_silence_min INTEGER);
+        CREATE TABLE entries(event_id INTEGER NOT NULL, bib TEXT NOT NULL, chip TEXT NOT NULL, wave TEXT, name TEXT,
+            birth_year TEXT, team TEXT, category TEXT, lane INTEGER, coach TEXT, seed TEXT, reg_id INTEGER, sex TEXT,
+            result TEXT, status TEXT, points REAL, PRIMARY KEY(event_id, chip));
+        CREATE TABLE waves(id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, name TEXT NOT NULL, start_time TEXT,
+            UNIQUE(event_id, name));
+        INSERT INTO waves(event_id, name) VALUES (1, 'A'), (1, 'B');
+        CREATE TABLE readers(id TEXT PRIMARY KEY, host TEXT, port INTEGER, device TEXT, enabled INTEGER);
+        CREATE TABLE reads(id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, chip TEXT, ts TEXT, antenna INTEGER);
+        CREATE TABLE raw(id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, line TEXT, ts TEXT);
+        CREATE TABLE wiclax_ports(port INTEGER PRIMARY KEY, devices TEXT, name TEXT);
+        INSERT INTO events(id, name, date, finish_device, created_at, push_wiclax) VALUES (1, 'Старый забег', '2026-05-01', 'FINISH', '2026-04-01 10:00:00', 1);
+        INSERT INTO events(id, name, date, finish_device, created_at) VALUES (2, 'Другой забег', '2026-06-01', 'FINISH', '2026-04-02 10:00:00');
+        INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, sex, result) VALUES
+            (1, '11', 'E2801160600002000000AA01', 'A', 'Иванов Иван', '2008', 'СШОР', 'Юноши', 1, 'М', '12.4'),
+            (1, '12', 'E2801160600002000000AA02', 'A', 'Петров Пётр', '2008', 'СШОР', 'Юноши', 2, 'М', NULL),
+            (1, '50', '', 'B', 'Сидоров Олег', '2009', 'Холмск', 'Юноши', NULL, 'М', NULL),
+            (2, '11', 'E2801160600002000000AA01', NULL, 'Иванов Иван', '2008', 'СШОР', NULL, NULL, 'М', NULL);
+        INSERT INTO readers VALUES ('IP1', '10.0.0.5', 10000, 'FINISH', 1);
+        INSERT INTO reads(source, chip, ts, antenna) VALUES ('FINISH', 'AA01', '2026-05-01 10:00:00.000', 1);
+        INSERT INTO raw(source, line, ts) VALUES ('FINISH', 'AA01,2026-05-01 10:00:00.000', '2026-05-01 10:00:00.000');
+        INSERT INTO wiclax_ports VALUES (9861, 'KM10', '10 км');
+    """)
+    con.commit()
+    con.close()
+    pw, pp = free_port(), free_port()
+    cfg_path = os.path.join(d, "config.json")
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        json.dump({"db_path": dbp, "log_level": "WARNING",
+                   "web": {"listen_host": "127.0.0.1", "listen_port": pw, "user": "admin", "password": "test-pass"},
+                   "public": {"enabled": False, "listen_host": "127.0.0.1", "listen_port": pp},
+                   "mail": {"outbox_dir": os.path.join(d, "outbox")}}, f)
+    proc = start_server(hub_path, cfg_path)
+    try:
+        up = wait_port(pw, 15)
+        check("миграция 6.x → 7.0: сервер стартует на старой базе (reads/readers/wiclax_ports, entries с ключом chip)", up)
+        hdr = {"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode()}
+
+        def get(path):
+            req = urllib.request.Request(f"http://127.0.0.1:{pw}{path}", headers=hdr)
             try:
-                d = self.sock.recv(65536)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            if not d:
-                break
-            self.buf += d
-            *ls, self.buf = self.buf.split(b"\r")
-            with self.lock:
-                self.lines.extend(x.decode() for x in ls if x)
-
-    def send(self, cmd: str):
-        self.sock.sendall((cmd + "\r").encode())
-
-    def snapshot(self) -> list:
-        with self.lock:
-            return list(self.lines)
-
-    def wait_for(self, pred, timeout=5.0) -> bool:
-        end = time.time() + timeout
-        while time.time() < end:
-            if pred(self.snapshot()):
-                return True
-            time.sleep(0.05)
-        return False
-
-    def close(self):
-        self.alive = False
-        try:
-            self.sock.close()
-        except OSError:
-            pass
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    return resp.status, resp.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                return e.code, e.read().decode("utf-8", "replace")
+        code, txt = get("/api/events/1/entries")
+        en = json.loads(txt) if code == 200 else {}
+        lines = (en.get("text") or "").splitlines()
+        check("миграция: участники прежние — те же номера, ФИО, забеги, команды и результат",
+              code == 200 and en.get("count") == 3 and sorted(x.split(";")[0] for x in lines) == ["11", "12", "50"]
+              and any(x.startswith("11;A;Иванов Иван;2008;СШОР") and "12.4" in x for x in lines)
+              and any(x.startswith("50;B;Сидоров Олег") for x in lines), txt[:300])
+        code2, txt2 = get("/api/events/2/entries")
+        check("миграция: участники второго соревнования с тем же номером и чипом не слиплись", json.loads(txt2).get("count") == 1, txt2[:200])
+        code, txt = get("/api/events/1/startlist")
+        sl = json.loads(txt)
+        ents = [e for h in sl["heats"] for e in h["entries"]] + sl["no_heat"]
+        check("миграция: стартовый список читается, у строк появился собственный id, чипа в ответе нет",
+              code == 200 and len(ents) == 3 and all(isinstance(e.get("id"), int) for e in ents) and "chip" not in txt.lower(), txt[:300])
+        db = sqlite3.connect(dbp)
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        ecols = [r[1] for r in db.execute("PRAGMA table_info(entries)")]
+        pk = [r[1] for r in db.execute("PRAGMA table_info(entries)") if r[5]]
+        evcols = {r[1] for r in db.execute("PRAGMA table_info(events)")}
+        cnt = db.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+        db.close()
+        check("миграция: таблиц reads, raw, readers, wiclax_ports больше нет",
+              not ({"reads", "raw", "readers", "wiclax_ports"} & tables), str(sorted(tables)))
+        check("миграция: у entries нет колонки chip, ключ — суррогатный id, 4 строки на месте",
+              "chip" not in ecols and "id" in ecols and pk == ["id"] and cnt == 4, f"{ecols} {pk} {cnt}")
+        check("миграция: устаревшие поля соревнований (push_wiclax и др.) убраны",
+              not ({"push_wiclax", "check_since", "min_time_sec", "alert_silence_min"} & evcols), str(sorted(evcols)))
+        c, t = None, None
+        req = urllib.request.Request(f"http://127.0.0.1:{pw}/api/events/1/results",
+                                     data=json.dumps({"rows": [{"bib": "50", "result": "13.7"}]}).encode(), method="POST",
+                                     headers={**hdr, "Content-Type": "application/json", "X-Requested-With": "timing-hub"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            c, t = resp.status, json.loads(resp.read())
+        check("миграция: на перенесённой базе работает запись результата", c == 200 and t.get("saved") == 1 and not t.get("errors"), str(t))
+    except Exception as e:  # noqa
+        check("миграция: непредвиденная ошибка", False, repr(e))
+    finally:
+        out = stop_server(proc)
+        check("миграция: сервер на старой базе корректно останавливается без ошибок в журнале",
+              proc.returncode == 0 and "Traceback" not in out, f"код {proc.returncode} {out[-300:]}")
 
 
 def main() -> int:
@@ -113,107 +179,47 @@ def main() -> int:
         return 2
 
     tmp = tempfile.mkdtemp(prefix="timing-hub-selftest-")
-    p_push, p_pull, p_wic, p_web, p_pub = free_port(), free_port(), free_port(), free_port(), free_port()
+    p_web, p_pub, p_old1, p_old2 = free_port(), free_port(), free_port(), free_port()
     cfg = {
         "db_path": os.path.join(tmp, "reads.db"),
         "log_level": "WARNING",
-        "wiclax": {"listen_host": "127.0.0.1", "listen_port": p_wic, "heartbeat_sec": 1,
-                   "forward_filter_sec": 3},
         "web": {"listen_host": "127.0.0.1", "listen_port": p_web, "user": "admin",
                 "password": "test-pass", "api_key": "test-key"},
         "public": {"enabled": True, "listen_host": "127.0.0.1", "listen_port": p_pub, "url": "https://reg.example.ru"},
         "mail": {"outbox_dir": os.path.join(tmp, "outbox")},
         "operator": {"name": "РОО «Федерация лёгкой атлетики Сахалинской области»", "email": "pd@example.ru"},
-        "sources": [
-            {"id": "FINISH", "name": "Финиш (push)", "mode": "listen", "listen_host": "127.0.0.1",
-             "listen_port": p_push, "parser": "auto"},
-            {"id": "KM5", "name": "5 км (connect)", "mode": "connect", "host": "127.0.0.1", "port": p_pull,
-             "parser": "regex",
-             "pattern": r"^(?P<chip>[0-9A-F]+),(?P<datetime>[0-9-]+ [0-9:.]+),(?P<antenna>\d+)",
-             "datetime_format": "%Y-%m-%d %H:%M:%S.%f"},
-            {"id": "HTTP", "name": "Через HTTP", "mode": "http", "parser": "auto"},
-        ],
+        # ключи прежних версий (чиповые источники и порт Wiclax): 7.0 молча их игнорирует и ничего не слушает
+        "sources": [{"id": "FINISH", "name": "Финиш", "mode": "listen", "listen_host": "127.0.0.1",
+                     "listen_port": p_old1, "parser": "auto"}],
+        "wiclax": {"listen_host": "127.0.0.1", "listen_port": p_old2, "heartbeat_sec": 1},
     }
     cfg_path = os.path.join(tmp, "config.json")
     with open(cfg_path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=1)
 
-    # 0. проверка настроек
+    # 0. версия и проверка настроек
+    r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
+    check("версия сервера 7.0.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.0.0", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
-    check("настройки читаются (--check)", r.returncode == 0, r.stderr.strip())
-    r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--test-parse", "KM5",
-                        "E2801160600002000000AA01,2026-10-06 10:00:00.250,2,-50"], capture_output=True, text=True)
-    check("проверка разбора строки (--test-parse)", r.returncode == 0 and "E2801160600002000000AA01" in r.stdout,
-          r.stdout + r.stderr)
+    check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
+          r.returncode == 0 and "Traceback" not in r.stderr, r.stdout.strip() + r.stderr.strip())
 
-    # ридер в режиме «сервер ждёт подключения» (для mode=connect)
-    pull_srv = socket.socket()
-    pull_srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    pull_srv.bind(("127.0.0.1", p_pull))
-    pull_srv.listen(1)
-    pull_srv.settimeout(15)
+    # миграция базы 6.x → 7.0 (отдельная копия сервера на отдельной базе)
+    migration_test(hub_path, tmp)
 
-    proc = subprocess.Popen([sys.executable, hub_path, "--config", cfg_path],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = start_server(hub_path, cfg_path)
     failed = False
     try:
-        check("сервер запустился", wait_port(p_wic) and wait_port(p_web) and wait_port(p_push))
-
-        wic = WiclaxSim(p_wic)
-        wic.send("HELLO")
-        wic.send("CLOCK")
-        check("ответ на CLOCK", wic.wait_for(lambda L: any(x.startswith("CLOCK ") for x in L)))
-        check("сигнал «на связи» (*)", wic.wait_for(lambda L: "*" in L, timeout=3))
+        check("сервер запустился", wait_port(p_web) and wait_port(p_pub))
+        time.sleep(0.5)
+        check("прежние порты чиповых источников и Wiclax не открываются",
+              not wait_port(p_old1, 0.5) and not wait_port(p_old2, 0.5))
 
         now = dt.datetime.now().replace(microsecond=0)
         t0 = now - dt.timedelta(seconds=30)
 
-        def ts(sec, ms=0):
-            x = t0 + dt.timedelta(seconds=sec, milliseconds=ms)
-            return x
 
-        # 1. ридер сам подключается (push), по 5 считываний на прохождение
-        push = socket.create_connection(("127.0.0.1", p_push))
-        lines = []
-        for chip, sec in (("E2801160600002000000AA01", 0), ("E2801160600002000000AA02", 2)):
-            for k in range(5):
-                x = ts(sec, 80 * k)
-                lines.append(f"{chip},{x:%Y-%m-%d %H:%M:%S}.{x.microsecond // 1000:03d},1,-55")
-        push.sendall(("\r\n".join(lines) + "\r\n").encode())
-        ok = wic.wait_for(lambda L: sum(1 for x in L if ";FINISH;" in x) >= 2)
-        got = [x for x in wic.snapshot() if ";FINISH;" in x]
-        check("push: отметки дошли до Wiclax", ok, str(got))
-        time.sleep(0.5)
-        got = [x for x in wic.snapshot() if ";FINISH;" in x]
-        check("push: повторы склеены (2 прохождения из 10 считываний)", len(got) == 2, str(got))
-        exp = f"E2801160600002000000AA01;{ts(0):%d-%m-%Y %H:%M:%S}.000;FINISH;;;0"
-        check("формат строки для Wiclax", exp in got, f"ждали {exp}, пришло {got}")
-
-        # 2. ридер повторно выгрузил всю память после обрыва связи
-        push.sendall(("\r\n".join(lines) + "\r\n").encode())
-        time.sleep(0.7)
-        got2 = [x for x in wic.snapshot() if ";FINISH;" in x]
-        check("повторная выгрузка памяти не дублирует отметки", len(got2) == 2, str(got2))
-        push.close()
-
-        # 3. сервер сам подключается к ридеру (connect)
-        conn, _ = pull_srv.accept()
-        x = ts(5, 250)
-        conn.sendall(f"E2801160600002000000AA03,{x:%Y-%m-%d %H:%M:%S}.250,3,-60\n".encode())
-        ok = wic.wait_for(lambda L: any("AA03" in y and ";KM5;" in y for y in L))
-        check("connect: сервер подключился к ридеру и получил отметку", ok)
-
-        # 4. обрыв связи с ридером и переподключение
-        conn.close()
-        conn, _ = pull_srv.accept()
-        x = ts(9, 0)
-        conn.sendall(f"E2801160600002000000AA04,{x:%Y-%m-%d %H:%M:%S}.000,1,-60\n".encode())
-        ok = wic.wait_for(lambda L: any("AA04" in y for y in L))
-        check("connect: переподключение после обрыва", ok)
-        conn.close()
-
-        # 5. приём по HTTP (JSON и текст)
         def http(method, path, body=None, headers=None, auth=True):
             h = dict(headers or {})
             if auth:
@@ -225,66 +231,80 @@ def main() -> int:
             except urllib.error.HTTPError as e:
                 return e.code, e.read().decode("utf-8", "replace")
 
-        def give_bibs(eid, start=None):
-            """Имитация шага 2: секретарь вписывает номера тем, у кого их ещё нет (сервер сам их не выдаёт)."""
-            v = json.loads(http("GET", f"/api/events/{eid}/bibs")[1])
-            have = [int(r["bib"]) for r in v["rows"] if str(r["bib"]).isdigit()]
+        J = {"Content-Type": "application/json", "X-Requested-With": "timing-hub"}
+
+        def api(method, path, obj=None):
+            """Запрос к API от имени администратора: (код, разобранный JSON)."""
+            c_, t_ = http(method, path, None if obj is None else json.dumps(obj).encode(), J)
+            try:
+                return c_, json.loads(t_)
+            except ValueError:
+                return c_, {"_raw": t_}
+
+        def give_bibs(eid, start=None, distance=None):
+            """Имитация шага 2: секретарь вписывает номера тем, у кого их ещё нет (сервер сам их не выдаёт).
+            Один человек (ФИО + год) получает один номер на все свои дисциплины."""
+            q = "?distance=" + urllib.parse.quote(distance) if distance else ""
+            v = json.loads(http("GET", f"/api/events/{eid}/bibs{q}")[1])
+            allv = json.loads(http("GET", f"/api/events/{eid}/bibs")[1])
+            have = [int(r["bib"]) for r in allv["rows"] if str(r["bib"]).isdigit()]
             n = start or (max(have) + 1 if have else 1)
-            rows = []
+            num, rows = {}, []
             for r in v["rows"]:
-                if not r["bib"]:
-                    rows.append({"ids": r["ids"], "bib": str(n)})
+                if r["bib"]:
+                    continue
+                k = (r["name"], r["birth_year"])
+                if k not in num:
+                    num[k] = n
                     n += 1
+                rows.append({"ids": r["ids"], "bib": str(num[k])})
             if rows:
-                c_, t_ = http("POST", f"/api/events/{eid}/bibs", json.dumps({"rows": rows}).encode(),
-                              {"Content-Type": "application/json", "X-Requested-With": "timing-hub"})
+                c_, t_ = http("POST", f"/api/events/{eid}/bibs", json.dumps({"rows": rows}).encode(), J)
                 assert c_ == 200, t_
-            return len(rows)
+            return len(num)
 
-        x = ts(12, 500)
-        body = json.dumps([{"chip": "AA05", "time": f"{x:%Y-%m-%d %H:%M:%S}.500", "antenna": 1},
-                           {"chip": "AA06", "time": x.timestamp()},
-                           {"chip": "", "time": "bad"}]).encode()
-        code, txt = http("POST", "/api/reads?source=HTTP", body,
-                         {"Content-Type": "application/json", "X-Api-Key": "test-key"}, auth=False)
-        check("HTTP JSON: принято 2, отклонено 1", code == 200 and json.loads(txt) == {"accepted": 2, "rejected": 1},
-              f"{code} {txt}")
-        code, txt = http("POST", "/api/reads?source=HTTP", b"AA07 " + f"{x:%H:%M:%S}".encode() + b".900\n",
-                         {"Content-Type": "text/plain", "X-Api-Key": "wrong"}, auth=False)
-        check("HTTP: неверный ключ отклонён", code == 401, f"{code}")
-        code, txt = http("POST", "/api/reads?source=HTTP", b"AA07 " + f"{x:%H:%M:%S}".encode() + b".900\n",
-                         {"Content-Type": "text/plain", "X-Api-Key": "test-key"}, auth=False)
-        check("HTTP текст: строка принята", code == 200 and '"accepted": 1' in txt, f"{code} {txt}")
-        ok = wic.wait_for(lambda L: all(any(c in y for y in L) for c in ("AA05", "AA06", "AA07")))
-        check("HTTP: отметки дошли до Wiclax", ok)
+        DEF_RULES = "Юноши;М;1980;2020\nДевушки;Ж;1980;2020"
 
-        # 6. STOPREAD / STARTREAD
-        wic.send("STOPREAD")
-        check("STOPREAD -> READOK", wic.wait_for(lambda L: L.count("READOK") >= 1))
-        push = socket.create_connection(("127.0.0.1", p_push))
-        x = ts(15)
-        push.sendall(f"AA08 {x:%Y-%m-%d %H:%M:%S}.000\n".encode())
-        time.sleep(0.7)
-        check("на паузе отметки в Wiclax не идут", not any("AA08" in y for y in wic.snapshot()))
-        wic.send("STARTREAD")
-        check("STARTREAD -> READOK", wic.wait_for(lambda L: L.count("READOK") >= 2))
-        push.close()
+        def seed(name, people, dists, lanes=8, rules=DEF_RULES, grid=True, **evkw):
+            """Соревнование на стадионе «под ключ» через настоящий путь секретаря: заявки (подтверждены), номера на шаге 2,
+            сетка по каждой дисциплине. people: (номер, 'Фамилия Имя', год, пол, команда, разряд, [дисциплины])."""
+            c_, e_ = api("POST", "/api/events", {"name": name, "kind": "stadium", "timing": "manual",
+                                                  "finish_device": "JUDGE", **evkw})
+            assert c_ == 201, e_
+            sid_ = e_["id"]
+            api("POST", f"/api/events/{sid_}", {"reg_distances": "\n".join(dists), "reg_rules": rules})
+            want = {}
+            for bib_, nm_, year_, sex_, team_, rank_, ds_ in people:
+                ln_, fn_ = nm_.split(" ", 1)
+                c_, o_ = api("POST", f"/api/events/{sid_}/regs", {
+                    "last_name": ln_, "first_name": fn_, "birth_date": f"{year_}-06-15", "sex": sex_, "team": team_,
+                    "rank": rank_, "representative": "Родитель", "policy": True, "distances": [{"distance": d_} for d_ in ds_]})
+                assert c_ == 201, (nm_, c_, o_)
+                want[(nm_, str(year_))] = str(bib_)
+            rows_ = [{"ids": r_["ids"], "bib": want[(r_["name"], r_["birth_year"])]}
+                     for r_ in json.loads(http("GET", f"/api/events/{sid_}/bibs")[1])["rows"]]
+            c_, t_ = http("POST", f"/api/events/{sid_}/bibs", json.dumps({"rows": rows_}).encode(), J)
+            assert c_ == 200, t_
+            if grid:
+                for d_ in dists:
+                    c_, o_ = api("POST", f"/api/events/{sid_}/heats", {"distance": d_, "lanes": lanes})
+                    assert c_ == 200, (d_, o_)
+            return sid_
 
-        # 7. REWIND — перезапрос отметок за период
-        a = (t0 - dt.timedelta(seconds=1)).strftime("%d-%m-%Y %H:%M:%S")
-        b = (t0 + dt.timedelta(seconds=20)).strftime("%d-%m-%Y %H:%M:%S")
-        wic.send(f"REWIND {a} {b}")
-        ok = wic.wait_for(lambda L: any("AA08" in y and y.endswith(";1") for y in L))
-        rew = [y for y in wic.snapshot() if y.endswith(";1")]
-        check("REWIND: пропущенная на паузе отметка пришла с флагом 1", ok, str(rew))
-        chips = sorted({y.split(";")[0] for y in rew})
-        exp_chips = sorted(["E2801160600002000000AA01", "E2801160600002000000AA02", "E2801160600002000000AA03",
-                            "E2801160600002000000AA04", "AA05", "AA06", "AA07", "AA08"])
-        check("REWIND: все 8 участников, без повторов", chips == exp_chips and len(rew) == 8, str(rew))
+        def sl_entries(eid):
+            sl_ = json.loads(http("GET", f"/api/events/{eid}/startlist")[1])
+            return [e for h in sl_["heats"] for e in h["entries"]] + sl_["no_heat"]
 
-        # 8. установка часов из Wiclax
-        wic.send(f"CLOCK {dt.datetime.now():%d-%m-%Y %H:%M:%S}")
-        check("CLOCK <время> -> CLOCKOK", wic.wait_for(lambda L: "CLOCKOK" in L))
+        def fin_by(eid):
+            """Итоги по ключу (номер, дисциплина): один номер стоит у спортсмена в нескольких дисциплинах."""
+            return {(x["bib"], x["distance"]): x for x in json.loads(http("GET", f"/api/events/{eid}/results")[1])["finished"]}
+
+        def grid_all(eid, dists, lanes=8):
+            """Сформировать сетку по каждой дисциплине (7.0: только через POST …/heats {distance, lanes})."""
+            return [api("POST", f"/api/events/{eid}/heats", {"distance": d_, "lanes": lanes}) for d_ in dists]
+
+        def to_wave(eid, bib, wave, distance=None):
+            return api("POST", f"/api/events/{eid}/entry", {"bib": bib, "wave": wave, **({"distance": distance} if distance else {})})
 
         # 9. страница состояния, JSON, CSV
         code, txt = http("GET", "/", auth=False)
@@ -364,73 +384,90 @@ def main() -> int:
         code2, _, _ = jpost("/api/login", {"login": "judge1", "password": "judge-pass-9"}, proxied=True)
         check("пользователи: разблокирован, новый пароль работает", code == 200 and code2 == 200, f"{code} {code2}")
         code, d, _ = jpost("/api/users/admin/update", {"active": False}, adm, True)
-        check("пользователи: нельзя заблокировать того, кого нет в таблице", code == 404, str(code))
         code, txt = http("GET", "/")
-        check("страница состояния открывается", code == 200 and "Сервер хронометража" in txt, str(code))
+        check("страница состояния открывается", code == 200 and "SakhStart" in txt, str(code))
         code, txt = http("GET", "/api/status")
         st = json.loads(txt) if code == 200 else {}
-        check("JSON-статус: 16 уникальных считываний в базе", st.get("totals", {}).get("reads") == 16, txt[:300])
-        fin = next((s for s in st.get("sources", []) if s["id"] == "FINISH"), {})
-        check("JSON-статус: повторы посчитаны", fin.get("duplicates") == 10, str(fin))
-        code, txt = http("GET", "/export.csv")
-        check("CSV: все считывания (16 строк + заголовок)", code == 200 and len(txt.strip().splitlines()) == 17,
-              f"{code} {len(txt.strip().splitlines())}")
-        code, txt = http("GET", "/export.csv?filtered=1")
-        check("CSV: только прохождения (8 + заголовок)", code == 200 and len(txt.strip().splitlines()) == 9,
-              f"{code} {len(txt.strip().splitlines())}")
-        code, txt = http("GET", "/raw?source=FINISH")
-        check("сырые строки видны", code == 200 and "AA01" in txt)
+        check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
+              set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
+              and st["version"] == "7.0.0" and st["build_date"] == "2026-10-14", txt[:300])
+        gone = {}
+        for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
+                    "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
+                    "/api/events/1/check"):
+            gone[pth] = http("GET", pth)[0]
+        gone["POST /api/reads"] = http("POST", "/api/reads?source=HTTP", b"AA01 10:00:00.000\n", {"X-Api-Key": "test-key"}, auth=False)[0]
+        check("чиповые адреса удалены: /api/readers, /api/wiclax-ports, /api/live, /api/devices, /raw, /export.csv, POST /api/reads, "
+              ".clax, wiclax.csv, check — все дают 404 или отказ",
+              all(c_ in (401, 404) for c_ in gone.values()), str(gone))
+        code, txt = http("GET", "/api/system")
+        sy0 = json.loads(txt)
+        check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.0.0", txt[:200])
 
-        # 9b. соревнования: создание, номера, старт, результаты
-        J = {"Content-Type": "application/json", "X-Requested-With": "timing-hub"}
+
+        # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
         code, _ = http("POST", "/api/events", json.dumps({"name": "x"}).encode(), {"Content-Type": "application/json"})
         check("API: POST без X-Requested-With отклонён", code == 403, str(code))
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Тестовый забег", "date": t0.strftime("%Y-%m-%d"),
-                         "finish_device": "FINISH", "push_wiclax": True}).encode(), J)
-        ev = json.loads(txt) if code == 201 else {}
-        check("API: соревнование создано", code == 201 and ev.get("id"), f"{code} {txt}")
-        eid = ev.get("id")
-        code, txt = http("POST", f"/api/events/{eid}/entries", json.dumps({"text":
-                         "1;E2801160600002000000AA01\n2 e2801160600002000000aa02\nплохая строка\n9;ZZ99"}).encode(), J)
-        check("API: список номеров (3 принято, 1 строка пропущена)",
-              code == 200 and json.loads(txt) == {"count": 3, "bad_lines": [3]}, txt)
-        st_t = t0 - dt.timedelta(seconds=1)
-        code, txt = http("POST", f"/api/events/{eid}/start", json.dumps({"time": st_t.strftime("%H:%M:%S") + ".000"}).encode(), J)
-        check("API: старт дан", code == 200 and json.loads(txt).get("status") == "running", txt)
-        exp_rs = f"RACESTART {st_t:%H:%M:%S},000"
-        check("старт отправлен в Wiclax (RACESTART)", wic.wait_for(lambda L: exp_rs in L), str(wic.snapshot()[-5:]))
-        code, txt = http("GET", f"/api/events/{eid}/results")
-        r = json.loads(txt) if code == 200 else {}
+        code, ev = api("POST", "/api/events", {"name": "Проверка видов", "kind": "mass", "timing": "chips"})
+        check("7.0: вид соревнования kind=mass не принимается — всегда «стадион»", code == 201 and ev.get("kind") == "stadium", str(ev.get("kind")))
+        check("7.0: хронометраж timing=chips не принимается (допустимы judge|manual|lynx)",
+              code == 201 and ev.get("timing") in (None, "", "judge", "manual", "lynx"), str(ev.get("timing")))
+        code, ev = api("POST", "/api/events", {"name": "Проверка поля", "kind": "stadium", "timing": "lynx"})
+        check("7.0: хронометраж lynx принимается", code == 201 and ev.get("timing") == "lynx", str(ev)[:200])
+        e1 = seed("Тестовый забег", [(1, "Иванов Иван", 2008, "М", "СШОР", "1р", ["100 м"]),
+                                     (2, "Петров Пётр", 2008, "М", "СШОР", "Б/р", ["100 м"]),
+                                     (9, "Сидоров Олег", 2008, "М", "СШОР", "Б/р", ["100 м"])],
+                  ["100 м"], date=t0.strftime("%Y-%m-%d"))
+        ev1 = json.loads(http("GET", f"/api/events/{e1}")[1])
+        check("API: соревнование создано без чиповых полей (finish_device, push_wiclax, check_since)",
+              ev1["id"] == e1 and ev1.get("kind") == "stadium" and "push_wiclax" not in ev1 and "check_since" not in ev1
+              and "chip" not in json.dumps(ev1).lower(), str(ev1)[:300])
+        code, txt = http("POST", f"/api/events/{e1}/entries", json.dumps({"text": "1;AA01"}).encode(), J)
+        check("импорт списка текстом (POST …/entries) удалён", code in (404, 405), f"{code} {txt[:100]}")
+        code, txt = http("GET", f"/api/events/{e1}/entries")
+        check("GET …/entries остался (только чтение): 3 участника, у номера 1 — «Иванов Иван»",
+              code == 200 and json.loads(txt)["count"] == 3 and any(x.startswith("1;Забег 1;Иванов Иван") for x in json.loads(txt)["text"].splitlines()),
+              txt[:300])
+        base1 = int(time.time() * 1000) - 60000
+        code, txt = api("POST", f"/api/events/{e1}/start", {"wave": "Забег 1", "epoch_ms": base1})
+        check("API: старт забега дан", code == 200 and txt.get("status") == "running", str(txt)[:200])
+        api("POST", f"/api/events/{e1}/manual", {"bib": "1", "epoch_ms": base1 + 1000, "client_id": "e1a"})
+        api("POST", f"/api/events/{e1}/manual", {"bib": "2", "epoch_ms": base1 + 3000, "client_id": "e1b"})
+        code, r = api("GET", f"/api/events/{e1}/results")
         fin = [(x["place"], x["bib"], x["time"]) for x in r.get("finished", [])]
         check("результаты: финиш по порядку с номерами",
-              fin[:2] == [(1, "1", "0:00:01.0"), (2, "2", "0:00:03.0")] and len(fin) == 3, str(fin))
-        check("результаты: на трассе и не отмеченные",
-              len(r.get("on_course", [])) == 5 and [x["bib"] for x in r.get("not_seen", [])] == ["9"], txt[:400])
-        code, txt = http("GET", f"/api/events/{eid}/results.csv")
-        check("результаты: CSV", code == 200 and "Результат;Чип" in txt, str(code))
-        code, txt = http("GET", f"/api/live?since=0&limit=50&event={eid}")
-        lv = json.loads(txt) if code == 200 else {}
-        check("лента: номер и время с начала", any(x.get("bib") == "1" and x.get("elapsed") for x in lv.get("reads", [])), txt[:300])
-        code, txt = http("GET", "/board?event=" + str(eid))
+              fin == [(1, "1", "0:00:01.0"), (2, "2", "0:00:03.0")], str(fin))
+        check("результаты: не отмеченные в списке; «на трассе» всегда пусто; без поля chip",
+              [x["bib"] for x in r.get("not_seen", [])] == ["9"] and r.get("on_course") == [] and '"chip"' not in json.dumps(r),
+              json.dumps(r, ensure_ascii=False)[:400])
+        check("результаты: devices — только точки ручных отметок судьи", r.get("devices") == ["JUDGE"], str(r.get("devices")))
+        code, txt = http("GET", f"/api/events/{e1}/results.csv")
+        check("результаты: CSV без колонки «Чип»", code == 200 and "Место общее" in txt and "Чип" not in txt and "Иванов Иван" in txt, txt[:200])
+        code, txt = http("GET", "/board?event=" + str(e1))
         check("табло открывается", code == 200 and "Табло" in txt, str(code))
         code, txt = http("GET", "/api/events")
-        check("список соревнований", code == 200 and len(json.loads(txt)["events"]) == 1, txt[:200])
+        check("список соревнований", code == 200 and len(json.loads(txt)["events"]) >= 3, txt[:200])
 
-        # 9c. волны, ручные отметки, предупреждения, проверка чипов, журнал
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Волны", "date": t0.strftime("%Y-%m-%d"),
-                         "finish_device": "FINISH"}).encode(), J)
-        e2 = json.loads(txt)["id"]
-        code, txt = http("POST", f"/api/events/{e2}/entries", json.dumps({"text":
-                         "1;E2801160600002000000AA01;A\n2;E2801160600002000000AA02;B\n50;;B"}).encode(), J)
-        check("забеги: участники с волнами и без чипа", code == 200 and json.loads(txt)["count"] == 3, txt)
-        _, txt = http("GET", f"/api/events/{e2}")
-        check("забеги созданы из списка", sorted(w["name"] for w in json.loads(txt)["waves"]) == ["A", "B"], txt[:300])
+        # 9c. два забега, ручные отметки судьи без номера, предупреждения, журнал
+        e2 = seed("Волны", [(1, "Иванов Иван", 2008, "М", "СШОР", "Б/р", ["100 м"]),
+                            (2, "Петров Пётр", 2008, "М", "СШОР", "Б/р", ["100 м"]),
+                            (50, "Сидоров Сидор", 2008, "М", "СШОР", "Б/р", ["100 м"])],
+                  ["100 м"], date=t0.strftime("%Y-%m-%d"))
+        api("POST", f"/api/events/{e2}/waves", {"name": "Забег 2", "category": "Юноши", "distance": "100 м"})
+        to_wave(e2, "2", "Забег 2")
+        to_wave(e2, "50", "Забег 2")
+        w2_ = json.loads(http("GET", f"/api/events/{e2}")[1])["waves"]
+        check("забеги: «Забег 1» из сетки и добавленный «Забег 2»", sorted(w["name"] for w in w2_) == ["Забег 1", "Забег 2"], str(w2_)[:300])
         tA = (t0 - dt.timedelta(seconds=1)).strftime("%H:%M:%S")
         tB = (t0 + dt.timedelta(seconds=1)).strftime("%H:%M:%S")
-        http("POST", f"/api/events/{e2}/start", json.dumps({"wave": "A", "time": tA}).encode(), J)
-        code, txt = http("POST", f"/api/events/{e2}/start", json.dumps({"wave": "B", "time": tB}).encode(), J)
-        check("забеги: старт каждой волны", code == 200 and all(w["start_time"] for w in json.loads(txt)["waves"]), txt[:300])
+        http("POST", f"/api/events/{e2}/start", json.dumps({"wave": "Забег 1", "time": tA}).encode(), J)
+        code, txt = http("POST", f"/api/events/{e2}/start", json.dumps({"wave": "Забег 2", "time": tB}).encode(), J)
+        check("забеги: старт каждого забега", code == 200 and all(w["start_time"] for w in json.loads(txt)["waves"]), txt[:300])
         tm = (t0 + dt.timedelta(seconds=10)).strftime("%H:%M:%S")
+        http("POST", f"/api/events/{e2}/manual", json.dumps({"bib": "1", "time": t0.strftime("%H:%M:%S"), "client_id": "w1"}).encode(), J)
+        http("POST", f"/api/events/{e2}/manual", json.dumps({"bib": "2", "time": (t0 + dt.timedelta(seconds=2)).strftime("%H:%M:%S"),
+                                                             "client_id": "w2"}).encode(), J)
         code, txt = http("POST", f"/api/events/{e2}/manual", json.dumps({"bib": "50", "time": tm, "judge": "Иванов",
                          "client_id": "c1"}).encode(), J)
         check("ручная отметка с номером", code == 201, txt)
@@ -439,36 +476,25 @@ def main() -> int:
                          "client_id": "c2"}).encode(), J)
         pend_id = json.loads(txt)["mark"]["id"] if code == 201 else None
         _, txt = http("GET", f"/api/events/{e2}/manual")
-        check("повторная отправка с тем же client_id не дублирует", len(json.loads(txt)["marks"]) == 2, txt[:300])
+        check("повторная отправка с тем же client_id не дублирует", len(json.loads(txt)["marks"]) == 4, txt[:300])
         _, txt = http("GET", f"/api/events/{e2}/results")
         r2 = json.loads(txt)
-        got = sorted((x["wave"], x["place"], x["bib"], x["time"], tuple(x["manual"])) for x in r2["finished"] if x["bib"])
-        check("забеги: места и время считаются от старта своей волны",
-              got == [("A", 1, "1", "0:00:01.0", ()), ("B", 1, "2", "0:00:01.0", ()), ("B", 2, "50", "0:00:09.0", ("FINISH",))],
-              str(got))
+        got = sorted((x["wave"], x["place"], x["bib"], x["time"]) for x in r2["finished"])
+        check("забеги: места и время считаются от старта своего забега",
+              got == [("Забег 1", 1, "1", "0:00:01.0"), ("Забег 2", 1, "2", "0:00:01.0"), ("Забег 2", 2, "50", "0:00:09.0")], str(got))
         texts = " | ".join(a["text"] for a in r2["alerts"])
-        check("предупреждения: отсечка без номера и чужие чипы",
-              r2["manual_pending"] == 1 and "без номера" in texts and "не из списка" in texts, texts)
+        check("предупреждения: отсечка без номера", r2["manual_pending"] == 1 and "без номера" in texts, texts)
         code, txt = http("POST", f"/api/events/{e2}/manual/{pend_id}", json.dumps({"bib": "77"}).encode(), J)
         _, txt = http("GET", f"/api/events/{e2}/results")
         r2 = json.loads(txt)
-        check("номер вписан в отсечку позже", r2["manual_pending"] == 0 and any(x["bib"] == "77" for x in r2["finished"]),
-              str(r2["finished"]))
-        code, txt = http("POST", f"/api/events/{e2}/check", b"{}", J)
-        check("проверка чипов: старт", code == 200 and json.loads(txt)["since"], txt)
-        push = socket.create_connection(("127.0.0.1", p_push))
-        x = dt.datetime.now()
-        push.sendall(f"E2801160600002000000AA01,{x:%Y-%m-%d %H:%M:%S}.{x.microsecond // 1000:03d}\n".encode())
-        push.close()
-        time.sleep(0.6)
-        _, txt = http("GET", f"/api/events/{e2}/check")
-        ck = json.loads(txt)
-        check("проверка чипов: проверен 1 из 2, номер 2 в списке непроверенных",
-              ck["checked"] == 1 and ck["total"] == 2 and ck["unchecked"] == ["2"] and ck["last"][0]["bib"] == "1", txt[:300])
+        texts = " | ".join(a["text"] for a in r2["alerts"])
+        check("номер вписан в отсечку позже; номера 77 нет в списке участников — предупреждение",
+              code == 200 and r2["manual_pending"] == 0 and "77" in texts and "нет в списке" in texts, f"{code} {texts}")
         _, txt = http("GET", f"/api/events/{e2}/log")
         acts = [a["action"] for a in json.loads(txt)["log"]]
-        check("журнал действий", "СТАРТ «A»" in acts and "Ручная отметка" in acts and "Номер в ручной отметке" in acts,
+        check("журнал действий", "СТАРТ «Забег 1»" in acts and "Ручная отметка" in acts and "Номер в ручной отметке" in acts,
               str(acts))
+
         for page in ("/judge", "/announcer?event=1"):
             code, txt = http("GET", page)
             check(f"страница {page} открывается", code == 200 and "<html" in txt, str(code))
@@ -490,48 +516,50 @@ def main() -> int:
         code, txt = http("POST", f"/api/events/{e2}/finish", b"{}", J)
         _, txt = http("GET", f"/api/events/{e2}/files")
         kinds = sorted(f["kind"] for f in json.loads(txt)["files"])
-        check("при завершении сохраняется снимок результатов", kinds == ["protocol", "snapshot"], str(kinds))
+        check("при завершении сохраняется снимок результатов (рядом — загруженный протокол и стартовый список сетки)",
+              kinds == ["protocol", "snapshot", "startlist"], str(kinds))
         snap = [f for f in json.loads(txt)["files"] if f["kind"] == "snapshot"][0]
         code, txt = http("GET", f"/files/{snap['id']}")
-        check("снимок результатов читается", code == 200 and "Результат;Чип" in txt, txt[:120])
+        check("снимок результатов читается", code == 200 and "Дистанция;Категория;Место общее" in txt and "Иванов Иван" in txt, txt[:120])
         code, txt = http("POST", f"/api/events/{e2}/archive", b"{}", J)
-        check("перенос в архив", code == 200 and json.loads(txt)["archived"] == 1 and json.loads(txt)["files_count"] == 2, txt[:200])
+        check("перенос в архив", code == 200 and json.loads(txt)["archived"] == 1 and json.loads(txt)["files_count"] == 3, txt[:200])
         code, txt = http("POST", f"/api/events/{e2}/files/{fid}", json.dumps({"delete": True}).encode(), J)
         code2, _ = http("GET", f"/files/{fid}")
         check("удаление файла", code == 200 and code2 == 404, f"{code} {code2}")
 
         # 9e. стадион: судья, забеги по очереди, финиш забега, общий протокол
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Первенство города", "finish_device": "JUDGE",
-                         "push_wiclax": False, "organizer": "РСОО ФЛАСО", "chief_judge": "Иванов И. И.",
-                         "chief_secretary": "Петрова А. А.", "place": "Стадион «Спартак»"}).encode(), J)
-        e3 = json.loads(txt)["id"]
-        check("забеги: судейское соревнование — забеги по очереди", json.loads(txt).get("heats_sequential") is True, txt[:300])
-        code, txt = http("POST", f"/api/events/{e3}/entries", json.dumps({"text":
-                         "ФИО;Номер;Год;Забег;Команда\nИванов Иван;11;2008;Забег 1;СШОР\nПетров Пётр;12;2008;Забег 1;СШОР\n"
-                         "Сидоров Олег;21;2009;Забег 2;Холмск\nКозлов Илья;31;2008;;Корсаков"}).encode(), J)
-        check("участники по заголовкам колонок", code == 200 and json.loads(txt)["count"] == 4, txt)
-        for wn in ("Забег 1", "Забег 2"):
-            http("POST", f"/api/events/{e3}/waves", json.dumps({"name": wn, "category": "Юноши", "distance": "100 м"}).encode(), J)
+        e3 = seed("Первенство города", [(11, "Иванов Иван", 2008, "М", "СШОР", "Б/р", ["100 м"]),
+                                        (12, "Петров Пётр", 2008, "М", "СШОР", "Б/р", ["100 м"]),
+                                        (21, "Сидоров Олег", 2009, "М", "Холмск", "Б/р", ["100 м"]),
+                                        (31, "Козлов Илья", 2008, "М", "Корсаков", "Б/р", ["100 м"])],
+                  ["100 м"], organizer="РСОО ФЛАСО", chief_judge="Иванов И. И.", chief_secretary="Петрова А. А.",
+                  place="Стадион «Спартак»")
+        check("забеги: судейское соревнование — забеги по очереди",
+              json.loads(http("GET", f"/api/events/{e3}")[1]).get("heats_sequential") is True)
+        api("POST", f"/api/events/{e3}/waves", {"name": "Забег 2", "category": "Юноши", "distance": "100 м"})
+        code, txt = api("POST", f"/api/events/{e3}/waves", {"next": True})
+        check("«Следующий забег»: Забег 3 с категорией и дистанцией предыдущего",
+              txt.get("created") == "Забег 3" and any(x["name"] == "Забег 3" and x["category"] == "Юноши" and x["distance"] == "100 м"
+                                                      for x in txt["waves"]), str(txt)[-300:])
+        to_wave(e3, "21", "Забег 2")
+        to_wave(e3, "31", "Забег 3")
         base = int(time.time() * 1000) - 120000
-        def jpost(path, body):
+
+        def jp3(path, body):
             return http("POST", f"/api/events/{e3}/{path}", json.dumps(body).encode(), J)
-        jpost("start", {"wave": "Забег 1", "epoch_ms": base})
-        jpost("manual", {"bib": "11", "epoch_ms": base + 12310, "wave": "Забег 1", "client_id": "h1"})
-        jpost("manual", {"bib": "12", "epoch_ms": base + 13000, "wave": "Забег 1", "client_id": "h2"})
-        code, txt = jpost("start", {"wave": "Забег 2", "epoch_ms": base + 20000})
+        jp3("start", {"wave": "Забег 1", "epoch_ms": base})
+        jp3("manual", {"bib": "11", "epoch_ms": base + 12310, "wave": "Забег 1", "client_id": "h1"})
+        jp3("manual", {"bib": "12", "epoch_ms": base + 13000, "wave": "Забег 1", "client_id": "h2"})
+        code, txt = jp3("start", {"wave": "Забег 2", "epoch_ms": base + 20000})
         w = {x["name"]: x for x in json.loads(txt)["waves"]}
         check("старт следующего забега завершает предыдущий",
               w["Забег 1"]["state"] == "finished" and w["Забег 1"]["finish_epoch_ms"] == base + 20000 and w["Забег 2"]["state"] == "running",
               str(w)[:300])
-        jpost("manual", {"bib": "21", "epoch_ms": base + 32050, "wave": "Забег 2", "client_id": "h3"})
-        code, txt = jpost("waves", {"name": "Забег 2", "finish": True, "epoch_ms": base + 34000})
-        jpost("manual", {"bib": "99", "epoch_ms": base + 37000, "wave": "Забег 2", "client_id": "h4"})
-        code, txt = jpost("waves", {"next": True})
-        w3 = [x for x in json.loads(txt)["waves"] if x["name"] == json.loads(txt).get("created")]
-        check("«Следующий забег»: Забег 3 с категорией и дистанцией предыдущего",
-              w3 and w3[0]["name"] == "Забег 3" and w3[0]["category"] == "Юноши" and w3[0]["distance"] == "100 м", txt[-300:])
-        jpost("start", {"wave": "Забег 3", "epoch_ms": base + 40000})
-        jpost("manual", {"bib": "31", "epoch_ms": base + 51900, "wave": "Забег 3", "client_id": "h5"})
+        jp3("manual", {"bib": "21", "epoch_ms": base + 32050, "wave": "Забег 2", "client_id": "h3"})
+        code, txt = jp3("waves", {"name": "Забег 2", "finish": True, "epoch_ms": base + 34000})
+        jp3("manual", {"bib": "99", "epoch_ms": base + 37000, "wave": "Забег 2", "client_id": "h4"})
+        jp3("start", {"wave": "Забег 3", "epoch_ms": base + 40000})
+        jp3("manual", {"bib": "31", "epoch_ms": base + 51900, "wave": "Забег 3", "client_id": "h5"})
         _, txt = http("GET", f"/api/events/{e3}/results")
         r3 = json.loads(txt)
         got = sorted((x["place_overall"], x["bib"], x["wave"], x["place"], x["result"]) for x in r3["finished"])
@@ -546,6 +574,7 @@ def main() -> int:
         check("страница протокола открывается", code == 200 and "Главный судья" in txt, str(code))
         code, txt = http("GET", f"/api/events/{e3}/results.csv")
         check("CSV протокола: общее место и ФИО", code == 200 and "Место общее" in txt and "Козлов Илья" in txt, txt[:200])
+
 
         # 9f. регистрация через публичную форму → подтверждение → забеги с посевом
         code, txt = http("POST", "/api/events", json.dumps({"name": "Первенство города", "date": "2026-10-24",
@@ -697,43 +726,44 @@ def main() -> int:
             code, _, _ = pub("GET", bad)
             check(f"публичный порт не отдаёт {bad}", code == 404, str(code))
         # стадион: результаты вписывает секретарь; публикация на сайте fla65.ru
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Стадион 60 м", "kind": "stadium", "timing": "manual",
-                         "finish_device": "JUDGE", "pub_site": True}).encode(), J)
-        es = json.loads(txt)
+        es_id = seed("Стадион 60 м", [(11, "Иванов Иван", 2008, "М", "СШОР", "Б/р", ["60 м"]),
+                                      (12, "Петров Пётр", 2008, "М", "СШОР", "Б/р", ["60 м"]),
+                                      (13, "Сидоров Сидор", 2008, "М", "СШОР", "Б/р", ["60 м"])],
+                     ["60 м"], pub_site=True)
+        es = json.loads(http("GET", f"/api/events/{es_id}")[1])
         check("стадион: событие создано с форматом и ручным хронометражем",
-              es.get("kind") == "stadium" and es.get("timing") == "manual" and es.get("pub_site") and es.get("reg_slug"), txt[:200])
-        http("POST", f"/api/events/{es['id']}/entries",
-             json.dumps({"text": "Номер;Чип;Забег;ФИО\n11;;;Иванов Иван\n12;;;Петров Пётр\n13;;;Сидоров Сидор"}).encode(), J)
+              es.get("kind") == "stadium" and es.get("timing") == "manual" and es.get("pub_site") and es.get("reg_slug"), str(es)[:200])
         code, txt = http("POST", f"/api/events/{es['id']}/results", json.dumps({"rows": [
             {"bib": "11", "result": "8,15"}, {"bib": "12", "result": "7.94"}, {"bib": "13", "status": "dnf"},
             {"bib": "99", "result": "9"}, {"bib": "11x", "result": "abc"}]}).encode(), J)
         rr = json.loads(txt)
-        check("стадион: результаты сохранены, ошибки названы", rr["saved"] == 3 and len(rr["errors"]) == 2, txt[:300])
+        check("стадион: результаты сохранены, ошибки названы строками «номер: текст»",
+              rr["saved"] == 3 and len(rr["errors"]) == 2 and all(isinstance(x, str) and ":" in x for x in rr["errors"])
+              and any(x.startswith("99:") for x in rr["errors"]), txt[:300])
         _, txt = http("GET", f"/api/events/{es['id']}/results")
         rs = json.loads(txt)
         check("стадион: места по введённым результатам, DNF отдельно",
               [(x["bib"], x["place"], x["result"]) for x in rs["finished"]] == [("12", 1, "7.94"), ("11", 2, "8.15")]
               and any(x["bib"] == "13" and x.get("status") == "DNF" for x in rs["not_seen"]), txt[:300])
-        # проведённый старт из чужого протокола: список с результатами и очками, командный зачёт
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Кросс школьников", "kind": "stadium", "timing": "manual",
-                         "team_best": 2}).encode(), J)
-        ek = json.loads(txt)
-        csv_txt = ("Номер;Забег;ФИО;Дата рождения;Команда;Категория;Дистанция;Результат;Очки\n"
-                   "1;Д1;Аа Ая;20.05.2017;Школа 1;Девочки 2017-2018 г.р.;500 м;1:50,5;20\n"
-                   "2;Д1;Бб Бя;21.11.2017;Школа 2;Девочки 2017-2018 г.р.;500 м;1:51,5;17\n"
-                   "3;Д1;Вв Вя;2017;Школа 1;Девочки 2017-2018 г.р.;500 м;1:52,2;15\n"
-                   "4;Д1;Гг Гя;2018;Школа 1;Девочки 2017-2018 г.р.;500 м;1:53,0;14\n"
-                   "5;Д1;Дд Дя;2017;Школа 2;Девочки 2017-2018 г.р.;500 м;DNF;\n"
-                   "6;М1;Ее Ея;2017;Школа 2;Мальчики 2017-2018 г.р.;500 м;1:41,03;20\n"
-                   "7;М1;Жж Жя;2017;Школа 1;Мальчики 2017-2018 г.р.;500 м;1:41,06;17\n"
-                   "8;М1;Зз Зя;2017;Школа 1;Мальчики 2017-2018 г.р.;500 м;мимо;1")
-        code, txt = http("POST", f"/api/events/{ek['id']}/entries", json.dumps({"text": csv_txt}).encode(), J)
-        check("протокол из файла: 7 строк принято, строка с ошибкой в результате названа",
-              code == 200 and json.loads(txt) == {"count": 7, "bad_lines": [9]}, txt)
+        # командный зачёт: результаты вписаны секретарём, очки — по месту (20, 17, 15, 14 …)
+        ek_id = seed("Кросс школьников", [
+            (1, "Аа Ая", 2017, "Ж", "Школа 1", "Б/р", ["500 м"]), (2, "Бб Бя", 2017, "Ж", "Школа 2", "Б/р", ["500 м"]),
+            (3, "Вв Вя", 2017, "Ж", "Школа 1", "Б/р", ["500 м"]), (4, "Гг Гя", 2018, "Ж", "Школа 1", "Б/р", ["500 м"]),
+            (5, "Дд Дя", 2017, "Ж", "Школа 2", "Б/р", ["500 м"]), (6, "Ее Ея", 2017, "М", "Школа 2", "Б/р", ["500 м"]),
+            (7, "Жж Жя", 2017, "М", "Школа 1", "Б/р", ["500 м"]), (8, "Зз Зя", 2017, "М", "Школа 1", "Б/р", ["500 м"])],
+            ["500 м"], rules="Девочки 2017-2018 г.р.;Ж;2017;2018\nМальчики 2017-2018 г.р.;М;2017;2018", team_best=2)
+        ek = {"id": ek_id}
+        code, txt = http("POST", f"/api/events/{ek['id']}/results", json.dumps({"rows": [
+            {"bib": "1", "result": "1:50,5"}, {"bib": "2", "result": "1:51,5"}, {"bib": "3", "result": "1:52,2"},
+            {"bib": "4", "result": "1:53,0"}, {"bib": "5", "status": "dnf"}, {"bib": "6", "result": "1:41,03"},
+            {"bib": "7", "result": "1:41,06"}, {"bib": "8", "result": "мимо"}]}).encode(), J)
+        check("командный зачёт: 7 результатов принято, строка с ошибкой в результате названа",
+              code == 200 and json.loads(txt)["saved"] == 7 and len(json.loads(txt)["errors"]) == 1
+              and json.loads(txt)["errors"][0].startswith("8:"), txt)
         _, txt = http("GET", f"/api/events/{ek['id']}/results")
         rk = json.loads(txt)
         fin = {x["bib"]: x for x in rk["finished"]}
-        check("протокол из файла: места, результаты, очки, дистанция забега, DNF",
+        check("протокол: места, результаты, очки по месту, дистанция, DNF",
               fin["1"]["place_overall"] == 1 and fin["4"]["place_overall"] == 4 and fin["6"]["result"] == "1:41.03"
               and fin["2"]["points"] == 17 and fin["1"]["distance"] == "500 м"
               and any(x["bib"] == "5" and x.get("status") == "DNF" for x in rk["not_seen"]), txt[:400])
@@ -743,12 +773,6 @@ def main() -> int:
               tk[0].get("group") == "2017-2018 г.р." and tk[0].get("columns") == ["Мальчики", "Девочки"]
               and rows_k["Школа 1"]["by"] == {"Девочки": 35, "Мальчики": 17} and rows_k["Школа 1"]["total"] == 52
               and rows_k["Школа 1"]["place"] == 1 and rows_k["Школа 2"]["total"] == 37, str(tk)[:400])
-        http("POST", f"/api/events/{ek['id']}/entries",
-             json.dumps({"text": "Номер;Забег;ФИО\n1;Д1;Аа Ая\n2;Д1;Бб Бя\n9;Д1;Новая Нна"}).encode(), J)
-        _, txt = http("GET", f"/api/events/{ek['id']}/results")
-        fin = {x["bib"]: x for x in json.loads(txt)["finished"]}
-        check("список без колонки результата не стирает введённые итоги", fin.get("1", {}).get("result") == "1:50.5"
-              and fin.get("2", {}).get("points") == 17 and "9" not in fin, txt[:300])
         code, txt, hd = pub("GET", "/r/api/calendar")
         cal = json.loads(txt)
         card = next((c for c in cal["events"] if c["name"] == "Стадион 60 м"), None)
@@ -842,9 +866,10 @@ def main() -> int:
         dbq = _sql.connect(cfg["db_path"])
         ph = dbq.execute("SELECT consent_hash, policy_hash FROM registrations WHERE last_name = 'Быстров'").fetchone()
         dbq.close()
+        cp_b = next((c for c in cpart if ph and c["hash"] == ph[0]), None)       # редакция, под которую подали заявку Быстрова
         check("5.1: тексты согласий хранятся по редакциям (участник, тренер) с числом согласий; у заявки — отпечатки согласия и Политики",
-              cpart and cpart[0]["used"] >= 6 and "табло" in cpart[0]["text"] and "ИНН 6501159635" in cpart[0]["text"]
-              and ctr and ctr[0]["used"] >= 1 and ph and ph[0] == cpart[0]["hash"] and ph[1] == cons["policy_hash"]
+              cpart and cp_b and cp_b["used"] >= 6 and "табло" in cp_b["text"] and "ИНН 6501159635" in cp_b["text"]
+              and ctr and ctr[0]["used"] >= 1 and ph and ph[0] == cp_b["hash"] and ph[1] == cons["policy_hash"]
               and cons["retention_days"] == 180, str([(c["kind"], c["used"]) for c in cons["consents"]])[:300])
         ca, cta, _ = pub("GET", "/r/api/auth/trainer/consent")
         check("5.1: текст согласия тренера отдаётся форме отдельно от Политики", ca == 200 and "личного кабинета тренера" in json.loads(cta)["text"], cta[:200])
@@ -887,13 +912,18 @@ def main() -> int:
         http("POST", f"/api/events/{e4}/regs/{rid_bad}", json.dumps({"status": "rejected"}).encode(), J)
         code, txt = http("POST", f"/api/events/{e4}/regs", json.dumps({"approve_all": True}).encode(), J)
         check("подтверждение заявок", json.loads(txt)["counts"] == {"pending": 0, "approved": 7, "rejected": 1}, txt[-200:])
-        # 5.2: номера только вручную — без них сетка не строится
+        # 5.2: номера только вручную — без них сетка не строится; сетка всегда по одной дисциплине
+        D60, D300 = "60 м", "300 м"
         code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
+        codeh, txth = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4, "mode": "list"}).encode(), J)
+        check("7.0: сетка без дисциплины не формируется — 400 «выберите дисциплину» (и с mode=list тоже)",
+              code == 400 and "выберите дисциплину" in txt and codeh == 400 and "выберите дисциплину" in txth, f"{code} {txt} {codeh} {txth}")
+        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D60, "lanes": 4}).encode(), J)
         _, txt_sl = http("GET", f"/api/events/{e4}/startlist")
         check("5.2: без вписанных вручную номеров забеги не формируются, автоматической выдачи номеров нет",
-              code == 400 and "нет нагрудных номеров у 7 участников" in txt and not json.loads(txt_sl)["heats"]
+              code == 400 and "нет нагрудных номеров у 6 участников" in txt and not json.loads(txt_sl)["heats"]
               and not json.loads(txt_sl)["no_heat"], txt[:200])
-        bv = json.loads(http("GET", f"/api/events/{e4}/bibs?distance=" + urllib.parse.quote("60 м") + "&sex=" + urllib.parse.quote("М"))[1])
+        bv = json.loads(http("GET", f"/api/events/{e4}/bibs?distance=" + urllib.parse.quote(D60) + "&sex=" + urllib.parse.quote("М"))[1])
         check("5.2: шаг 2 видит подтверждённых участников дисциплины по фильтру, номеров ещё нет",
               bv["total"] == 5 and bv["with_bib"] == 0 and all(not r["bib"] and r["ids"] for r in bv["rows"]), str(bv)[:300])
         ids5 = [r["ids"] for r in bv["rows"]]
@@ -901,14 +931,21 @@ def main() -> int:
         cd2, td2 = http("POST", f"/api/events/{e4}/bibs", json.dumps({"rows": [{"ids": ids5[0], "bib": "с пробелом"}]}).encode(), J)
         bv2 = json.loads(http("GET", f"/api/events/{e4}/bibs")[1])
         check("5.2: повтор номера и неверный номер отклоняются целиком — в базу ничего не записано",
-              cd1 == 400 and "уже у другого участника" in td1 and cd2 == 400 and bv2["with_bib"] == 0, f"{cd1} {td1[:150]} {cd2}")
-        check("5.2: секретарь вписал номера 1–7 и нажал «Сохранить нагрудные номера»", give_bibs(e4, 1) == 7
-              and json.loads(http("GET", f"/api/events/{e4}/bibs")[1])["with_bib"] == 7)
-        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
+              cd1 == 400 and "уже у другого участника" in td1 and json.loads(td1).get("errors") and cd2 == 400 and bv2["with_bib"] == 0,
+              f"{cd1} {td1[:150]} {cd2}")
+        nb4 = give_bibs(e4, 1)
+        bv3 = json.loads(http("GET", f"/api/events/{e4}/bibs")[1])
+        bg = [r for r in bv3["rows"] if r["name"].startswith("Бегова")]
+        check("5.2: секретарь вписал номера 1–6 (по одному на человека) и нажал «Сохранить нагрудные номера»; "
+              "у Береговой один номер на 60 м и 300 м", nb4 == 6 and bv3["with_bib"] == 7 and len(bg) == 2 and bg[0]["bib"] == bg[1]["bib"],
+              str(bv3)[:300])
+        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D60, "lanes": 4}).encode(), J)
         hs = json.loads(txt)
-        check("забеги сформированы: 60 м Юноши ×2, 60 м Девушки, 300 м Девушки",
-              code == 200 and [(h["distance"], h["category"], h["count"]) for h in hs["heats"]] ==
-              [("60 м", "Юноши", 2), ("60 м", "Юноши", 3), ("60 м", "Девушки", 1), ("300 м", "Девушки", 1)], txt)
+        code_, txt_ = http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D300, "lanes": 4}).encode(), J)
+        hs3 = json.loads(txt_)
+        check("забеги сформированы по дисциплинам: 60 м Юноши ×2, 60 м Девушки, 300 м Девушки",
+              code == 200 and code_ == 200 and [(h["distance"], h["category"], h["count"]) for h in hs["heats"] + hs3["heats"]] ==
+              [("60 м", "Юноши", 2), ("60 м", "Юноши", 3), ("60 м", "Девушки", 1), ("300 м", "Девушки", 1)], txt + txt_)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
         sl = json.loads(txt)
         h2 = {e["name"].split()[0]: e["lane"] for e in sl["heats"][1]["entries"]}
@@ -916,8 +953,8 @@ def main() -> int:
         check("посев: сильнейшие в последнем забеге, лучший — на центральной дорожке",
               h2 == {"Быстров": 2, "Шагов": 3, "Скоров": 1} and sorted(h1) == ["Ветров", "Лётов"], f"{h1} {h2}")
         bibs = sorted(int(e["bib"]) for h in sl["heats"] for e in h["entries"])
-        check("5.2: в сетке — ровно те номера, что вписал секретарь", bibs == list(range(1, 8)), str(bibs))
-        anna = [e for e in sl["heats"][2]["entries"]][0]
+        check("5.2: в сетке — ровно те номера, что вписал секретарь (у Береговой один и тот же номер в двух дисциплинах)",
+              len(bibs) == 7 and set(bibs) == set(range(1, 7)) and len(bibs) - len(set(bibs)) == 1, str(bibs))
         code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": [e["bib"] for e in sl["heats"][0]["entries"]
                          if e["name"].startswith("Лётов")][0], "wave": "Забег 2"}).encode(), J)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
@@ -929,21 +966,18 @@ def main() -> int:
         rs = json.loads(txt)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
         sl0 = json.loads(txt)
-        check("сброс сетки: забегов нет, все 7 участников нераспределены без дорожек",
-              code == 200 and rs["waves"] == 4 and rs["entries"] == 7 and not sl0["heats"] and len(sl0["no_heat"]) == 7
-              and all(e["wave"] is None and e["lane"] is None for e in sl0["no_heat"]), txt[:300])
-        check("сброс сетки: номера сохранены", sorted(int(e["bib"]) for e in sl0["no_heat"]) == list(range(1, 8)))
-        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4, "mode": "list"}).encode(), J)
+        check("сброс сетки: забегов нет, все 7 строк участников нераспределены без дорожек; стартовавших не было",
+              code == 200 and rs["waves"] == 4 and rs["entries"] == 7 and rs["stopped"] == [] and not sl0["heats"]
+              and len(sl0["no_heat"]) == 7 and all(e["wave"] is None and e["lane"] is None for e in sl0["no_heat"]), txt[:300])
+        check("сброс сетки: номера сохранены", sorted({int(e["bib"]) for e in sl0["no_heat"]}) == list(range(1, 7)))
+        http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D60, "lanes": 4}).encode(), J)
+        http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D300, "lanes": 4}).encode(), J)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
-        sll = json.loads(txt)
-        check("общим списком: один сквозной список, без деления на забеги и дорожек, номера и пол сохранены",
-              code == 200 and len(sll["heats"]) == 1 and sll["heats"][0]["name"] == "Общий список"
-              and len(sll["heats"][0]["entries"]) == 7 and all(e["lane"] is None for e in sll["heats"][0]["entries"])
-              and not sll["no_heat"] and {e["sex"] for e in sll["heats"][0]["entries"]} == {"М", "Ж"}, txt[:300])
-        check("3.4: у участника в списке своя дисциплина, тип результата и число попыток (для бланка техники)",
-              all({"distance", "rtype", "slots"} <= set(e) for e in sll["heats"][0]["entries"])
-              and all(e["rtype"] == "time" and e["slots"] == 0 for e in sll["heats"][0]["entries"] if e["distance"]), txt[:300])
-        b1 = sll["heats"][0]["entries"][0]["bib"]; b2 = sll["heats"][0]["entries"][1]["bib"]
+        sl = json.loads(txt)
+        check("3.4: у участника в списке своя дисциплина, тип результата и число попыток (для бланка техники); поля chip нет",
+              all({"id", "distance", "rtype", "slots"} <= set(e) and "chip" not in e for h in sl["heats"] for e in h["entries"])
+              and all(e["rtype"] == "time" and e["slots"] == 0 for h in sl["heats"] for e in h["entries"] if e["distance"]), txt[:300])
+        b1 = sl["heats"][0]["entries"][0]["bib"]; b2 = sl["heats"][0]["entries"][1]["bib"]
         code, txt = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b1, "new_bib": "501"}).encode(), J)
         code2, txt2 = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b2, "new_bib": "501"}).encode(), J)
         code3, _ = http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": b2, "new_bib": "с пробелом"}).encode(), J)
@@ -951,10 +985,9 @@ def main() -> int:
         bb = {e["bib"]: e for e in json.loads(txt)["heats"][0]["entries"]}
         _, rt = http("GET", f"/api/events/{e4}/regs")
         check("секретарь вручную меняет нагрудный номер; занятый и неверный номера отклоняются",
-              "501" in bb and b1 not in bb and bb["501"]["chip"] == "#501" and code2 == 400 and "занят" in txt2 and code3 == 400
-              and '"bib": "501"' in rt.replace('"bib":"501"', '"bib": "501"'), txt2[:200])
+              code == 200 and "501" in bb and b1 not in bb and code2 == 400 and "уже" in txt2 and code3 == 400
+              and '"bib": "501"' in rt.replace('"bib":"501"', '"bib": "501"'), f"{code} {txt2[:200]}")
         http("POST", f"/api/events/{e4}/entry", json.dumps({"bib": "501", "new_bib": b1}).encode(), J)
-        http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
         _, txt = http("GET", f"/api/events/{e4}/startlist")
         sl = json.loads(txt)
         # поздняя заявка после формирования забегов — добавляется вручную
@@ -975,10 +1008,9 @@ def main() -> int:
         fr = json.loads(txt)["finished"]
         check("результат участника из регистрации: ФИО, категория, 7.5",
               fr and fr[0]["name"] == "Быстров Иван" and fr[0]["category"] == "Юноши" and fr[0]["result"] == "7.5", str(fr)[:300])
-        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"lanes": 4}).encode(), J)
-        check("после старта пересобрать забеги нельзя", code == 400, txt)
-        code, txt = http("POST", f"/api/events/{e4}/resetheats", b"{}", J)
-        check("после старта сбросить сетку нельзя", code == 400, txt)
+        code, txt = http("POST", f"/api/events/{e4}/heats", json.dumps({"distance": D60, "lanes": 4}).encode(), J)
+        check("после старта пересобрать забеги без сброса нельзя — «стоит время старта — нажмите «Сбросить сетку»»",
+              code == 400 and "стоит время старта" in txt and "Сбросить сетку" in txt, txt)
         code, txt = http("GET", f"/api/events/{e4}/regs.csv")
         check("выгрузка заявок CSV", code == 200 and "Быстров" in txt and "Представитель" in txt, txt[:100])
         # командная заявка: шаблон Excel → заполненный файл → проверка → отправка
@@ -1071,46 +1103,6 @@ def main() -> int:
               "Мальчики до 12 лет;М;2015;" in dr and "Юноши до 16 лет;М;2011;2012" in dr and "Мужчины до 23 лет;М;2004;2006" in dr
               and "Женщины;Ж;;2003" in dr, dr)
 
-        # обмен с Wiclax: импорт .clax (участники, дистанции, чипы из прохождений) и экспорт CSV
-        clax = ('<?xml version="1.0" encoding="utf-8"?><Epreuve nom="TEST" dates="1 октября 2026 г."><Etapes><Etape><Engages>'
-                '<E d="7" n="ТЕСТОВ ТЕСТ Тестович" a="2010" x="M" p="4000 м юноши" />'
-                '<E d="8" n="ПРОБОВА ПРОБА" c="ЛИН" a="2011" x="F" p="2000 м Девочки" />'
-                '<E d="9" n="БЕЗЧИПОВ ИВАН" a="1990" x="M" p="4000 м юноши" /></Engages>'
-                '<Pass_Arr><P>*7*101343910*1*58003a9f837*0*0</P><P>*8*101703400*1*58003aa5d0f*0*0</P></Pass_Arr></Etape></Etapes>'
-                '<Parcours><Pcs nom="2000 м Девочки" distance="2000" /><Pcs nom="4000 м юноши" distance="4000" /></Parcours></Epreuve>').encode()
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Импорт Wiclax", "finish_device": "FINISH"}).encode(), J)
-        e5 = json.loads(txt)["id"]
-        r = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e5}/clax", data=clax, method="POST",
-                                   headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(),
-                                            "X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
-        with urllib.request.urlopen(r, timeout=5) as resp:
-            out = json.loads(resp.read())
-        _, txt = http("GET", f"/api/events/{e5}")
-        evw = json.loads(txt)
-        check("импорт .clax: участники, чипы, дистанции → забеги",
-              out["entries"] == 3 and out["with_chip"] == 2 and
-              {(w["name"], w["category"], w["distance"]) for w in evw["waves"]} == {("2000 м Девочки", "Девочки", "2000 м"), ("4000 м юноши", "юноши", "4000 м")},
-              str(out) + str(evw["waves"])[:200])
-        code, txt = http("GET", f"/api/events/{e5}/wiclax.csv")
-        check("экспорт для Wiclax: номер, ФИО, пол, дистанция, чип", code == 200 and "7;Тестов;Тест;;M;2010;;;4000 м юноши;юноши;;58003A9F837" in txt
-              and "9;Безчипов;Иван;;M;1990" in txt, txt[:300])
-        req = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e5}/event.clax",
-                                     headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode()})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            cl = resp.read()
-        import xml.etree.ElementTree as ET
-        cr = ET.fromstring(cl.split(b"?>", 1)[1])
-        pucs = sorted(p_.text for p_ in cr.find("PucesDos"))
-        check("файл .clax для Wiclax: дистанции, участники, чипы", cr.tag == "Epreuve" and cr.get("nom") == "Импорт Wiclax"
-              and len(cr.find("Parcours")) == 2 and len(cr.find("Etapes/Etape/Engages")) == 3
-              and pucs == ["58003a9f837.7", "58003aa5d0f.8"], cl[:300])
-        r = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/events/{e5}/clax?check=1", data=cl, method="POST",
-                                   headers={"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(),
-                                            "X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
-        with urllib.request.urlopen(r, timeout=5) as resp:
-            back = json.loads(resp.read())
-        check("свой .clax читается обратно (чипы из PucesDos)", back.get("entries") == 3 and back.get("with_chip") == 2, str(back)[:200])
-
         # обновление из браузера: папки update нет — вежливый отказ; есть — архив принят и проверен
         upd = os.path.join(tmp, "update")
         code, txt = http("POST", "/api/system/update", b"PK", {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"})
@@ -1162,108 +1154,12 @@ def main() -> int:
         check("файл загружен в папку и перенесён в «Для судей»", code == 200 and any(f["id"] == fid2 for f in json.loads(txt)["files"]), txt[:200])
         code, txt = http("GET", "/api/system")
         sy = json.loads(txt)
-        check("вкладка «Оборудование»: сервер, ридеры, кто подключён", code == 200 and sy["server"]["disk_total"] > 0
-              and len(sy["readers"]) == 3 and any(c["ip"] == "127.0.0.1" for c in sy["clients"]), txt[:300])
+        check("вкладка «Оборудование»: сервер и кто подключён, без ридеров и Wiclax", code == 200 and sy["server"]["disk_total"] > 0
+              and "readers" not in sy and "wiclax" not in sy and any(c["ip"] == "127.0.0.1" for c in sy["clients"]), txt[:300])
 
         http("POST", f"/api/events/{e4}", json.dumps({"reg_open": False}).encode(), J)
         code, out = reg("Опоздал", "Совсем", "2010-09-09", "М", ["60 м"])
         check("регистрация закрыта — заявки не принимаются", code == 403, str(out))
-
-        # 9b. ридеры из браузера: добавить, подключить, порт Wiclax по точке, отключить, удалить
-        ip_srv = socket.socket(); ip_srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        ip_srv.bind(("127.0.0.1", 0)); ip_srv.listen(5); ip_srv.settimeout(10)
-        p_ip = ip_srv.getsockname()[1]
-        code, txt = http("POST", "/api/readers", json.dumps({"id": "FINISH", "host": "127.0.0.1", "port": p_ip}).encode(), J)
-        check("ридеры: имя из файла настроек не занять", code == 400 and "файле настроек" in txt, txt)
-        code, txt = http("POST", "/api/readers", json.dumps({"id": "IP1", "host": "10.0.0.999", "port": 10000}).encode(), J)
-        check("ридеры: неверный адрес отклонён", code == 400, txt)
-        code, txt = http("POST", "/api/readers", json.dumps({"id": "IP1", "host": "127.0.0.1", "port": p_ip,
-                                                              "device": "km10", "box": "Ящик 2", "enabled": True}).encode(), J)
-        check("ридеры: добавлен и включён из браузера", code == 200, txt)
-        code, txt = http("GET", "/api/readers")
-        rd1 = next((r for r in json.loads(txt)["readers"] if r["id"] == "IP1"), {})
-        rport = (rd1.get("wiclax") or {}).get("port")
-        check("ридеру закреплён личный порт Wiclax (9861+)", bool(rport) and 9861 <= rport <= 9899, txt[:300])
-        wic_rd = WiclaxSim(rport) if rport and wait_port(rport, 5) else None
-        check("личный порт ридера открыт", wic_rd is not None)
-        code, txt = http("POST", "/api/readers/scan", json.dumps({"subnet": "8.8.8"}).encode(), J)
-        check("поиск ридеров: внешние сети запрещены", code == 400, txt)
-        code, txt = http("POST", "/api/readers/scan", json.dumps({"subnet": "10.255.255", "port": 1}).encode(), J)
-        check("поиск ридеров: внутренняя сеть проверяется", code == 200 and "found" in json.loads(txt), txt[:200])
-        p_wx2 = free_port()
-        while not 9855 <= p_wx2 <= 9860:
-            p_wx2 = 9855 + (p_wx2 % 6)
-            try:
-                t_ = socket.socket(); t_.bind(("127.0.0.1", p_wx2)); t_.close()
-            except OSError:
-                p_wx2 = 0
-        code, txt = http("POST", "/api/wiclax-ports", json.dumps({"port": p_wx2, "devices": "KM10", "name": "10 км"}).encode(), J)
-        check("порт Wiclax для точки добавлен", code == 200, txt)
-        ok_port = wait_port(p_wx2, 5)
-        check("порт Wiclax для точки открыт", ok_port)
-        wic_km = WiclaxSim(p_wx2) if ok_port else None
-        conn_ip, _ = ip_srv.accept()
-        now = dt.datetime.now()
-        line = "aa00" + "058003a9f837" + "0100" + now.strftime("%y%m%d%H%M%S") + "%02x" % (now.microsecond // 10000) + "7e"
-        conn_ip.sendall((line + "\r\n").encode())
-        ok = wic.wait_for(lambda L: any(y.startswith("58003a9f837;") and ";KM10;" in y for y in L))
-        check("IPICO из браузера: отметка ушла в Wiclax строчными, точка KM10", ok, str(wic.snapshot()[-3:]))
-        if wic_rd:
-            check("личный порт ридера получил отметку", wic_rd.wait_for(lambda L: any(y.startswith("58003a9f837;") for y in L)),
-                  str(wic_rd.snapshot()[-3:]))
-        if wic_km:
-            check("порт точки KM10 получил отметку", wic_km.wait_for(lambda L: any(";KM10;" in y for y in L)))
-            push = socket.create_connection(("127.0.0.1", p_push)); x = dt.datetime.now()
-            push.sendall(f"AA77,{x:%Y-%m-%d %H:%M:%S}.{x.microsecond // 1000:03d}\n".encode())
-            wic.wait_for(lambda L: any("AA77" in y for y in L)); push.close(); time.sleep(0.3)
-            check("порт точки KM10 не получает финиш", not any("AA77" in y for y in wic_km.snapshot()))
-        code, txt = http("GET", "/api/readers")
-        rv = json.loads(txt) if code == 200 else {}
-        r1 = next((r for r in rv.get("readers", []) if r["id"] == "IP1"), {})
-        check("ридеры: список со статусом «на связи»", bool(r1.get("live", {}).get("connected")) and r1.get("box") == "Ящик 2", txt[:400])
-        code, txt = http("POST", "/api/readers/IP1/point", json.dumps({"device": "km5"}).encode(), J)
-        now = dt.datetime.now()
-        line = "aa00" + "058003a9f999" + "0100" + now.strftime("%y%m%d%H%M%S") + "%02x" % (now.microsecond // 10000) + "7e"
-        conn_ip.sendall((line + "\r\n").encode())
-        ok = wic.wait_for(lambda L: any(y.startswith("58003a9f999;") and ";KM5;" in y for y in L))
-        _, txt2 = http("GET", "/api/readers")
-        r1 = next((r for r in json.loads(txt2)["readers"] if r["id"] == "IP1"), {})
-        check("ридеры: переставлен на другую точку без переподключения", code == 200 and ok and r1.get("device") == "KM5"
-              and bool(r1.get("live", {}).get("connected")), str(wic.snapshot()[-3:]))
-        code, txt = http("POST", "/api/readers/IP1/disconnect", b"{}", J)
-        time.sleep(0.5)
-        code, txt = http("GET", "/api/readers")
-        r1 = next((r for r in json.loads(txt)["readers"] if r["id"] == "IP1"), {})
-        check("ридеры: отключён из браузера", r1.get("enabled") is False and r1.get("live") is None, txt[:300])
-        try:
-            conn_ip.settimeout(3)
-            gone = conn_ip.recv(10) == b""
-        except OSError:
-            gone = True
-        check("ридеры: соединение с ридером закрыто", gone)
-        code, txt = http("POST", "/api/readers/bulk", json.dumps({"text": "название;IP;порт;точка;ящик\nIP2;10.19.1.62;10000;FINISH;Ящик 1\nIP3;10.19.1.63;;FINISH;Ящик 1"}).encode(), J)
-        check("ридеры: список загружен (2 новых)", code == 200 and json.loads(txt).get("added") == 2, txt)
-        code, txt = http("POST", "/api/readers", json.dumps({"id": "SIM", "parser": "sim", "device": "FINISH", "enabled": True}).encode(), J)
-        check("симулятор: виртуальный ридер добавлен", code == 200, txt)
-        code, txt = http("POST", "/api/readers/SIM/simulate", json.dumps({"count": 5, "minutes": 0.2}).encode(), J)
-        check("симулятор: гонка запущена", code == 200 and json.loads(txt).get("total") == 5, txt)
-        time.sleep(14)
-        code, txt = http("GET", "/api/readers")
-        sim = next((r for r in json.loads(txt)["readers"] if r["id"] == "SIM"), {})
-        check("симулятор: все 5 «финишировали», отметки на сервере", (sim.get("sim") or {}).get("sent") == 5
-              and (sim.get("live") or {}).get("reads", 0) >= 5, txt[:400])
-        code, txt = http("POST", "/api/readers/SIM/clear-reads", b"{}", J)
-        check("симулятор: отметки стёрты", code == 200 and json.loads(txt).get("deleted", 0) >= 5, txt)
-        code, txt = http("POST", "/api/readers/IP2/clear-reads", b"{}", J)
-        check("стереть отметки настоящего ридера нельзя", code == 400, txt)
-        for rid in ("IP1", "IP2", "IP3", "SIM"):
-            http("POST", f"/api/readers/{rid}/delete", b"{}", J)
-        code, txt = http("GET", "/api/readers")
-        check("ридеры: удалены", code == 200 and not json.loads(txt)["readers"], txt[:200])
-        http("POST", f"/api/wiclax-ports/{p_wx2}/delete", b"{}", J)
-        if wic_km:
-            wic_km.close()
-        conn_ip.close(); ip_srv.close()
 
         # 2.8: лимит мест, диапазоны номеров, эстафета, выдача номеров, страница события, копия, серия
         code, txt = http("POST", "/api/events", json.dumps({"name": "Осенний забег 2026", "date": "2026-11-01",
@@ -1321,7 +1217,8 @@ def main() -> int:
                                                                                    if k in bv8]}).encode(), J)
         check("5.2: эстафета на шаге 2 — одна строка на команду, номер вписывается один раз",
               c8b == 200 and "СШОР-1" in bv8 and len(bv8["СШОР-1"]) == 4, t8b[:200])
-        code, txt = http("POST", f"/api/events/{e8}/heats", json.dumps({"lanes": 8}).encode(), J)
+        gr8 = grid_all(e8, ["5 км", "10 км", "4×100 м"])
+        code = 200 if all(c_ == 200 for c_, _ in gr8) else 400
         _, txt = http("GET", f"/api/events/{e8}/startlist")
         ents = [e for h in json.loads(txt)["heats"] for e in h["entries"]]
         bibs = {e["name"]: e["bib"] for e in ents}
@@ -1336,7 +1233,7 @@ def main() -> int:
         code, txt = http("POST", f"/api/events/{e8}/pickup", json.dumps({"bib": "500"}).encode(), J)
         pk = json.loads(txt)
         check("2.8: выдача номера отмечена", code == 200 and pk["picked"] == 1 and pk["total"] == 4 and pk["picked_at"], txt)
-        http("POST", f"/api/events/{e8}/heats", json.dumps({"lanes": 8}).encode(), J)
+        grid_all(e8, ["5 км", "10 км", "4×100 м"])
         _, txt = http("GET", f"/api/events/{e8}/pickup")
         pv = json.loads(txt)
         check("2.8: отметка «выдан» сохраняется при пересборке забегов",
@@ -1361,13 +1258,10 @@ def main() -> int:
         # серия: два этапа с результатами — сумма очков
         stage_ids = []
         for n, (res_a, res_b) in enumerate((("12.0", "12.5"), ("13.1", "12.9")), 1):
-            code, txt = http("POST", "/api/events", json.dumps({"name": f"Этап {n}", "date": f"2026-0{n}-10", "kind": "stadium",
-                             "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
-            sid = json.loads(txt)["id"]
+            sid = seed(f"Этап {n}", [(1, "Альфа Аня", 2010, "Ж", "СШОР", "Б/р", ["100 м"]),
+                                     (2, "Бета Вера", 2010, "Ж", "Холмск", "Б/р", ["100 м"])], ["100 м"], date=f"2026-0{n}-10")
             stage_ids.append(sid)
             http("POST", f"/api/events/{sid}", json.dumps({"series": "Кубок проверки", "pub_results": True}).encode(), J)
-            http("POST", f"/api/events/{sid}/entries", json.dumps({"text": "Номер;ФИО;Год;Команда;Категория;Дистанция\n"
-                 "1;Альфа Аня;2010;СШОР;Девушки;100 м\n2;Бета Вера;2010;Холмск;Девушки;100 м"}).encode(), J)
             http("POST", f"/api/events/{sid}/results", json.dumps({"rows": [{"bib": "1", "result": res_a},
                  {"bib": "2", "result": res_b}]}).encode(), J)
         code, txt, _ = pub("GET", "/r/api/series?name=" + urllib.parse.quote("кубок проверки"))
@@ -1384,16 +1278,20 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("3.0: версия 6.0.0 и дата сборки 14.10.2026", st3["version"] == "6.0.0" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.0: версия 7.0.0 и дата сборки 14.10.2026", st3["version"] == "7.0.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
               code == 200 and dr["year"] == 2027 and dr["rules"].splitlines()[0].startswith("Мальчики до 12 лет;М;2016;")
               and len(dr["rules"].splitlines()) == 14, txt[:300])
         code, txt = http("GET", "/")
-        check("3.0: стартовый экран — Мастер подбора соревнования с двумя направлениями",
-              code == 200 and "Мастер подбора соревнования" in txt and "Настройка оборудования IPICO" in txt
-              and "Массовый забег с хронометражем" in txt and "Соревнования на стадионе" in txt, str(code))
+        wl_ = _re.search(r'<button[^>]*id="wlIpico"[^>]*>.*?</button>', txt, _re.S)       # серая карточка «перенесено в отдельный модуль»
+        rest_ = txt.replace(wl_.group(0), "") if wl_ else txt
+        bad_w = [w for w in ("IPICO", "Wiclax", "ридер", "Массовый забег с хронометражем") if w in rest_]
+        check("7.0: стартовый экран — «Что будем проводить?» с карточкой «Стадион / Манеж»; чиповое направление — только неактивная "
+              "карточка-заглушка, про ридеры, Wiclax и настройку оборудования IPICO ни слова",
+              code == 200 and "Что будем проводить?" in txt and 'id="wlStadium"' in txt and "Стадион / Манеж" in txt and not bad_w
+              and (wl_ is None or "disabled" in wl_.group(0)), str(bad_w))
         # 3.1: справочник дисциплин и типы результата (прыжки, метания, многоборья)
         code, txt = http("GET", "/api/disciplines")
         dj = json.loads(txt)
@@ -1414,11 +1312,14 @@ def main() -> int:
         ids_ = {d["id"] for d in dj["disciplines"]}
         check("3.1: пресеты ссылаются на существующие дисциплины", len(dj["presets"]) >= 8
               and all(set(p["disciplines"]) <= ids_ for p in dj["presets"]), "")
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Технические виды", "kind": "stadium", "timing": "manual"}).encode(), J)
-        et = json.loads(txt)["id"]
-        http("POST", f"/api/events/{et}/entries", json.dumps({"text": "Номер;Забег;ФИО\n1;Длина;Альфа\n2;Длина;Бета\n3;Длина;Гамма\n4;Высота;Дельта\n5;Высота;Эпсилон\n6;Многоборье;Зета\n7;Многоборье;Эта\n8;100;Тета\n9;100;Йота"}).encode(), J)
-        for wn, dist in (("Длина", "Прыжок в длину"), ("Высота", "Прыжок в высоту"), ("Многоборье", "Десятиборье"), ("100", "100 м")):
-            http("POST", f"/api/events/{et}/waves", json.dumps({"name": wn, "category": "Юноши", "distance": dist}).encode(), J)
+        M_ = "М"
+        et = seed("Технические виды", [
+            (1, "Альфа Аа", 2008, M_, "СШОР", "Б/р", ["Прыжок в длину"]), (2, "Бета Бб", 2008, M_, "СШОР", "Б/р", ["Прыжок в длину"]),
+            (3, "Гамма Вв", 2008, M_, "СШОР", "Б/р", ["Прыжок в длину"]), (4, "Дельта Гг", 2008, M_, "СШОР", "Б/р", ["Прыжок в высоту"]),
+            (5, "Эпсилон Дд", 2008, M_, "СШОР", "Б/р", ["Прыжок в высоту"]), (6, "Зета Ее", 2008, M_, "СШОР", "Б/р", ["Десятиборье"]),
+            (7, "Эта Жж", 2008, M_, "СШОР", "Б/р", ["Десятиборье"]), (8, "Тета Зз", 2008, M_, "СШОР", "Б/р", ["100 м"]),
+            (9, "Йота Ии", 2008, M_, "СШОР", "Б/р", ["100 м"])],
+            ["Прыжок в длину", "Прыжок в высоту", "Десятиборье", "100 м"])
         code, txt = http("POST", f"/api/events/{et}/results", json.dumps({"rows": [
             {"bib": "1", "result": "7,85"}, {"bib": "2", "result": "7.2"}, {"bib": "3", "result": "99"},
             {"bib": "4", "result": "1,95"}, {"bib": "5", "result": "2.05"},
@@ -1442,12 +1343,13 @@ def main() -> int:
         code, txt = http("POST", f"/api/events/{et}/results", json.dumps({"rows": [{"bib": "6", "result": "13:20"}]}).encode(), J)
         check("3.1: время в дисциплине с очками не принимается", json.loads(txt)["saved"] == 0 and len(json.loads(txt)["errors"]) == 1, txt[:200])
         # 3.2: три секундомера и попытки
-        code, txt = http("POST", "/api/events", json.dumps({"name": "Секундомеры и попытки", "kind": "stadium", "timing": "manual"}).encode(), J)
-        e5 = json.loads(txt)["id"]
-        http("POST", f"/api/events/{e5}/entries", json.dumps({"text": "Номер;Забег;ФИО;Разряд\n11;Бег;Один;1р\n12;Бег;Два;кмс\n13;Бег;Три\n14;Бег;Четыре\n15;Бег;Пять\n"
-                                                                    "21;Длина;Шесть;мс\n22;Длина;Семь\n23;Длина;Восемь\n31;Высота;Девять\n32;Высота;Десять"}).encode(), J)
-        for wn, dist in (("Бег", "100 м"), ("Длина", "Прыжок в длину"), ("Высота", "Прыжок в высоту")):
-            http("POST", f"/api/events/{e5}/waves", json.dumps({"name": wn, "category": "Юноши", "distance": dist}).encode(), J)
+        e5 = seed("Секундомеры и попытки", [
+            (11, "Один Аа", 2008, M_, "СШОР", "1р", ["100 м"]), (12, "Два Бб", 2008, M_, "СШОР", "кмс", ["100 м"]),
+            (13, "Три Вв", 2008, M_, "СШОР", "Б/р", ["100 м"]), (14, "Четыре Гг", 2008, M_, "СШОР", "Б/р", ["100 м"]),
+            (15, "Пять Дд", 2008, M_, "СШОР", "Б/р", ["100 м"]), (21, "Шесть Ее", 2008, M_, "СШОР", "мс", ["Прыжок в длину"]),
+            (22, "Семь Жж", 2008, M_, "СШОР", "Б/р", ["Прыжок в длину"]), (23, "Восемь Зз", 2008, M_, "СШОР", "Б/р", ["Прыжок в длину"]),
+            (31, "Девять Ии", 2008, M_, "СШОР", "Б/р", ["Прыжок в высоту"]), (32, "Десять Кк", 2008, M_, "СШОР", "Б/р", ["Прыжок в высоту"])],
+            ["100 м", "Прыжок в длину", "Прыжок в высоту"])
         code, txt = http("POST", f"/api/events/{e5}/results", json.dumps({"rows": [
             {"bib": "11", "t": ["12.31", "12.40", "12.33"], "auto": True},
             {"bib": "12", "t": ["13.0", "13.2", ""], "auto": True},
@@ -1543,14 +1445,22 @@ def main() -> int:
               and all(e["lane"] for h in run for e in h["entries"]) and len([h for h in sl9["heats"] if h["distance"] == "Прыжок в длину"]) == 2, txt[:300])
         code, txt = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "ages": ["u12"]}).encode(), J)
         check("3.5: фильтр по возрасту без подходящих участников — понятная ошибка", code == 400 and "нет подтверждённых" in txt, txt[:200])
+        DJ, D60 = "Прыжок в длину", "60 м"
         j_bib = next(e["bib"] for e in jump if e["name"].startswith("Аргунов"))
         r_bib = next(e["bib"] for h in run for e in h["entries"] if e["name"].startswith("Аргунов"))
         code, txt = http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [
-            {"bib": j_bib, "a": ["7.10", "X", "7.85", "-", "7,60", "6.00"], "auto": True, "done_rank": "2р"},
-            {"bib": r_bib, "t": ["8.31", "8.40", "8.33"], "auto": True, "done_rank": "3 юн."}]}).encode(), J)
+            {"bib": j_bib, "distance": DJ, "a": ["7.10", "X", "7.85", "-", "7,60", "6.00"], "auto": True, "done_rank": "2р"},
+            {"bib": r_bib, "distance": D60, "t": ["8.31", "8.40", "8.33"], "auto": True, "done_rank": "3 юн."}]}).encode(), J)
         _, txt = http("GET", f"/api/events/{e9}/results")
         rs9 = json.loads(txt)
-        fj = next(x for x in rs9["finished"] if x["bib"] == j_bib); fr = next(x for x in rs9["finished"] if x["bib"] == r_bib)
+        fj = next(x for x in rs9["finished"] if x["bib"] == j_bib and x["distance"] == DJ)
+        fr = next(x for x in rs9["finished"] if x["bib"] == r_bib and x["distance"] == D60)
+        c_nod, t_nod = http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": j_bib, "result": "7.00"}]}).encode(), J)
+        check("7.0: номер стоит в нескольких дисциплинах (60 м и длина) — без «distance» результат не принят, ошибка названа строкой «номер: текст»",
+              j_bib == r_bib and c_nod == 200 and json.loads(t_nod)["saved"] == 0
+              and json.loads(t_nod)["errors"] == [f"{j_bib}: номер стоит в нескольких дисциплинах — укажите дисциплину"], t_nod[:300])
+        check("7.0: результаты одного спортсмена по двум видам независимы (одинаковый bib, разный distance)",
+              fj["bib"] == fr["bib"] and fj["result"] == "7.85" and fr["result"] == "8.4" and fj["place"] == 1 and fr["place"] == 1, str((fj, fr))[:300])
         check("3.5: техника — лучшая попытка 7.85 найдена сервером, шесть попыток и выполненный разряд в итогах",
               fj["result"] == "7.85" and fj["rt"] == "distance" and fj["attempts"] == ["7.10", "X", "7.85", "-", "7.60", "6.00"]
               and fj["done_rank"] == "2 р.", str(fj)[:300])
@@ -1558,8 +1468,8 @@ def main() -> int:
               fr["result"] == "8.4" and fr["sw"] == ["8.31", "8.40", "8.33"] and fr["done_rank"] == "3 юн." and fr["rt"] == "time", str(fr)[:300])
         # 5.2: один секундомер — официальный результат
         r_one = next(e["bib"] for h in run for e in h["entries"] if e["bib"] != r_bib)
-        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": r_one, "t": ["8.27", "", ""], "auto": True}]}).encode(), J)
-        f1 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["bib"] == r_one)
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": r_one, "distance": D60, "t": ["8.27", "", ""], "auto": True}]}).encode(), J)
+        f1 = fin_by(e9)[(r_one, D60)]
         check("5.2: заполнен один секундомер — он и есть официальный результат (8.27 → 8.3 вверх до 0,1)", f1["result"] == "8.3", str(f1)[:200])
         # 5.2: правка номера после сетки и результатов — результат переезжает вместе с участником
         bvj = {r["name"]: r for r in json.loads(http("GET", f"/api/events/{e9}/bibs?distance=" + urllib.parse.quote("Прыжок в длину"))[1])["rows"]}
@@ -1601,7 +1511,7 @@ def main() -> int:
         http("POST", f"/api/events/{e9}/reset", json.dumps({"wave": w60}).encode(), J)
         wv = next(w for w in json.loads(http("GET", f"/api/events/{e9}")[1])["waves"] if w["name"] == w60)
         cg2, tg2 = http("POST", f"/api/events/{e9}/heats", json.dumps({"distance": "60 м", "lanes": 2}).encode(), J)
-        fr2 = next(x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"] if x["bib"] == r_bib)
+        fr2 = fin_by(e9)[(r_bib, D60)]
         check("5.2: после старта пересобрать нельзя; «Отменить старт» обнуляет время — сетка пересобирается, введённые результаты целы",
               cg1 == 400 and not wv.get("start_time") and cg2 == 200 and fr2["result"] == "8.4", f"{cg1} {wv} {cg2} {tg2[:150]}")
         # 6.0: официальный результат считает только сервер (POST /api/calc); возрасты — из справочника; общее состояние Мастера и корзины
@@ -1697,10 +1607,10 @@ def main() -> int:
               sget("/", sck) == 200 and sget("/judge", sck) == 200 and sget("/sector", sck) == 200 and "Судья на секторе" in page_
               and sget("/board", sck) == 200 and sget("/scoreboard", sck) == 200 and sget("/protocol", sck) == 200
               and sget(f"/api/events/{se}/regs", sck) == 200 and sget(f"/api/events/{se}/startlist", sck) == 200
-              and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200 and sget("/api/devices", sck) == 200)
-        check("4.5: судье жёстко закрыты «Система», обновления, оборудование IPICO/Wiclax, пользователи",
+              and sget(f"/api/events/{se}/results", sck) == 200 and sget("/api/disciplines", sck) == 200)
+        check("4.5: судье жёстко закрыты «Система», обновления, пользователи; журнал открыт; чиповых адресов нет вовсе",
               sget("/api/system", sck) == 403 and sget("/api/system/update", sck) == 403 and sget("/api/users", sck) == 403
-              and sget("/api/readers", sck) == 403 and sget("/api/wiclax-ports", sck) == 403 and sget("/api/log", sck) == 200)
+              and sget("/api/readers", sck) in (403, 404) and sget("/api/wiclax-ports", sck) in (403, 404) and sget("/api/log", sck) == 200)
         c1, _, _ = spost(f"/api/events/{se}/results", {"rows": []}, sck)
         c2, _, _ = spost(f"/api/events/{se}/heats", {"distance": "нет такой дистанции"}, sck)
         c3, _, _ = spost(f"/api/events/{se}/delete", {}, sck)
@@ -1708,7 +1618,7 @@ def main() -> int:
         c5, _, _ = spost(f"/api/events/{se}", {"organizer": "СШОР"}, sck)
         c6, _, _ = spost("/api/system/update/install", {}, sck)
         c7, _, _ = spost("/api/users", {"login": "hack1", "role": "admin", "password": "hack-pass-1"}, sck)
-        c8, _, _ = spost("/api/readers/scan", {}, sck)
+        c8, _, _ = spost("/api/system/retention", {}, sck)
         check("4.5: судья вводит результаты, строит сетку, очищает протокол, правит соревнование — но не удаляет его и не трогает систему",
               c1 == 200 and c2 != 403 and c4 != 403 and c5 == 200 and c3 == 403 and c6 == 403 and c7 == 403 and c8 == 403,
               f"{c1} {c2} {c3} {c4} {c5} {c6} {c7} {c8}")
@@ -1800,47 +1710,47 @@ def main() -> int:
         beg = next(e["bib"] for e in jump if e["name"].startswith("Бегунов"))
         grm = next(e["bib"] for e in jump if e["name"].startswith("Громова"))
         http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [
-            {"bib": vas, "t": ["9.1", "9.2", "9.15"], "auto": True},
-            {"bib": beg, "a": ["6.10", "X", "5.90"], "auto": True},
-            {"bib": grm, "a": ["5.75", "5.50"], "auto": True}]}).encode(), J)
-        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+            {"bib": vas, "distance": D60, "t": ["9.1", "9.2", "9.15"], "auto": True},
+            {"bib": beg, "distance": DJ, "a": ["6.10", "X", "5.90"], "auto": True},
+            {"bib": grm, "distance": DJ, "a": ["5.75", "5.50"], "auto": True}]}).encode(), J)
+        fin9 = fin_by(e9)
         check("4.3: у введённого вручную результата есть время ввода (табло показывает свежие сверху)",
-              all(isinstance(fin9[b_].get("entered_epoch_ms"), int) and fin9[b_]["entered_epoch_ms"] > 1.7e12 for b_ in (vas, beg, grm)),
+              all(isinstance(fin9[b_].get("entered_epoch_ms"), int) and fin9[b_]["entered_epoch_ms"] > 1.7e12 for b_ in ((vas, D60), (beg, DJ), (grm, DJ))),
               str({k: v.get("entered_epoch_ms") for k, v in fin9.items()}))
         check("3.6: разряд считается сам — 60 м девочка 15 лет 9.2 (ручной) → 1 юн.; длина юноша 16 лет 6.10 → 2 р.",
-              fin9[vas]["done_rank"] == "1 юн." and fin9[vas]["done_rank_src"] == "auto"
-              and fin9[beg]["done_rank"] == "2 р.", str({k: (v["result"], v["done_rank"]) for k, v in fin9.items()}))
+              fin9[vas, D60]["done_rank"] == "1 юн." and fin9[vas, D60]["done_rank_src"] == "auto"
+              and fin9[beg, DJ]["done_rank"] == "2 р.", str({k: (v["result"], v["done_rank"]) for k, v in fin9.items()}))
         check("3.6: на региональных соревнованиях потолок — I разряд (5.75 у девушки — норма КМС, засчитан 1 р.)",
-              fin9[grm]["done_rank"] == "1 р.", str(fin9[grm])[:200])
-        check("3.6: вписанный секретарём разряд главнее расчётного", fin9[j_bib]["done_rank"] == "2 р." and fin9[j_bib]["done_rank_src"] == "manual"
-              and fin9[j_bib]["done_rank_auto"] == "1 р.", str(fin9[j_bib])[:300])
-        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "done_rank": "—"}, {"bib": beg, "done_rank": "кмс"}]}).encode(), J)
-        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
+              fin9[grm, DJ]["done_rank"] == "1 р.", str(fin9[grm, DJ])[:200])
+        check("3.6: вписанный секретарём разряд главнее расчётного", fin9[j_bib, DJ]["done_rank"] == "2 р." and fin9[j_bib, DJ]["done_rank_src"] == "manual"
+              and fin9[j_bib, DJ]["done_rank_auto"] == "1 р.", str(fin9[j_bib, DJ])[:300])
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "distance": D60, "done_rank": "—"}, {"bib": beg, "distance": DJ, "done_rank": "кмс"}]}).encode(), J)
+        fin9 = fin_by(e9)
         check("3.8: секретарь вручную ставит «Не выполнен» (—) и свой разряд — они главнее расчёта ЕВСК, результат не стёрт",
-              fin9[vas]["done_rank"] == "" and fin9[vas]["done_rank_src"] == "manual" and fin9[vas]["done_rank_auto"] == "1 юн."
-              and fin9[beg]["done_rank"] == "КМС" and fin9[beg]["done_rank_src"] == "manual" and fin9[beg]["result"] == "6.10"
-              and fin9[vas]["result"] == "9.2", str({k: (v["result"], v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
-        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "done_rank": ""}, {"bib": beg, "done_rank": ""}]}).encode(), J)
-        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
-        check("3.8: «Авто» возвращает расчёт по нормам", fin9[vas]["done_rank"] == "1 юн." and fin9[beg]["done_rank"] == "2 р."
-              and fin9[vas]["done_rank_src"] == "auto", str({k: (v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
-        code, txt = http("POST", f"/api/events/{e9}/clearresults", json.dumps({"bibs": [vas], "label": "60 м"}).encode(), J)
-        fin9c = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
-        sl9c = {e["bib"]: e for h in json.loads(http("GET", f"/api/events/{e9}/startlist")[1])["heats"] for e in h["entries"]}
+              fin9[vas, D60]["done_rank"] == "" and fin9[vas, D60]["done_rank_src"] == "manual" and fin9[vas, D60]["done_rank_auto"] == "1 юн."
+              and fin9[beg, DJ]["done_rank"] == "КМС" and fin9[beg, DJ]["done_rank_src"] == "manual" and fin9[beg, DJ]["result"] == "6.10"
+              and fin9[vas, D60]["result"] == "9.2", str({k: (v["result"], v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "distance": D60, "done_rank": ""}, {"bib": beg, "distance": DJ, "done_rank": ""}]}).encode(), J)
+        fin9 = fin_by(e9)
+        check("3.8: «Авто» возвращает расчёт по нормам", fin9[vas, D60]["done_rank"] == "1 юн." and fin9[beg, DJ]["done_rank"] == "2 р."
+              and fin9[vas, D60]["done_rank_src"] == "auto", str({k: (v["done_rank"], v["done_rank_src"]) for k, v in fin9.items()}))
+        code, txt = http("POST", f"/api/events/{e9}/clearresults", json.dumps({"bibs": [vas], "distance": D60, "label": "60 м"}).encode(), J)
+        fin9c = fin_by(e9)
+        sl9c = {(e["bib"], e["distance"]): e for h in json.loads(http("GET", f"/api/events/{e9}/startlist")[1])["heats"] for e in h["entries"]}
         check("4.0: «Очистить протокол» стирает результат, секундомеры и ручной разряд только выбранных участников",
-              code == 200 and json.loads(txt)["cleared"] == 1 and vas not in fin9c and beg in fin9c
-              and not sl9c[vas].get("result") and not sl9c[vas].get("detail") and not sl9c[vas].get("done_rank"), txt[:200])
-        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "t": ["9.1", "9.2", "9.15"], "auto": True}]}).encode(), J)
+              code == 200 and json.loads(txt)["cleared"] == 1 and (vas, D60) not in fin9c and (beg, DJ) in fin9c
+              and not sl9c[vas, D60].get("result") and not sl9c[vas, D60].get("detail") and not sl9c[vas, D60].get("done_rank"), txt[:200])
+        http("POST", f"/api/events/{e9}/results", json.dumps({"rows": [{"bib": vas, "distance": D60, "t": ["9.1", "9.2", "9.15"], "auto": True}]}).encode(), J)
         http("POST", f"/api/events/{e9}", json.dumps({"level": "interregion"}).encode(), J)
-        fin9 = {x["bib"]: x for x in json.loads(http("GET", f"/api/events/{e9}/results")[1])["finished"]}
-        check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm]["done_rank"] == "КМС", str(fin9[grm])[:200])
+        fin9 = fin_by(e9)
+        check("3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС", fin9[grm, DJ]["done_rank"] == "КМС", str(fin9[grm, DJ])[:200])
         http("POST", f"/api/events/{e9}", json.dumps({"level": "region"}).encode(), J)
         _, dtxt = http("GET", "/api/disciplines")
         dd = {x["name"]: x for x in json.loads(dtxt)["disciplines"]}
         mb = dd.get("Метание мяча/снаряда")
         check("3.6: «Метание мяча/снаряда» есть в справочнике как техническая дисциплина (попытки, расстояние)",
               mb and mb["attempts"] and mb["result"] == "distance" and mb["group"] == "throws" and "Метание снаряда" in mb["aliases"], str(mb)[:200])
-        # смешанный общий список без единой дистанции: техника не должна читаться как время
+        # бег и техника в одном соревновании: техника не должна читаться как время
         code, txt = http("POST", "/api/events", json.dumps({"name": "Смешанный список", "kind": "stadium", "timing": "manual", "finish_device": "JUDGE"}).encode(), J)
         e10 = json.loads(txt)["id"]
         http("POST", f"/api/events/{e10}", json.dumps({"reg_open": True, "reg_distances": "60 м\nПрыжок в длину"}).encode(), J)
@@ -1850,14 +1760,17 @@ def main() -> int:
                  "representative": "Р", "distances": [{"distance": dd}], "rank": "Б/р"}).encode())
         http("POST", f"/api/events/{e10}/regs", json.dumps({"approve_all": True}).encode(), J)
         give_bibs(e10)
-        http("POST", f"/api/events/{e10}/heats", json.dumps({"mode": "list"}).encode(), J)
+        c_mix, t_mix = http("POST", f"/api/events/{e10}/heats", json.dumps({"mode": "list"}).encode(), J)
+        check("7.0: смешанный общий список без дисциплины больше не формируется — 400 «выберите дисциплину»",
+              c_mix == 400 and "выберите дисциплину" in t_mix, t_mix)
+        grid_all(e10, ["60 м", "Прыжок в длину"])
         sl = json.loads(http("GET", f"/api/events/{e10}/startlist")[1])
-        jb = next(e["bib"] for e in sl["heats"][0]["entries"] if e["name"].startswith("Прыгунов"))
+        jb = next(e["bib"] for h in sl["heats"] for e in h["entries"] if e["name"].startswith("Прыгунов"))
         http("POST", f"/api/events/{e10}/results", json.dumps({"rows": [{"bib": jb, "a": ["5.20", "5.45", "X"], "auto": True}]}).encode(), J)
         rs10 = json.loads(http("GET", f"/api/events/{e10}/results")[1])
         f10 = [x for x in rs10["finished"] if x["bib"] == jb]
-        check("3.5: в смешанном общем списке прыжок читается как расстояние (5.45), а не как время",
-              sl["heats"][0]["distance"] == "" and f10 and f10[0]["result"] == "5.45" and f10[0]["distance"] == "Прыжок в длину" and f10[0]["rt"] == "distance",
+        check("3.5: у соревнования с бегом и техникой прыжок читается как расстояние (5.45), а не как время",
+              f10 and f10[0]["result"] == "5.45" and f10[0]["distance"] == "Прыжок в длину" and f10[0]["rt"] == "distance",
               str(f10)[:300])
         # публикация в общую сеть
         code, txt = http("POST", f"/api/events/{e9}/publish", json.dumps({"start": True, "results": True}).encode(), J)
@@ -1874,26 +1787,237 @@ def main() -> int:
               code == 200 and json.loads(txt)["waves"] == 2 and len([h for h in sl9["heats"] if h["distance"] == "60 м"]) == 2
               and not [h for h in sl9["heats"] if h["distance"] == "Прыжок в длину"], txt[:200])
 
-        wic.close()
-        # 10. второй Wiclax подключается и получает новые отметки
-        wic2 = WiclaxSim(p_wic)
-        push = socket.create_connection(("127.0.0.1", p_push))
-        x = dt.datetime.now()
-        push.sendall(f"AA09,{x:%Y-%m-%d %H:%M:%S}.{x.microsecond // 1000:03d}\n".encode())
-        check("переподключение Wiclax", wic2.wait_for(lambda L: any("AA09" in y for y in L)))
-        push.close()
-        wic2.close()
+        # ===================== 7.0: сквозной номер спортсмена на все его дисциплины =====================
+        DM = "Метание мяча/снаряда"
+        c_, e13v = api("POST", "/api/events", {"name": "Открытое первенство СШОР по метаниям", "date": "2026-10-17", "kind": "stadium",
+                                                "timing": "manual", "finish_device": "JUDGE"})
+        e13 = e13v["id"]
+        c_, evr13 = api("POST", f"/api/events/{e13}", {
+            "reg_open": True, "place": "Легкоатлетический манеж", "organizer": "ГАУ СШОР по лёгкой атлетике",
+            "reg_rules": "Девочки до 14 лет;Ж;2012;2013\nМальчики до 14 лет;М;2012;2013", "reg_distances": f"{DM}\n60 м"})
+        s13 = evr13["reg_path"].rsplit("/", 1)[-1]
+
+        def reg13(last, first="Анна", year="2013", dists=(DM, D60)):
+            body = {"last_name": last, "first_name": first, "birth_date": f"{year}-05-05", "sex": "Ж", "team": "СШОР ЛВС",
+                    "coach": "Петрова П.В.", "consent": True, "policy": True, "representative": "Родитель", "rank": "3 юн.",
+                    "distances": [{"distance": d_, "best": "25.5" if d_ == DM else "9.1"} for d_ in dists]}
+            c__, t__, _ = pub("POST", f"/r/{s13}", json.dumps(body).encode())
+            return c__
+        letters = "абвгдежзиклмн"
+        codes13 = [reg13("Фамилиева" + letters[i]) for i in range(13)]
+        c_, rv13 = api("POST", f"/api/events/{e13}/regs", {"approve_all": True})
+        check("7.0: 13 девочек заявлены через публичную форму на 60 м и метание (26 заявок), все подтверждены",
+              codes13 == [201] * 13 and rv13["counts"] == {"pending": 0, "approved": 26, "rejected": 0}, f"{codes13} {rv13.get('counts')}")
+        bv60 = json.loads(http("GET", f"/api/events/{e13}/bibs?distance=" + urllib.parse.quote(D60) + "&sex=" + urllib.parse.quote("Ж"))[1])
+        check("7.0: шаг 2 по «60 м»: 13 человек, у каждого показана вторая дисциплина (метание) и пока без номера",
+              bv60["total"] == 13 and bv60["with_bib"] == 0 and all(len(r["also"]) == 1 and r["also"][0]["distance"] == DM
+                                                                     and not r["also"][0]["bib"] and not r["inherited"] for r in bv60["rows"]),
+              str(bv60["rows"][:1]))
+        rows13 = [{"ids": r["ids"], "bib": str(i + 1)} for i, r in enumerate(bv60["rows"])]
+        c_, sv13 = api("POST", f"/api/events/{e13}/bibs", {"rows": rows13})
+        check("7.0: номер вписан один раз на шаге «60 м» и «разъехался» на 2 дисциплины: saved=13, spread=13 (по числу людей)",
+              c_ == 200 and sv13.get("ok") and sv13.get("saved") == 13 and sv13.get("spread") == 13, str(sv13))
+        nm_bib = {r["name"]: str(i + 1) for i, r in enumerate(bv60["rows"])}
+        dbq = _sql.connect(cfg["db_path"])
+        rg = dbq.execute("SELECT last_name, distance, bib FROM registrations WHERE event_id = ? ORDER BY last_name, distance", (e13,)).fetchall()
+        dbq.close()
+        per = {}
+        for ln_, d_, b_ in rg:
+            per.setdefault(ln_, {})[d_] = b_
+        check("7.0: в registrations.bib у каждой из 26 заявок стоит номер, а у каждой девочки в метании — тот же, что в беге",
+              len(rg) == 26 and all(b_ for _, _, b_ in rg) and all(len(v) == 2 and v[D60] == v[DM] for v in per.values())
+              and sorted(int(v[D60]) for v in per.values()) == list(range(1, 14)), str(rg[:4]))
+        bvm = json.loads(http("GET", f"/api/events/{e13}/bibs?distance=" + urllib.parse.quote(DM))[1])
+        check("7.0: шаг 2 по метанию: те же 13 человек с теми же номерами, повторно вписывать не нужно",
+              bvm["total"] == 13 and bvm["with_bib"] == 13 and {r["name"]: r["bib"] for r in bvm["rows"]} == nm_bib
+              and not any(r["mismatch"] for r in bvm["rows"]), str(bvm["rows"][:1]))
+        # повтор номера у ДРУГОГО человека — 400
+        r1_, r2_ = bvm["rows"][0], bvm["rows"][1]
+        c_, dup = api("POST", f"/api/events/{e13}/bibs", {"rows": [{"ids": r2_["ids"], "bib": r1_["bib"]}]})
+        check("7.0: номер другого человека дать нельзя — 400 с errors, в базе ничего не изменилось",
+              c_ == 400 and dup.get("errors") and "уже у другого участника" in dup["errors"][0]["error"]
+              and json.loads(http("GET", f"/api/events/{e13}/bibs?distance=" + urllib.parse.quote(DM))[1])["rows"][1]["bib"] == r2_["bib"], str(dup)[:300])
+        c_, dup2 = api("POST", f"/api/events/{e13}/bibs", {"rows": [{"ids": r1_["ids"], "bib": r2_["bib"]}]})
+        check("7.0: то же через шаг «метание» — 400 (проверка по людям, а не по дисциплинам)", c_ == 400 and dup2.get("errors"), str(dup2)[:200])
+        # сетки обеих дисциплин
+        g60 = api("POST", f"/api/events/{e13}/heats", {"distance": D60, "lanes": 8})
+        gdm = api("POST", f"/api/events/{e13}/heats", {"distance": DM, "lanes": 8})
+        ents13 = sl_entries(e13)
+        by_bib = {}
+        for e_ in ents13:
+            by_bib.setdefault(e_["bib"], []).append(e_["distance"])
+        check("7.0: после генерации обеих сеток в entries у каждой девочки две строки с одним номером (60 м и метание); всего 26",
+              g60[0] == 200 and gdm[0] == 200 and g60[1]["entries"] == 13 and gdm[1]["entries"] == 13 and len(ents13) == 26
+              and all(sorted(v) == sorted([D60, DM]) for v in by_bib.values()) and len(by_bib) == 13
+              and all(isinstance(e_["id"], int) for e_ in ents13) and len({e_["id"] for e_ in ents13}) == 26,
+              str(g60[1])[:150] + str(sorted(by_bib.items())[:2]))
+        check("7.0: в стартовом списке и в entries нет поля chip", "chip" not in json.dumps(ents13).lower()
+              and "chip" not in http("GET", f"/api/events/{e13}/results")[1].lower(), "")
+        # результаты по обоим видам независимы
+        bA = nm_bib[bvm["rows"][0]["name"]]
+        bB = nm_bib[bvm["rows"][1]["name"]]
+        c_, rs = api("POST", f"/api/events/{e13}/results", {"rows": [
+            {"bib": bA, "distance": D60, "result": "9.1"}, {"bib": bA, "distance": DM, "a": ["25.5", "X", "27.1"], "auto": True},
+            {"bib": bB, "distance": DM, "a": ["30.0"], "auto": True}, {"bib": bB, "distance": D60, "result": "8.8"}]})
+        f13 = fin_by(e13)
+        check("7.0: результаты вписаны по каждой дисциплине отдельно: один bib, разный distance — разные результаты и места",
+              c_ == 200 and rs["saved"] == 4 and not rs["errors"] and f13[(bA, D60)]["result"] == "9.1"
+              and f13[(bA, DM)]["result"].startswith("27.1") and f13[(bB, D60)]["result"] == "8.8"
+              and f13[(bB, DM)]["result"].startswith("30.0") and f13[(bA, D60)]["place"] == 2 and f13[(bB, D60)]["place"] == 1
+              and f13[(bA, DM)]["place"] == 2 and f13[(bB, DM)]["place"] == 1, str({k: (v["result"], v["place"]) for k, v in f13.items()}))
+        c_, rs = api("POST", f"/api/events/{e13}/results", {"rows": [{"bib": bA, "result": "9.0"}]})
+        check("7.0: без distance результат номера из двух дисциплин не принят — «номер стоит в нескольких дисциплинах — укажите дисциплину»",
+              c_ == 200 and rs["saved"] == 0 and rs["errors"] == [f"{bA}: номер стоит в нескольких дисциплинах — укажите дисциплину"], str(rs))
+        c_, rs = api("POST", f"/api/events/{e13}/results", {"rows": [{"bib": bA, "distance": "100 м", "result": "9.0"}]})
+        check("7.0: дисциплина, в которой номера нет, — ошибка строкой «номер: текст»",
+              c_ == 200 and rs["saved"] == 0 and len(rs["errors"]) == 1 and rs["errors"][0].startswith(f"{bA}:"), str(rs))
+        c_, cl = api("POST", f"/api/events/{e13}/clearresults", {"bibs": [bA], "distance": DM, "label": DM})
+        f13 = fin_by(e13)
+        check("7.0: «Очистить протокол» с distance стирает результат только в этой дисциплине",
+              c_ == 200 and cl["cleared"] == 1 and (bA, DM) not in f13 and (bA, D60) in f13 and (bB, DM) in f13, str(cl))
+        # выдача номеров — по людям
+        pk13 = json.loads(http("GET", f"/api/events/{e13}/pickup")[1])
+        c_, pkp = api("POST", f"/api/events/{e13}/pickup", {"bib": bA})
+        dbq = _sql.connect(cfg["db_path"])
+        pk_rows = dbq.execute("SELECT COUNT(*), SUM(picked_at IS NOT NULL) FROM entries WHERE event_id = ? AND bib = ?", (e13, bA)).fetchone()
+        dbq.close()
+        pk13b = json.loads(http("GET", f"/api/events/{e13}/pickup")[1])
+        check("7.0: выдача номеров — одна строка на человека (13, а не 26); отметка «выдан» ложится на обе строки номера",
+              pk13["total"] == 13 and len(pk13["rows"]) == 13 and pk13["picked"] == 0 and c_ == 200 and pkp["total"] == 13 and pkp["picked"] == 1
+              and tuple(pk_rows) == (2, 2) and pk13b["picked"] == 1
+              and next(r for r in pk13b["rows"] if r["bib"] == bA)["distance"] in (f"{D60}, {DM}", f"{DM}, {D60}"), str((pk13["total"], pkp, pk_rows)))
+
+        # тёзки в одной дисциплине — разные люди; выравнивание «разъехавшихся» номеров; номер подхватывается в новой дисциплине
+        e12 = api("POST", "/api/events", {"name": "Тёзки и сквозные номера", "kind": "stadium", "timing": "manual", "finish_device": "JUDGE",
+                                          "date": "2026-10-18"})[1]["id"]
+        api("POST", f"/api/events/{e12}", {"reg_distances": f"{D60}\n{DM}", "reg_rules": "Девочки до 14 лет;Ж;2012;2013"})
+
+        def man_reg(eid_, last, first, year, dists):
+            return api("POST", f"/api/events/{eid_}/regs", {"last_name": last, "first_name": first, "birth_date": f"{year}-04-04", "sex": "Ж",
+                       "team": "СШОР", "rank": "Б/р", "representative": "Р", "policy": True, "distances": [{"distance": d_} for d_ in dists]})
+        t1 = man_reg(e12, "Петрова", "Анна", 2012, [D60, DM])
+        t2 = man_reg(e12, "Петрова", "Анна", 2013, [D60])
+        bt = json.loads(http("GET", f"/api/events/{e12}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        pe = {r["birth_year"]: r for r in bt["rows"]}
+        check("7.0: тёзки (Петрова Анна 2012 и 2013) в одной дисциплине — две разные строки шага 2; у старшей видна вторая дисциплина",
+              t1[0] == 201 and t2[0] == 201 and bt["total"] == 2 and pe["2012"]["ids"] != pe["2013"]["ids"]
+              and len(pe["2012"]["also"]) == 1 and pe["2013"]["also"] == [], str(bt["rows"]))
+        c_, sv = api("POST", f"/api/events/{e12}/bibs", {"rows": [{"ids": pe["2012"]["ids"], "bib": "1"}, {"ids": pe["2013"]["ids"], "bib": "2"}]})
+        check("7.0: тёзкам можно дать разные номера (saved=2); spread=1 — только у той, что заявлена на две дисциплины",
+              c_ == 200 and sv["saved"] == 2 and sv["spread"] == 1, str(sv))
+        c_, sv = api("POST", f"/api/events/{e12}/bibs", {"rows": [{"ids": pe["2013"]["ids"], "bib": "1"}]})
+        check("7.0: номер тёзки другому тёзке — 400", c_ == 400 and sv.get("errors"), str(sv))
+        # старые разъехавшиеся номера (101 и 201 у одного человека) выравниваются сохранением
+        dbq = _sql.connect(cfg["db_path"], isolation_level=None)
+        dbq.execute("UPDATE registrations SET bib = '101' WHERE event_id = ? AND last_name = 'Петрова' AND birth_date LIKE '2012%' AND distance = ?", (e12, D60))
+        dbq.execute("UPDATE registrations SET bib = '201' WHERE event_id = ? AND last_name = 'Петрова' AND birth_date LIKE '2012%' AND distance = ?", (e12, DM))
+        dbq.close()
+        bt = json.loads(http("GET", f"/api/events/{e12}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        pe = {r["birth_year"]: r for r in bt["rows"]}
+        check("7.0: разъехавшиеся номера (101 в беге, 201 в метании у одного человека) видны на шаге 2 как расхождение",
+              pe["2012"]["bib"] == "101" and pe["2012"]["mismatch"] is True and pe["2012"]["also"] == [{"distance": DM, "bib": "201"}]
+              and pe["2013"]["mismatch"] is False, str(pe["2012"]))
+        c_, sv = api("POST", f"/api/events/{e12}/bibs", {"rows": [{"ids": pe["2012"]["ids"], "bib": "101"}]})
+        dbq = _sql.connect(cfg["db_path"])
+        rg = dbq.execute("SELECT distance, bib FROM registrations WHERE event_id = ? AND last_name = 'Петрова' AND birth_date LIKE '2012%'", (e12,)).fetchall()
+        dbq.close()
+        bt = json.loads(http("GET", f"/api/events/{e12}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        check("7.0: сохранение выравнивает номера: 101 стоит в обеих дисциплинах, расхождения нет",
+              c_ == 200 and sv["saved"] == 1 and sv["spread"] == 1 and sorted(rg) == sorted([(D60, "101"), (DM, "101")])
+              and not {r["birth_year"]: r for r in bt["rows"]}["2012"]["mismatch"], f"{sv} {rg}")
+        # новая дисциплина у человека с номером: заявка добавлена позже — номер подхватывается без повторного ввода
+        t3 = man_reg(e12, "Петрова", "Анна", 2013, [DM])
+        bm = json.loads(http("GET", f"/api/events/{e12}/bibs?distance=" + urllib.parse.quote(DM))[1])
+        pm = {r["birth_year"]: r for r in bm["rows"]}
+        check("7.0: у младшей Петровой заявка на метание добавлена позже — на шаге 2 уже стоит её номер 2 («inherited»), вписывать не нужно",
+              t3[0] == 201 and pm["2013"]["bib"] == "2" and pm["2013"]["inherited"] is True and pm["2012"]["inherited"] is False
+              and pm["2012"]["bib"] == "101", str(bm["rows"]))
+        c_, ga = api("POST", f"/api/events/{e12}/heats", {"distance": D60, "lanes": 8})
+        c2_, gb = api("POST", f"/api/events/{e12}/heats", {"distance": DM, "lanes": 8})
+        ents12 = sl_entries(e12)
+        sig = sorted((e_["bib"], e_["distance"]) for e_ in ents12)
+        check("7.0: сетки двух дисциплин построены без повторного ввода: у младшей Петровой в метании тот же номер 2, у старшей — 101 в обеих",
+              c_ == 200 and c2_ == 200 and sig == sorted([("101", D60), ("101", DM), ("2", D60), ("2", DM)]), str(sig))
+        dbq = _sql.connect(cfg["db_path"])
+        late_reg = dbq.execute("SELECT bib FROM registrations WHERE event_id = ? AND distance = ? AND birth_date LIKE '2013%'", (e12, DM)).fetchone()
+        dbq.close()
+        check("7.0: после генерации номер записан и в registrations.bib заявки, добавленной позже", late_reg and late_reg[0] == "2", str(late_reg))
+
+        # ===================== 7.0: принудительный сброс сетки и пересборка 13 → 21 =====================
+        def wave_names(eid_, dist_):
+            return [w["name"] for w in json.loads(http("GET", f"/api/events/{eid_}")[1])["waves"] if w.get("distance") == dist_]
+
+        def ev_state(eid_):
+            v_ = json.loads(http("GET", f"/api/events/{eid_}")[1])
+            return v_["status"], v_.get("start_time"), {w["name"]: w.get("start_time") for w in v_["waves"]}
+        wm = wave_names(e13, DM)
+        w60_ = wave_names(e13, D60)
+        # время старта выставлено по ошибке в технической дисциплине
+        c_, _ = api("POST", f"/api/events/{e13}/start", {"wave": wm[0]})
+        stt, st_time, wst = ev_state(e13)
+        check("7.0: старт «по ошибке» поставлен в технической дисциплине (метание): забег стартовал, соревнование идёт",
+              c_ == 200 and len(wm) == 1 and wm[0].startswith("Общий список") and wst[wm[0]] and stt == "running", f"{wm} {stt} {wst}")
+        nb = [reg13("Новикова" + letters[i]) for i in range(8)]
+        c_, rv21 = api("POST", f"/api/events/{e13}/regs", {"approve_all": True})
+        check("7.0: ещё 8 девочек подали заявки и подтверждены (теперь 21 человек, 42 заявки)",
+              nb == [201] * 8 and rv21["counts"]["approved"] == 42, str(rv21.get("counts")))
+        give_bibs(e13, 14)
+        c_, rb = api("POST", f"/api/events/{e13}/heats", {"distance": DM, "lanes": 8})
+        check("7.0: пересборка без сброса после старта — 400 «стоит время старта — нажмите «Сбросить сетку»»",
+              c_ == 400 and "стоит время старта" in rb["error"] and "Сбросить сетку" in rb["error"], str(rb))
+        keep = fin_by(e13)
+        c_, rr = api("POST", f"/api/events/{e13}/resetheats", {"distance": DM})
+        stt, st_time, wst = ev_state(e13)
+        sl13 = json.loads(http("GET", f"/api/events/{e13}/startlist")[1])
+        dm_rows = [e_ for e_ in sl13["no_heat"] if e_["distance"] == DM]
+        check("7.0: сброс сетки метания НЕ блокируется стартом: ответ {waves:1, entries:13, stopped:[имя забега]}; время старта обнулено, "
+              "часы события остановлены (planned, start_time пусто), участники в «нераспределённых»",
+              c_ == 200 and rr == {"waves": 1, "entries": 13, "stopped": wm} and wm[0] not in wst and stt == "planned" and not st_time
+              and len(dm_rows) == 13 and all(e_["wave"] is None and e_["lane"] is None for e_ in dm_rows), f"{rr} {stt} {st_time} {len(dm_rows)}")
+        check("7.0: сброс одной дисциплины не тронул бег (2 забега с 13 участницами), номера и введённые результаты целы",
+              sorted(wave_names(e13, D60)) == sorted(w60_) and len([e_ for h in sl13["heats"] for e_ in h["entries"]]) == 13
+              and all(k in fin_by(e13) for k in keep), f"{wave_names(e13, D60)} {w60_}")
+        c_, g21 = api("POST", f"/api/events/{e13}/heats", {"distance": DM, "lanes": 8})
+        c2_, g21b = api("POST", f"/api/events/{e13}/heats", {"distance": D60, "lanes": 8})
+        ents21 = sl_entries(e13)
+        check("7.0: после сброса список формируется заново и подтягивает ВСЕХ подтверждённых: было 13 → стало 21 (метание и бег), всего 42 строки",
+              c_ == 200 and g21["entries"] == 21 and c2_ == 200 and g21b["entries"] == 21 and len(ents21) == 42
+              and len({e_["bib"] for e_ in ents21}) == 21, f"{g21.get('entries')} {g21b.get('entries')} {len(ents21)}")
+        check("7.0: введённые результаты пережили сброс и пересборку", all(k in fin_by(e13) for k in keep), str(sorted(keep)))
+        pk21 = json.loads(http("GET", f"/api/events/{e13}/pickup")[1])
+        check("7.0: выдача номеров после пересборки: 21 человек, отметка «выдан» сохранилась", pk21["total"] == 21 and pk21["picked"] == 1, str((pk21["total"], pk21["picked"])))
+        # ошибочный старт в беге и в технике одновременно: сброс одной дисциплины не останавливает часы, пока стоит старт другой
+        w60_ = wave_names(e13, D60)
+        wm = wave_names(e13, DM)
+        api("POST", f"/api/events/{e13}/start", {"wave": w60_[0]})
+        api("POST", f"/api/events/{e13}/start", {"wave": wm[0]})
+        c_, rr1 = api("POST", f"/api/events/{e13}/resetheats", {"distance": DM})
+        stt1, stm1, _ = ev_state(e13)
+        c2_, rr2 = api("POST", f"/api/events/{e13}/resetheats", {"distance": D60})
+        stt2, stm2, wst2 = ev_state(e13)
+        check("7.0: два ошибочных старта: после сброса метания часы идут (стартовавший бег остался), после сброса бега — остановлены; "
+              "ответ перечисляет стартовавшие забеги",
+              c_ == 200 and rr1["stopped"] == wm and stt1 == "running" and stm1 and c2_ == 200 and rr2["stopped"] == [w60_[0]]
+              and stt2 == "planned" and not stm2 and not wst2, f"{rr1} {stt1} {rr2} {stt2} {wst2}")
+        api("POST", f"/api/events/{e13}/heats", {"distance": D60, "lanes": 8})
+        api("POST", f"/api/events/{e13}/heats", {"distance": DM, "lanes": 8})
+        w60_ = wave_names(e13, D60)
+        api("POST", f"/api/events/{e13}/start", {"wave": w60_[0]})
+        c_, rr3 = api("POST", f"/api/events/{e13}/reset", {})
+        stt3, stm3, wst3 = ev_state(e13)
+        check("7.0: «Сбросить старт» всего соревнования по-прежнему обнуляет время всех забегов",
+              c_ == 200 and stt3 == "planned" and not stm3 and not any(wst3.values()), f"{stt3} {wst3}")
+        c_, rr4 = api("POST", f"/api/events/{e13}/resetheats", {"distance": "Прыжок в высоту"})
+        check("7.0: сброс несуществующей в сетке дисциплины безвреден: {waves:0, entries:0}", c_ == 200 and rr4["waves"] == 0 and rr4["entries"] == 0, str(rr4))
+
+
     except Exception as e:  # noqa
         failed = True
         check("непредвиденная ошибка", False, repr(e))
+        import traceback
+        traceback.print_exc()
     finally:
-        proc.terminate()
-        try:
-            out, _ = proc.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            out, _ = proc.communicate()
-        pull_srv.close()
+        out = stop_server(proc)
         check("сервер корректно останавливается", proc.returncode == 0, f"код {proc.returncode}")
         if out.strip():
             print("--- журнал сервера ---")

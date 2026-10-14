@@ -187,8 +187,6 @@ table.att,table.swt{table-layout:auto}
   </select>
   <select id="grp" class="hide" hidden><option value="">все дистанции и категории</option></select>
   <select id="team" title="Показать только участников одной команды — например, своей школы"><option value="">все команды</option></select>
-  <label id="chipBox"><input type="checkbox" id="showChip"> чипы</label>
-  <label><input type="checkbox" id="showSplits"> отсечки</label>
   <label><input type="checkbox" id="showDnf" checked> не финишировали</label>
   <label><input type="checkbox" id="showCoach" checked> тренеры</label>
   <span class="sp"></span>
@@ -212,7 +210,7 @@ let DIST=new URLSearchParams(location.search).get("dist")||"";      // дисц�
 const QGRP=new URLSearchParams(location.search).get("grp")||"", HASGRP=new URLSearchParams(location.search).has("grp");
 const QIDS=(new URLSearchParams(location.search).get("ids")||"").split(",").filter(Boolean);
 const QTEAM=new URLSearchParams(location.search).get("team")||"";
-["mode","smode","orient","sexf","grp","team","showChip","showSplits","showDnf","showCoach"].forEach(id=>{
+["mode","smode","orient","sexf","grp","team","showDnf","showCoach"].forEach(id=>{
   const el=$(id), saved=LS.get("protocol."+id,null);
   if(saved!==null){ if(el.type==="checkbox") el.checked=saved; else if(id!=="grp"&&id!=="team") el.value=saved; }
   el.onchange=()=>{LS.set("protocol."+id, el.type==="checkbox"?el.checked:el.value); render();};
@@ -223,8 +221,8 @@ const PUB=window.PUB, SLUG=PUB?PUB[1]:"", A=window.ASSETS||"/assets/";
 $("barLogo").src=A+"sakhstart-dark.svg";
 const BRAND=`<div class="brandrow"><span class="logos"><img class="lg-sakh" src="${A}sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="${A}flaso-light.png" alt="ФЛАСО"></span><img class="lg-ss" src="${A}sakhstart.svg" alt="SakhStart"></div>`;
 if(PUB){
-  // публичный протокол: без чипов, без CSV из закрытого API, со ссылкой на страницу события
-  $("csv").remove(); $("chipBox").remove();
+  // публичный протокол: без CSV из закрытого API, со ссылкой на страницу события
+  $("csv").remove();
   const b=document.createElement("a"); b.className="back"; b.href="/r/"+SLUG; b.textContent="← к странице события"; $("barLogo").after(b);
 }
 const gkey=x=>(x.distance||"")+"|"+(x.category||"");
@@ -269,7 +267,7 @@ async function getPub(name){
   if(r.status===401){ location.href="/r/trainer?next="+encodeURIComponent(location.pathname+location.search); throw new Error("нужно войти"); }
   if(!r.ok){ r.text().catch(()=>{}); if(r.status===404||r.status===403) return null; throw new Error("HTTP "+r.status); }
   const d=await r.json();
-  if(d.finished||d.not_seen){ ["finished","on_course","not_seen","devices"].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; }); }
+  if(d.finished||d.not_seen){ ["finished","on_course","not_seen"].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; }); }
   if(d.event&&!Array.isArray(d.event.waves)) d.event.waves=[];
   return d;
 }
@@ -539,8 +537,7 @@ function buildFinal(o={}){
   const anyPts=R.finished.some(x=>x.points!=null);
   const fmtPts=v=>v==null?"":String(v).replace(".",",");
   const coachOn=$("showCoach").checked&&R.finished.concat(R.not_seen).some(x=>x.coach);
-  const chip=!PUB&&$("showChip").checked, spl=$("showSplits").checked, dnf=$("showDnf").checked;
-  const fin=ev.finish_device, splitDevs=(R.devices||[]).filter(d=>d!==fin);
+  const dnf=$("showDnf").checked, fin=ev.finish_device||"JUDGE";
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
   const anyTeam=!tf&&(R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team)), hasHeats=ev.waves.length>0;
   const anyRank=R.finished.some(x=>x.rank)||R.not_seen.some(x=>x.rank);
@@ -554,8 +551,8 @@ function buildFinal(o={}){
 
   const head=(placeLbl,withHeat)=>`<thead><tr><th style="width:42px">${placeLbl}</th><th style="width:52px">Нагр. №</th>
     ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyRank?'<th style="width:46px">Разряд</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
-    ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
-    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyDone?'<th style="width:56px">Вып. разряд</th>':''}${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+    ${withHeat?'<th style="width:70px">Забег</th>':''}
+    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyDone?'<th style="width:56px">Вып. разряд</th>':''}${anyPts?'<th style="width:46px">Очки</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
   // техника: на каждое место — все шесть попыток, чтобы был виден ход борьбы
   const techHead=withHeat=>`<thead><tr><th rowspan="2" style="width:42px">Место</th><th rowspan="2" style="width:52px">Нагр. №</th><th rowspan="2">Фамилия, имя</th><th rowspan="2" style="width:46px">Год рожд.</th>${anyRank?'<th rowspan="2" style="width:46px">Разряд</th>':''}${anyTeam?'<th rowspan="2">Команда</th>':''}${coachOn?'<th rowspan="2">Тренер</th>':''}<th colspan="6" class="sub" style="text-align:center">Попытки</th><th rowspan="2" style="width:84px">Лучший результат</th>${anyDone?'<th rowspan="2" style="width:56px">Вып. разряд</th>':''}</tr><tr>${[1,2,3,4,5,6].map(i=>`<th class="sub">Попытка ${i}</th>`).join("")}</tr></thead>`;
   const techTr=(x,place,res)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td><td>${esc(x.name)}</td><td class="c">${esc(x.birth_year)}</td>${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}${[0,1,2,3,4,5].map(i=>{const v=(x.attempts||[])[i]||""; return `<td class="c cellv${v&&res&&String(v).replace(",",".")===String(res).replace(",",".")?" bestv":""}">${esc(v)}</td>`;}).join("")}<td class="c"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}</tr>`;
@@ -563,8 +560,7 @@ function buildFinal(o={}){
   const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
     ${anyName?`<td>${esc(x.name)}${mem(x)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
-    ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
-    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
+    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}<td class="c">${note}</td></tr>`;
   const handNote=x=>man(x)&&!allManual?"р":"";
   // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
   const outCode=x=>x.status||(x.last_point?"DNF":"DNS");

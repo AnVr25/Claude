@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `6.0.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.0.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `39c6600`
-- **Дамп сформирован:** 2026-10-14 03:29 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 310 из 310 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7486 строк, `hub/ui.html` 3369, `hub/protocol.html` 641
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `6233695`
+- **Дамп сформирован:** 2026-10-14 05:40 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 303 из 303 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 5613 строк, `hub/ui.html` 2701, `hub/protocol.html` 637
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -37,7 +37,7 @@
 
 ## 2. [СХЕМА БД SQLITE]
 
-Схема получена запуском `Store(...)` на пустой БД (создание + все миграции `_migrate`), то есть показывает **итоговое** состояние. Таблицы: `audit`, `consent_texts`, `entries`, `events`, `files`, `manual`, `raw`, `readers`, `reads`, `registrations`, `scoreboard`, `sessions`, `trainers`, `ui_state`, `users`, `waves`, `wiclax_ports`.
+Схема получена запуском `Store(...)` на пустой БД (создание + все миграции `_migrate`), то есть показывает **итоговое** состояние. Таблицы: `audit`, `consent_texts`, `entries`, `events`, `files`, `manual`, `registrations`, `scoreboard`, `sessions`, `trainers`, `ui_state`, `users`, `waves`.
 
 ### Таблица `events`
 
@@ -48,48 +48,44 @@
 | 2 | `date` | TEXT |  |  |  |
 | 3 | `place` | TEXT |  |  |  |
 | 4 | `finish_device` | TEXT |  |  |  |
-| 5 | `min_time_sec` | REAL | да | 0 |  |
-| 6 | `push_wiclax` | INTEGER | да | 1 |  |
-| 7 | `start_time` | TEXT |  |  |  |
-| 8 | `status` | TEXT | да | 'planned' |  |
-| 9 | `notes` | TEXT |  |  |  |
-| 10 | `created_at` | TEXT | да |  |  |
-| 11 | `check_since` | TEXT |  |  |  |
-| 12 | `alert_silence_min` | REAL | да | 10 |  |
-| 13 | `archived` | INTEGER | да | 0 |  |
-| 14 | `finished_at` | TEXT |  |  |  |
-| 15 | `organizer` | TEXT |  |  |  |
-| 16 | `chief_judge` | TEXT |  |  |  |
-| 17 | `chief_secretary` | TEXT |  |  |  |
-| 18 | `start_clock` | TEXT |  |  |  |
-| 19 | `heats_sequential` | INTEGER |  |  |  |
-| 20 | `team_best` | INTEGER |  |  |  |
-| 21 | `cover` | TEXT |  |  |  |
-| 22 | `program` | TEXT |  |  |  |
-| 23 | `contacts` | TEXT |  |  |  |
-| 24 | `series` | TEXT |  |  |  |
-| 25 | `reg_open` | INTEGER | да | 0 |  |
-| 26 | `reg_slug` | TEXT |  |  |  |
-| 27 | `reg_deadline` | TEXT |  |  |  |
-| 28 | `reg_distances` | TEXT |  |  |  |
-| 29 | `reg_rules` | TEXT |  |  |  |
-| 30 | `reg_lanes` | INTEGER |  |  |  |
-| 31 | `reg_info` | TEXT |  |  |  |
-| 32 | `reg_consent` | TEXT |  |  |  |
-| 33 | `kind` | TEXT |  |  |  |
-| 34 | `timing` | TEXT |  |  |  |
-| 35 | `pub_site` | INTEGER | да | 0 |  |
-| 36 | `ours` | INTEGER | да | 1 |  |
-| 37 | `level` | TEXT |  |  |  |
-| 38 | `adaptive` | INTEGER | да | 0 |  |
-| 39 | `date_end` | TEXT |  |  |  |
-| 40 | `city` | TEXT |  |  |  |
-| 41 | `note` | TEXT |  |  |  |
-| 42 | `live_url` | TEXT |  |  |  |
-| 43 | `photo_url` | TEXT |  |  |  |
-| 44 | `links` | TEXT |  |  |  |
-| 45 | `pub_start` | INTEGER | да | 0 |  |
-| 46 | `pub_results` | INTEGER | да | 0 |  |
+| 5 | `start_time` | TEXT |  |  |  |
+| 6 | `status` | TEXT | да | 'planned' |  |
+| 7 | `notes` | TEXT |  |  |  |
+| 8 | `created_at` | TEXT | да |  |  |
+| 9 | `archived` | INTEGER | да | 0 |  |
+| 10 | `finished_at` | TEXT |  |  |  |
+| 11 | `organizer` | TEXT |  |  |  |
+| 12 | `chief_judge` | TEXT |  |  |  |
+| 13 | `chief_secretary` | TEXT |  |  |  |
+| 14 | `start_clock` | TEXT |  |  |  |
+| 15 | `heats_sequential` | INTEGER |  |  |  |
+| 16 | `team_best` | INTEGER |  |  |  |
+| 17 | `cover` | TEXT |  |  |  |
+| 18 | `program` | TEXT |  |  |  |
+| 19 | `contacts` | TEXT |  |  |  |
+| 20 | `series` | TEXT |  |  |  |
+| 21 | `reg_open` | INTEGER | да | 0 |  |
+| 22 | `reg_slug` | TEXT |  |  |  |
+| 23 | `reg_deadline` | TEXT |  |  |  |
+| 24 | `reg_distances` | TEXT |  |  |  |
+| 25 | `reg_rules` | TEXT |  |  |  |
+| 26 | `reg_lanes` | INTEGER |  |  |  |
+| 27 | `reg_info` | TEXT |  |  |  |
+| 28 | `reg_consent` | TEXT |  |  |  |
+| 29 | `kind` | TEXT |  |  |  |
+| 30 | `timing` | TEXT |  |  |  |
+| 31 | `pub_site` | INTEGER | да | 0 |  |
+| 32 | `ours` | INTEGER | да | 1 |  |
+| 33 | `level` | TEXT |  |  |  |
+| 34 | `adaptive` | INTEGER | да | 0 |  |
+| 35 | `date_end` | TEXT |  |  |  |
+| 36 | `city` | TEXT |  |  |  |
+| 37 | `note` | TEXT |  |  |  |
+| 38 | `live_url` | TEXT |  |  |  |
+| 39 | `photo_url` | TEXT |  |  |  |
+| 40 | `links` | TEXT |  |  |  |
+| 41 | `pub_start` | INTEGER | да | 0 |  |
+| 42 | `pub_results` | INTEGER | да | 0 |  |
 
 ```sql
 CREATE TABLE events(
@@ -98,13 +94,11 @@ CREATE TABLE events(
                 date TEXT,
                 place TEXT,
                 finish_device TEXT,
-                min_time_sec REAL NOT NULL DEFAULT 0,
-                push_wiclax INTEGER NOT NULL DEFAULT 1,
                 start_time TEXT,
                 status TEXT NOT NULL DEFAULT 'planned',
                 notes TEXT,
                 created_at TEXT NOT NULL
-            , check_since TEXT, alert_silence_min REAL NOT NULL DEFAULT 10, archived INTEGER NOT NULL DEFAULT 0, finished_at TEXT, organizer TEXT, chief_judge TEXT, chief_secretary TEXT, start_clock TEXT, heats_sequential INTEGER, team_best INTEGER, cover TEXT, program TEXT, contacts TEXT, series TEXT, reg_open INTEGER NOT NULL DEFAULT 0, reg_slug TEXT, reg_deadline TEXT, reg_distances TEXT, reg_rules TEXT, reg_lanes INTEGER, reg_info TEXT, reg_consent TEXT, kind TEXT, timing TEXT, pub_site INTEGER NOT NULL DEFAULT 0, ours INTEGER NOT NULL DEFAULT 1, level TEXT, adaptive INTEGER NOT NULL DEFAULT 0, date_end TEXT, city TEXT, note TEXT, live_url TEXT, photo_url TEXT, links TEXT, pub_start INTEGER NOT NULL DEFAULT 0, pub_results INTEGER NOT NULL DEFAULT 0)
+            , archived INTEGER NOT NULL DEFAULT 0, finished_at TEXT, organizer TEXT, chief_judge TEXT, chief_secretary TEXT, start_clock TEXT, heats_sequential INTEGER, team_best INTEGER, cover TEXT, program TEXT, contacts TEXT, series TEXT, reg_open INTEGER NOT NULL DEFAULT 0, reg_slug TEXT, reg_deadline TEXT, reg_distances TEXT, reg_rules TEXT, reg_lanes INTEGER, reg_info TEXT, reg_consent TEXT, kind TEXT, timing TEXT, pub_site INTEGER NOT NULL DEFAULT 0, ours INTEGER NOT NULL DEFAULT 1, level TEXT, adaptive INTEGER NOT NULL DEFAULT 0, date_end TEXT, city TEXT, note TEXT, live_url TEXT, photo_url TEXT, links TEXT, pub_start INTEGER NOT NULL DEFAULT 0, pub_results INTEGER NOT NULL DEFAULT 0)
 ```
 
 ```sql
@@ -137,9 +131,9 @@ CREATE TABLE waves(
 
 | # | поле | тип | NOT NULL | по умолчанию | PK |
 |---|---|---|---|---|---|
-| 0 | `event_id` | INTEGER | да |  | да |
-| 1 | `bib` | TEXT | да |  |  |
-| 2 | `chip` | TEXT | да |  | да |
+| 0 | `id` | INTEGER |  |  | да |
+| 1 | `event_id` | INTEGER | да |  |  |
+| 2 | `bib` | TEXT | да |  |  |
 | 3 | `points` | REAL |  |  |  |
 | 4 | `picked_at` | TEXT |  |  |  |
 | 5 | `members` | TEXT |  |  |  |
@@ -162,11 +156,14 @@ CREATE TABLE waves(
 
 ```sql
 CREATE TABLE entries(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL,
-                bib TEXT NOT NULL,
-                chip TEXT NOT NULL, points REAL, picked_at TEXT, members TEXT, rank TEXT, detail TEXT, done_rank TEXT, result_at TEXT, wave TEXT, name TEXT, birth_year TEXT, team TEXT, category TEXT, lane INTEGER, coach TEXT, seed TEXT, reg_id INTEGER, sex TEXT, result TEXT, status TEXT,
-                PRIMARY KEY(event_id, chip)
-            )
+                bib TEXT NOT NULL
+            , points REAL, picked_at TEXT, members TEXT, rank TEXT, detail TEXT, done_rank TEXT, result_at TEXT, wave TEXT, name TEXT, birth_year TEXT, team TEXT, category TEXT, lane INTEGER, coach TEXT, seed TEXT, reg_id INTEGER, sex TEXT, result TEXT, status TEXT)
+```
+
+```sql
+CREATE INDEX idx_entries_event ON entries(event_id, bib);
 ```
 
 ### Таблица `registrations`
@@ -272,7 +269,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 - `waves.distance` пуст у смешанного «общего списка» (глобальная сборка) — поэтому дисциплина участника берётся из `registrations.distance` через `entries.reg_id` (`Hub.entry_dists`).
 - Миграции идемпотентны: `Store._migrate` через `add(table, columns)` (`ALTER TABLE … ADD COLUMN`, если столбца нет).
 
-### `Store._migrate` — `hub/hub.py` строки 716–906
+### `Store._migrate` — `hub/hub.py` строки 405–576
 
 ```python
     def _migrate(self) -> None:
@@ -288,11 +285,9 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 if name not in have:
                     self.con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
-        add("events", (("check_since", "TEXT"), ("alert_silence_min", "REAL NOT NULL DEFAULT 10"),
-                       ("archived", "INTEGER NOT NULL DEFAULT 0"), ("finished_at", "TEXT"),
+        add("events", (("archived", "INTEGER NOT NULL DEFAULT 0"), ("finished_at", "TEXT"),
                        ("organizer", "TEXT"), ("chief_judge", "TEXT"), ("chief_secretary", "TEXT"),
                        ("start_clock", "TEXT"), ("heats_sequential", "INTEGER")))
-        add("readers", (("wiclax_port", "INTEGER"),))
         add("entries", (("points", "REAL"),))
         add("events", (("team_best", "INTEGER"),))
         add("users", (("note", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1")))
@@ -398,24 +393,6 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             );
             CREATE INDEX IF NOT EXISTS idx_reg_event ON registrations(event_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events(reg_slug);
-            CREATE TABLE IF NOT EXISTS readers(
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                box TEXT,
-                host TEXT NOT NULL,
-                port INTEGER NOT NULL,
-                device TEXT NOT NULL,
-                parser TEXT NOT NULL DEFAULT 'ipico',
-                enabled INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT,
-                updated_at TEXT,
-                wiclax_port INTEGER
-            );
-            CREATE TABLE IF NOT EXISTS wiclax_ports(
-                port INTEGER PRIMARY KEY,
-                devices TEXT NOT NULL,
-                name TEXT
-            );
             CREATE TABLE IF NOT EXISTS users(
                 login TEXT PRIMARY KEY,
                 name TEXT,
@@ -466,6 +443,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             hash TEXT PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL)""")
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
+        self._migrate_v7()
 ```
 
 ## 3. [ВЕСЬ ИЗМЕНЁННЫЙ КОД PYTHON] — `hub/hub.py`
@@ -474,7 +452,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.1 Определение типа дисциплины (Бег / Техника)
 
-#### `Hub.discipline` — `hub/hub.py` строки 2481–2483
+#### `Hub.discipline` — `hub/hub.py` строки 1704–1706
 
 ```python
     @classmethod
@@ -482,7 +460,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 ```
 
-#### `Hub.result_type` — `hub/hub.py` строки 2609–2613
+#### `Hub.result_type` — `hub/hub.py` строки 1832–1836
 
 ```python
     @classmethod
@@ -492,7 +470,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return d["result"] if d else "time"
 ```
 
-#### `Hub.discipline_kind` — `hub/hub.py` строки 2592–2600
+#### `Hub.discipline_kind` — `hub/hub.py` строки 1815–1823
 
 ```python
     @classmethod
@@ -506,7 +484,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "run" if d.get("result") == "time" else "other"
 ```
 
-#### `Hub.attempt_slots` — `hub/hub.py` строки 2294–2300
+#### `Hub.attempt_slots` — `hub/hub.py` строки 1505–1511
 
 ```python
     @classmethod
@@ -518,20 +496,20 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return 12 if d.get("result") == "height" else 6
 ```
 
-#### `Hub.entry_dists` — `hub/hub.py` строки 2602–2607
+#### `Hub.entry_dists` — `hub/hub.py` строки 1825–1830
 
 ```python
     def entry_dists(self, eid: int, erows: Optional[list] = None) -> dict:
-        """chip → дисциплина участника: дистанция забега, а у смешанного «общего списка» — из заявки."""
+        """id строки участника → её дисциплина: дистанция забега, а у смешанного «общего списка» — из заявки."""
         erows = erows if erows is not None else self.store.entries_rows(eid)
         wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
         rd = {r["id"]: r.get("distance") for r in self.store.registrations(eid)}
-        return {e["chip"]: (wd.get(e["wave"] or "") or rd.get(e.get("reg_id")) or None) for e in erows}
+        return {e["id"]: (wd.get(e["wave"] or "") or rd.get(e.get("reg_id")) or None) for e in erows}
 ```
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 4622–4724
+#### `Hub.generate_scoped` — `hub/hub.py` строки 3653–3754
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -548,7 +526,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         lanes = max(1, min(int(lanes or 8), 50))
         waves = self.store.waves(eid)
         if any(w.get("start_time") for w in waves if (w.get("distance") or "") == dist):
-            raise ValueError("по этой дисциплине уже был старт забега — пересобрать нельзя")
+            raise ValueError("по этой дисциплине стоит время старта — нажмите «Сбросить сетку», затем сформируйте список заново")
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
 
         def in_scope(r):
@@ -562,13 +540,14 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         if not regs:
             raise ValueError("нет подтверждённых заявок по выбранным условиям: проверьте дисциплину, возраст и пол")
         mine = {r["id"] for r in regs}
-        entries = self.store.entries_rows(eid)
-        old = {e["reg_id"]: e for e in entries if e.get("reg_id")}
-        self._need_bibs(regs, old)                      # 5.2: без ручных номеров сетку не строим
-        theirs = {e["bib"] for e in entries if e.get("reg_id") not in mine}
-        clash = [self._reg_bib(r, old.get(r["id"])) for r in regs if self._reg_bib(r, old.get(r["id"])) in theirs]
+        st = self._bib_state(eid)
+        entries = st["entries"]
+        self._need_bibs(regs, st)                       # без ручных номеров сетку не строим
+        my_keys = {st["key_of"].get(i) for i in mine}
+        theirs = {e["bib"] for e in entries if e.get("reg_id") not in mine and st["key_of"].get(e.get("reg_id")) not in my_keys}
+        clash = [self._reg_bib(r, st) for r in regs if self._reg_bib(r, st) in theirs]
         if clash:
-            raise ValueError(f"номер {clash[0]} уже у участника другой дисциплины — исправьте на шаге 2")
+            raise ValueError(f"номер {clash[0]} уже у другого участника — исправьте на шаге 2")
         # удаляем только свои забеги: те, где нет участников вне выбранной группы
         by_wave: dict = {}
         for e in entries:
@@ -622,10 +601,8 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         for name, cat, chunk, use_lanes in plan:
             heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
             for i, r in enumerate(chunk):
-                e = old.get(r["id"])
-                bib = self._reg_bib(r, e)
-                chip = e["chip"] if e and e["bib"] == bib else "#" + bib
-                rows.append({"bib": bib, "chip": chip, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
+                bib = self._reg_bib(r, st)
+                rows.append({"bib": bib, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                              "birth_year": r["birth_date"][:4].strip(), "team": r.get("team"), "category": r.get("category"),
                              "lane": order[i] if use_lanes else None, "coach": r.get("coach"), "seed": r.get("best"),
                              "reg_id": r["id"], "sex": r.get("sex"), "members": r.get("members"), "rank": r.get("rank"),
@@ -639,81 +616,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.generate_heats` — `hub/hub.py` строки 4726–4794
-
-```python
-    def generate_heats(self, ev: dict, lanes: int, mode: str = "heats") -> dict:
-        """Подтверждённые заявки → забеги по категории и дистанции, посев по лучшему результату:
-        сильнейшие — в последнем забеге группы, внутри забега — на центральных дорожках."""
-        eid = ev["id"]
-        if any(w.get("start_time") for w in self.store.waves(eid)):
-            raise ValueError("уже был старт забега — пересобрать нельзя, переносите участников вручную")
-        lanes = max(1, min(int(lanes or 8), 50))
-        regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if r["status"] == "approved"])
-        if not regs:
-            raise ValueError("нет подтверждённых заявок")
-        dist_order = {d: i for i, d in enumerate(self.reg_distances(ev))}
-        cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
-        groups: dict = {}
-        for r in regs:
-            groups.setdefault((r["distance"], r.get("category") or ""), []).append(r)
-        old = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
-        self._need_bibs(regs, old)                      # 5.2: номера только ручные
-
-        def bib_for(r):
-            e = old.get(r["id"])
-            b = self._reg_bib(r, e)
-            return b, (e["chip"] if e and e["bib"] == b else "#" + b)
-
-        heats, rows, n = [], [], 0
-        plan = []        # (дистанция, категория, участники, дорожки?)
-        if mode == "list":
-            # «Общим списком»: никакого деления на забеги и дорожки — один сквозной список
-            dists = {r["distance"] for r in regs}
-            lst = sorted(regs, key=lambda r: (dist_order.get(r["distance"], 99), cat_order.get(r.get("category") or "", 99), r["id"]))
-            plan.append((dists.pop() if len(dists) == 1 else "", "", lst, False))
-        else:
-            for key in sorted(groups, key=lambda k: (dist_order.get(k[0], 99), k[0], cat_order.get(k[1], 99), k[1])):
-                sign = 1 if self.result_type(key[0]) == "time" else -1        # в прыжках и метаниях лучший — наибольший результат
-                lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, sign * (r["best_sec"] or 0), r["id"]))
-                k = math.ceil(len(lst) / lanes)
-                base, extra = divmod(len(lst), k)
-                sizes = [base + (1 if i >= k - extra else 0) for i in range(k)]   # полные забеги — последние
-                chunks, pos = [], 0
-                for size in reversed(sizes):            # от сильнейших
-                    chunks.append(lst[pos:pos + size])
-                    pos += size
-                chunks.reverse()                        # слабые забеги — первыми, сильнейший — последний
-                plan += [(key[0], key[1], chunk, True) for chunk in chunks]
-        for dist, cat, chunk, use_lanes in plan:
-            n += 1
-            name = "Общий список" if mode == "list" else f"Забег {n}"
-            heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
-            order = self.lane_order(lanes)
-            for i, r in enumerate(chunk):
-                bib, chip = bib_for(r)
-                full = " ".join(x for x in (r["last_name"], r["first_name"]) if x)
-                rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
-                             "team": r.get("team"), "category": r.get("category"), "lane": order[i] if use_lanes else None,
-                             "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
-                             "members": r.get("members"), "rank": r.get("rank"), "_ids": r.get("_ids") or [r["id"]]})
-        self.store.con.execute("BEGIN")
-        try:
-            self.store.con.execute("DELETE FROM waves WHERE event_id = ?", (eid,))
-            self.store.con.execute("COMMIT")
-        except Exception:
-            self.store.con.execute("ROLLBACK")
-            raise
-        self.store.set_entries(eid, rows)
-        for h in heats:
-            self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=h["distance"] or None)
-        for r in rows:
-            for rid in r["_ids"]:
-                self.store.update_registration(rid, bib=r["bib"])
-        return {"heats": heats, "entries": len(rows)}
-```
-
-#### `Hub.lane_order` — `hub/hub.py` строки 4592–4601
+#### `Hub.lane_order` — `hub/hub.py` строки 3623–3632
 
 ```python
     @staticmethod
@@ -728,30 +631,53 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4796–4813
+#### `Hub.reset_heats` — `hub/hub.py` строки 3756–3796
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
-        """Полный сброс сетки: у участников очищаются забег и дорожка, забеги удаляются.
-        Номера и чипы сохраняются; участники возвращаются в «Не распределены». distance — только эта дисциплина."""
+        """Принудительный сброс сетки (кнопка «Сбросить сетку / Удалить забеги»). Никогда не блокируется тем, что у забега
+        стоит время старта — в том числе поставленное по ошибке: часы забегов останавливаются, start_time обнуляется
+        (NULL), забеги и дорожки удаляются, участники возвращаются в «Не распределены». Номера, заявки и введённые
+        результаты сохраняются; после сброса список формируется заново и подтягивает ВСЕХ подтверждённых участников."""
         eid = ev["id"]
-        waves = [w for w in self.store.waves(eid) if not distance or (w.get("distance") or "") == distance]
-        if any(w.get("start_time") for w in waves):
-            raise ValueError("уже был старт забега — сбросить сетку нельзя")
-        names = [w["name"] for w in waves]
-        n = 0
-        for r in self.store.entries_rows(eid):
-            if distance and r["wave"] not in names:
-                continue
-            if r["wave"] or r["lane"] is not None:
-                self.store.update_entry(eid, r["bib"], wave=None, lane=None)
-                n += 1
-        for name in names:
-            self.store.delete_wave(eid, name)
-        return {"waves": len(names), "entries": n}
+        rows = self.store.entries_rows(eid)
+        ed = self.entry_dists(eid, rows)
+        dkey = self._dkey(distance) if distance else None
+
+        def mine(w):
+            if not distance:
+                return True
+            if w.get("distance"):
+                return self._dkey(w["distance"]) == dkey
+            inside = [r for r in rows if r["wave"] == w["name"]]          # забег без дисциплины: по составу
+            return bool(inside) and all(self._dkey(ed.get(r["id"]) or "") == dkey for r in inside)
+        gone = [w for w in self.store.waves(eid) if mine(w)]
+        names = {w["name"] for w in gone}
+        stopped = [w["name"] for w in gone if w.get("start_time")]
+        con = self.store.con
+        con.execute("BEGIN")
+        try:
+            for w in gone:
+                con.execute("UPDATE waves SET start_time = NULL, finished_at = NULL WHERE event_id = ? AND name = ?", (eid, w["name"]))
+            n = 0
+            for r in rows:
+                inside = r["wave"] in names or (distance and self._dkey(ed.get(r["id"]) or "") == dkey
+                                                and (r["wave"] or r["lane"] is not None))
+                if inside:
+                    con.execute("UPDATE entries SET wave = NULL, lane = NULL WHERE id = ?", (r["id"],))
+                    n += 1
+            for name in names:
+                self.store.delete_wave(eid, name)
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        if not any(w.get("start_time") for w in self.store.waves(eid)):      # часы соревнования тоже остановлены
+            self.store.set_event_field(eid, start_time=None, status="finished" if ev.get("status") == "finished" else "planned")
+        return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 4604–4608
+#### `Hub.age_limits` — `hub/hub.py` строки 3635–3639
 
 ```python
     @classmethod
@@ -761,7 +687,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 4610–4620
+#### `Hub.age_ok` — `hub/hub.py` строки 3641–3651
 
 ```python
     @classmethod
@@ -779,78 +705,45 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.3 Номера и участники
 
-#### `Store.add_entry` — `hub/hub.py` строки 1281–1297
+#### `Store.add_entry` — `hub/hub.py` строки 905–916
 
 ```python
-    def add_entry(self, eid: int, r: dict) -> None:
-        # 5.2: нагрудный номер вписывает только судья/секретарь — автоматической выдачи номеров нет
+    def add_entry(self, eid: int, r: dict) -> int:
+        # нагрудный номер вписывает только судья/секретарь — автоматической выдачи номеров нет
         bib = str(r.get("bib") or "").strip()
         if not bib:
-            raise ValueError("нет нагрудного номера — впишите его на шаге 2 «Регистрация номеров»")
-
-        # Если чип не указан, используем номер с префиксом #
-        chip = r.get("chip")
-        if not chip or str(chip).strip() == "":
-            chip = "#" + str(bib)
-
-        self.con.execute(
-            "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-            " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+            raise ValueError("нет нагрудного номера — впишите его на шаге 2 «Нагрудные номера»")
+        cur = self.con.execute(
+            "INSERT INTO entries(event_id, bib, wave, name, birth_year, team, category, lane, coach, seed,"
+            " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (eid, bib, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
              r.get("members"), r.get("rank")))
+        return int(cur.lastrowid)
 ```
 
-#### `Store.set_entries` — `hub/hub.py` строки 1180–1204
-
-```python
-    def set_entries(self, eid: int, rows: list) -> None:
-        keep = {r[0]: dict(zip(self._KEEP, r[1:])) for r in self.con.execute(
-            "SELECT bib, picked_at, members, detail, rank, done_rank FROM entries WHERE event_id = ?", (eid,))}
-        self.con.execute("BEGIN")
-        try:
-            self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
-
-            def val(r, k):
-                v = r[k] if k in r else keep.get(r["bib"], {}).get(k)
-                return json.dumps(v, ensure_ascii=False) if k == "detail" and isinstance(v, dict) else v
-            self.con.executemany(
-                "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members, detail, rank, done_rank)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
-                  r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
-                  r.get("result"), r.get("status"), r.get("points"),
-                  val(r, "picked_at"), val(r, "members"), val(r, "detail"), val(r, "rank"), val(r, "done_rank"))
-                 for r in rows])
-            for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
-                self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
-            self.con.execute("COMMIT")
-        except Exception:
-            self.con.execute("ROLLBACK")
-            raise
-```
-
-#### `Store.upsert_entries` — `hub/hub.py` строки 1206–1230
+#### `Store.upsert_entries` — `hub/hub.py` строки 832–858
 
 ```python
     def upsert_entries(self, eid: int, rows: list) -> None:
-        """Выборочное формирование: участники других дисциплин и уже введённые результаты не трогаются."""
+        """Формирование сетки одной дисциплины: строки ищутся по заявке (reg_id); введённые результаты не трогаются,
+        участники других дисциплин остаются на месте."""
         self.con.execute("BEGIN")
         try:
             for r in rows:
-                have = self.con.execute("SELECT 1 FROM entries WHERE event_id = ? AND bib = ?", (eid, r["bib"])).fetchone()
+                have = self.con.execute("SELECT id FROM entries WHERE event_id = ? AND reg_id = ?", (eid, r["reg_id"])).fetchone() \
+                    if r.get("reg_id") else None
                 if have:
                     self.con.execute(
-                        "UPDATE entries SET wave = ?, lane = ?, name = ?, birth_year = ?, team = ?, category = ?, coach = ?,"
-                        " seed = ?, reg_id = ?, sex = ?, rank = ?, members = COALESCE(?, members) WHERE event_id = ? AND bib = ?",
-                        (r.get("wave"), r.get("lane"), r.get("name"), r.get("birth_year"), r.get("team"), r.get("category"),
-                         r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"), r.get("rank"), r.get("members"), eid, r["bib"]))
+                        "UPDATE entries SET bib = ?, wave = ?, lane = ?, name = ?, birth_year = ?, team = ?, category = ?, coach = ?,"
+                        " seed = ?, sex = ?, rank = ?, members = COALESCE(?, members) WHERE id = ?",
+                        (r["bib"], r.get("wave"), r.get("lane"), r.get("name"), r.get("birth_year"), r.get("team"), r.get("category"),
+                         r.get("coach"), r.get("seed"), r.get("sex"), r.get("rank"), r.get("members"), have[0]))
                 else:
                     self.con.execute(
-                        "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-                        " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+                        "INSERT INTO entries(event_id, bib, wave, name, birth_year, team, category, lane, coach, seed,"
+                        " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (eid, r["bib"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
                          r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
                          r.get("members"), r.get("rank")))
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
@@ -861,10 +754,10 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             raise
 ```
 
-#### `Store.update_entry` — `hub/hub.py` строки 1269–1279
+#### `Store.update_entry` — `hub/hub.py` строки 893–903
 
 ```python
-    def update_entry(self, eid: int, bib: str, **kw) -> int:
+    def update_entry(self, eid: int, entry_id: int, **kw) -> int:
         sets, args = [], []
         for k, v in kw.items():
             if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed", "rank", "done_rank"):
@@ -873,24 +766,23 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             args.append(v)
         if not sets:
             return 0
-        return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND bib = ?",
-                                (*args, eid, bib)).rowcount
+        return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND id = ?",
+                                (*args, eid, entry_id)).rowcount
 ```
 
-#### `Store.rename_bib` — `hub/hub.py` строки 1299–1304
+#### `Store.rename_bib` — `hub/hub.py` строки 918–922
 
 ```python
     def rename_bib(self, eid: int, old: str, new: str) -> None:
-        """Сменить нагрудный номер участника везде: в списке, заявках и ручных отметках судей."""
-        self.con.execute("UPDATE entries SET bib = ?, chip = CASE WHEN chip = ? THEN ? ELSE chip END"
-                         " WHERE event_id = ? AND bib = ?", (new, "#" + old, "#" + new, eid, old))
+        """Сменить нагрудный номер везде: во всех строках участника (дисциплинах), заявках и ручных отметках судей."""
+        self.con.execute("UPDATE entries SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
         self.con.execute("UPDATE registrations SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
         self.con.execute("UPDATE manual SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
 ```
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4853–4872
+#### `Hub.startlist` — `hub/hub.py` строки 3836–3855
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -915,38 +807,38 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
 ```
 
-#### `Hub.public_startlist` — `hub/hub.py` строки 2185–2189
+#### `Hub.public_startlist` — `hub/hub.py` строки 1405–1409
 
 ```python
     def public_startlist(self, ev: dict) -> dict:
         sl = self.startlist(ev)
         for h in sl["heats"]:
-            h["entries"] = self._no_chips(h["entries"])
-        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._no_chips(sl["no_heat"])}
+            h["entries"] = self._public_rows(h["entries"])
+        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._public_rows(sl["no_heat"])}
 ```
 
 ### 3.5 Хранение результата и отметок
 
-#### `Store.set_entry_result` — `hub/hub.py` строки 1249–1260
+#### `Store.set_entry_result` — `hub/hub.py` строки 872–883
 
 ```python
-    def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str],
+    def set_entry_result(self, eid: int, entry_id: int, result: Optional[str], status: Optional[str],
                          detail: Optional[dict] = None, set_detail: bool = False) -> int:
-        """Итог участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
+        """Итог строки участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
         at = fmt_db(now_local()) if (result or status or detail) else None      # время ввода — табло показывает свежие сверху
         if set_detail:
             dj = json.dumps(detail, ensure_ascii=False) if detail else None
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ?, result_at = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, dj, at, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ?, result_at = ? WHERE event_id = ? AND id = ?",
+                                   (result or None, status or None, dj, at, eid, entry_id))
         else:
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, result_at = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, at, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, result_at = ? WHERE event_id = ? AND id = ?",
+                                   (result or None, status or None, at, eid, entry_id))
         return cur.rowcount
 ```
 
 ### 3.6 Официальное время по 3 секундомерам и лучший результат из 6 попыток
 
-#### `Hub.round_up_tenth` — `hub/hub.py` строки 2277–2279
+#### `Hub.round_up_tenth` — `hub/hub.py` строки 1488–1490
 
 ```python
     @staticmethod
@@ -954,7 +846,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return math.ceil(round(x * 10, 6)) / 10.0
 ```
 
-#### `Hub.stopwatch_main` — `hub/hub.py` строки 2281–2290
+#### `Hub.stopwatch_main` — `hub/hub.py` строки 1492–1501
 
 ```python
     @classmethod
@@ -969,7 +861,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.round_up_tenth(main)
 ```
 
-#### `Hub.parse_result` — `hub/hub.py` строки 2437–2454
+#### `Hub.parse_result` — `hub/hub.py` строки 1660–1677
 
 ```python
     @classmethod
@@ -992,7 +884,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return total, txt
 ```
 
-#### `Hub.fmt_result` — `hub/hub.py` строки 2248–2259
+#### `Hub.fmt_result` — `hub/hub.py` строки 1459–1470
 
 ```python
     @staticmethod
@@ -1009,7 +901,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"{s}.{t}"
 ```
 
-#### `Hub.parse_typed` — `hub/hub.py` строки 2615–2634
+#### `Hub.parse_typed` — `hub/hub.py` строки 1838–1857
 
 ```python
     @classmethod
@@ -1034,7 +926,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return -v, f"{v:.2f}"
 ```
 
-#### `Hub.parse_attempts` — `hub/hub.py` строки 2409–2432
+#### `Hub.parse_attempts` — `hub/hub.py` строки 1632–1655
 
 ```python
     @classmethod
@@ -1063,7 +955,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return clean, best, errs
 ```
 
-#### `Hub.result_hint` — `hub/hub.py` строки 2636–2638
+#### `Hub.result_hint` — `hub/hub.py` строки 1859–1861
 
 ```python
     @classmethod
@@ -1073,7 +965,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.7 Выполненный разряд по нормам ЕВСК
 
-#### `Hub.norm_key` — `hub/hub.py` строки 2494–2526
+#### `Hub.norm_key` — `hub/hub.py` строки 1717–1749
 
 ```python
     @classmethod
@@ -1111,7 +1003,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"run:{dist}"
 ```
 
-#### `Hub.rank_norms` — `hub/hub.py` строки 2528–2541
+#### `Hub.rank_norms` — `hub/hub.py` строки 1751–1764
 
 ```python
     @classmethod
@@ -1130,7 +1022,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._NORMS
 ```
 
-#### `Hub.age_group` — `hub/hub.py` строки 2543–2548
+#### `Hub.age_group` — `hub/hub.py` строки 1766–1771
 
 ```python
     @staticmethod
@@ -1141,7 +1033,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "sen"
 ```
 
-#### `Hub.rank_for` — `hub/hub.py` строки 2550–2590
+#### `Hub.rank_for` — `hub/hub.py` строки 1773–1813
 
 ```python
     def rank_for(self, ev: dict, dist, sex, birth_year, value: float, hand: bool) -> str:
@@ -1187,7 +1079,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return ""
 ```
 
-#### `Hub.norm_rank` — `hub/hub.py` строки 2269–2274
+#### `Hub.norm_rank` — `hub/hub.py` строки 1480–1485
 
 ```python
     @classmethod
@@ -1198,19 +1090,19 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._RANK_ALIAS.get(key) or cls._RANK_ALIAS.get(key.rstrip("."), "") or t
 ```
 
-#### `Hub.RANK_ORDER` — `hub/hub.py` строки 2487–2487
+#### `Hub.RANK_ORDER` — `hub/hub.py` строки 1710–1710
 
 ```python
     RANK_ORDER = ("МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн.")
 ```
 
-#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 2488–2488
+#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 1711–1711
 
 ```python
     RANK_MIN_AGE = {"МСМК": 16, "МС": 15, "КМС": 14}          # остальные разряды — с 10 лет
 ```
 
-#### `Hub.RANK_CAP` — `hub/hub.py` строки 2490–2490
+#### `Hub.RANK_CAP` — `hub/hub.py` строки 1713–1713
 
 ```python
     RANK_CAP = {"russia": "МС", "dfo": "МС", "interregion": "КМС", "region": "1 р.", "mass": "2 р."}
@@ -1218,20 +1110,19 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.8 Ветки HTTP-API Мастера (внутри `Hub._api_event`)
 
-#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 3726–3743
+#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2696–2712
 
 ```python
         if action == "heats":
             try:
-                if str(data.get("distance") or "").strip():       # мастер протоколов: одна дисциплина
-                    out = self.generate_scoped(ev, data.get("lanes") or ev.get("reg_lanes") or 8, data)
-                else:
-                    out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8, "list" if data.get("mode") == "list" else "heats")
+                if not str(data.get("distance") or "").strip():
+                    return err("выберите дисциплину")
+                out = self.generate_scoped(ev, data.get("lanes") or ev.get("reg_lanes") or 8, data)
             except ValueError as e:
                 return err(str(e))
             if data.get("lanes"):
                 self.store.update_event(eid, {"reg_lanes": data["lanes"]})
-            self.store.audit(who, eid, "Сформирован общий список" if data.get("mode") == "list" or out.get("mode") == "list" else "Сформированы забеги",
+            self.store.audit(who, eid, "Сформирован общий список" if out.get("mode") == "list" else "Сформированы забеги",
                              f"{data.get('distance') + ': ' if data.get('distance') else ''}{len(out['heats'])} забегов, {out['entries']} участников")
             try:
                 self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
@@ -1241,7 +1132,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 3713–3719
+#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2682–2689
 
 ```python
         if action == "resetheats":
@@ -1249,11 +1140,12 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 out = self.reset_heats(ev, data.get("distance"))
             except ValueError as e:
                 return err(str(e))
-            self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}")
+            self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}"
+                             + (f"; сброшено время старта: {', '.join(out['stopped'])}" if out["stopped"] else ""))
             return ok(out)
 ```
 
-#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 3692–3712
+#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2661–2681
 
 ```python
         if action == "publish":
@@ -1279,18 +1171,11 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
 ```
 
-#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 3744–3819
+#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2713–2790
 
 ```python
         if action == "entry":
-            def clean_bib(v, used):
-                v = str(v or "").strip()
-                if not v or len(v) > 10 or not re.fullmatch(r"[0-9A-Za-zА-Яа-я\-]+", v):
-                    return None, "номер — до 10 символов: цифры или буквы, без пробелов"
-                if v in used or "#" + v in {e["chip"] for e in self.store.entries_rows(eid)}:
-                    return None, f"номер {v} уже занят другим участником"
-                return v, None
-            # перенос участника в другой забег / дорожку, или добавление подтверждённой заявки в забег
+            # добавление подтверждённой заявки в сетку (поздний участник), перенос участника в другой забег / на другую дорожку
             wave = str(data.get("wave") or "").strip()[:40] or None
             if wave and not self.store.get_wave(eid, wave):
                 return err(f"нет забега «{wave}»")
@@ -1307,20 +1192,23 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                     team = [x for x in self.store.registrations(eid) if x["status"] == "approved"
                             and x["distance"] == r["distance"] and (x.get("relay") or "").lower() == r["relay"].lower()]
                     r = self.relay_entry(team)
-                rows = self.store.entries_rows(eid)
                 ids = r.get("_ids") or [r["id"]]
-                if any(x.get("reg_id") in ids for x in rows) or (r.get("bib") and any(e["bib"] == r["bib"] for e in rows)):
+                rows = self.store.entries_rows(eid)
+                if any(x.get("reg_id") in ids for x in rows):
                     return err("участник уже в стартовом списке")
-                # 5.2: номер только ручной — из поля рядом с заявкой или вписанный на шаге 2 «Регистрация номеров»
-                bib, e_ = clean_bib(data.get("set_bib") or r.get("bib"), {e["bib"] for e in rows})
-                if not str(data.get("set_bib") or r.get("bib") or "").strip():
-                    return err("впишите нагрудный номер участника (шаг 2 Мастера «Регистрация номеров»)")
-                if e_:
-                    return err(e_)
+                typed = str(data.get("set_bib") or "").strip()
+                if typed:                                # вписанный номер ложится на все дисциплины человека, с проверкой повторов
+                    code_, out_ = self.save_bibs(ev, [{"ids": ids, "bib": typed}], who)
+                    if code_ != 200:
+                        return err((out_.get("errors") or [{}])[0].get("error") or out_.get("error") or "номер не сохранён")
+                st = self._bib_state(eid)
+                bib = self._reg_bib(st["regs"][ids[0]], st)
+                if not bib:
+                    return err("впишите нагрудный номер участника (шаг 2 Мастера «Нагрудные номера»)")
                 if lane is None and wave:
                     taken = {e["lane"] for e in rows if e["wave"] == wave}
                     lane = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
-                self.store.add_entry(eid, {"bib": bib, "chip": "#" + bib, "wave": wave,
+                self.store.add_entry(eid, {"bib": bib, "wave": wave,
                                            "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                                            "birth_year": r["birth_date"][:4].strip(),
                                            "team": r["team"], "category": r["category"], "lane": lane,
@@ -1331,43 +1219,51 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 self.store.audit(who, eid, "Участник добавлен в забег", f"№{bib} {r['last_name']} → {wave or 'без забега'}")
                 return ok({"bib": bib})
             bib = str(data.get("bib") or "").strip()
-            row = next((e for e in self.store.entries_rows(eid) if e["bib"] == bib), None)
+            all_rows = self.store.entries_rows(eid)
+            row, why = self._entry_of(bib, [e for e in all_rows if e["bib"] == bib], data.get("distance"), self.entry_dists(eid, all_rows))
             if not row:
-                return err("нет участника с таким номером", 404)
+                return err(why if any(e["bib"] == bib for e in all_rows) else "нет участника с таким номером", 404)
             if row["wave"] and (self.store.get_wave(eid, row["wave"]) or {}).get("start_time") and "wave" in data \
                     and wave != row["wave"]:
                 return err("забег участника уже стартовал")
             if "new_bib" in data:
-                if str(data["new_bib"]).strip() == bib:
+                nb = str(data["new_bib"] or "").strip()
+                if nb == bib:
                     return ok({"bib": bib})
-                nb, e_ = clean_bib(data["new_bib"], {e["bib"] for e in self.store.entries_rows(eid)})
-                if e_:
-                    return err(e_)
-                self.store.rename_bib(eid, bib, nb)
+                if row.get("reg_id"):                    # номер меняется у человека во всех его дисциплинах
+                    code_, out_ = self.save_bibs(ev, [{"ids": [row["reg_id"]], "bib": nb}], who)
+                    if code_ != 200:
+                        return err((out_.get("errors") or [{}])[0].get("error") or out_.get("error") or "номер не сохранён")
+                else:
+                    if not self.BIB_RE.fullmatch(nb) or any(e["bib"] == nb for e in all_rows):
+                        return err(f"номер {nb or '—'} не подходит или уже занят другим участником")
+                    self.store.rename_bib(eid, bib, nb)
                 self.store.audit(who, eid, "Изменён нагрудный номер", f"{row.get('name') or ''}: №{bib} → №{nb}")
                 return ok({"bib": nb})
             upd = {}
             if "wave" in data:
                 upd["wave"] = wave
                 if "lane" not in data and wave:
-                    taken = {e["lane"] for e in self.store.entries_rows(eid) if e["wave"] == wave}
+                    taken = {e["lane"] for e in all_rows if e["wave"] == wave}
                     upd["lane"] = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
             if "lane" in data:
                 upd["lane"] = lane
-            self.store.update_entry(eid, bib, **upd)
+            self.store.update_entry(eid, row["id"], **upd)
             self.store.audit(who, eid, "Перенос участника", f"№{bib}: {row['wave'] or '—'} → {upd.get('wave', row['wave']) or '—'}"
                              + (f", дорожка {upd['lane']}" if upd.get("lane") else ""))
             return ok({"ok": True})
 ```
 
-#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 3441–3485
+#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2427–2474
 
 ```python
         if action == "results" and isinstance(data.get("rows"), list):
             bad, n = [], 0
-            old = {e["bib"]: e for e in self.store.entries_rows(eid)}
-            ed_ = self.entry_dists(eid, list(old.values()))
-            dn_of = {b_: ed_.get(e["chip"]) for b_, e in old.items()}
+            all_rows = self.store.entries_rows(eid)
+            ed_ = self.entry_dists(eid, all_rows)
+            old: dict = {}                      # номер → строки этого номера (по одной на дисциплину)
+            for e_ in all_rows:
+                old.setdefault(e_["bib"], []).append(e_)
             for rw in data["rows"][:2000]:
                 if not isinstance(rw, dict):
                     continue
@@ -1377,10 +1273,11 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 if st and st not in self.STATUSES:
                     bad.append(f"{bib}: неизвестная отметка {st}")
                     continue
-                if bib not in old:
-                    bad.append(f"{bib}: нет такого номера")
+                row_, why = self._entry_of(bib, old.get(bib) or [], rw.get("distance"), ed_)
+                if row_ is None:
+                    bad.append(f"{bib}: {why}")
                     continue
-                dn = dn_of.get(bib)
+                dn = ed_.get(row_["id"])
                 rt = self.result_type(dn)
                 detail, set_detail, auto_txt, errs = self.official_from_raw(dn, rt, rw)
                 if errs:
@@ -1399,41 +1296,45 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                     # пусто — разряд считает система по ЕВСК; «—» — вручную «не выполнен»; иначе — разряд секретаря
                     dr = str(rw.get("done_rank") or "").strip()
                     dr = self.NO_RANK if dr in ("—", "-", "–", "нет") else self.norm_rank(dr)
-                    self.store.update_entry(eid, bib, done_rank=dr or None)
-                    if not (set(rw) - {"bib", "done_rank", "auto"}):
+                    self.store.update_entry(eid, row_["id"], done_rank=dr or None)
+                    if not (set(rw) - {"bib", "distance", "done_rank", "auto"}):
                         n += 1             # прислан только разряд — результат и отметку не трогаем
                         continue
-                if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None, detail or None, set_detail):
+                if self.store.set_entry_result(eid, row_["id"], pr[1] if pr else None, st or None, detail or None, set_detail):
                     n += 1
             if n:
                 self.store.audit(who, eid, "Введены результаты", f"строк: {n}")
             return ok({"saved": n, "errors": bad})
 ```
 
-### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 2686–2949
+### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 1909–2100
 
 Дословно: включает дисциплину участника (`entry_dists`), места по дисциплине в смешанном забеге и расчёт `done_rank`.
 
 ```python
     def compute(self, ev: dict) -> dict:
+        """Результаты соревнования: введённые вручную итоги (секундомеры, попытки, очки) и отсечки судьи JUDGE.
+        Строка участника = спортсмен в одной дисциплине (ключ — id), поэтому у многоборца места считаются по каждому виду отдельно."""
         eid = ev["id"]
         erows = self.store.entries_rows(eid)
         entered, status_of, rtype_of = {}, {}, {}
-        edist = self.entry_dists(eid, erows)          # дисциплина участника: у забега или, если забег смешанный, из заявки
+        edist = self.entry_dists(eid, erows)          # дисциплина строки: у забега или, если забег смешанный, из заявки
         for r in erows:
+            k = r["id"]
             if r.get("status") in self.STATUSES:
-                status_of[r["chip"]] = r["status"]
+                status_of[k] = r["status"]
             elif r.get("result"):
-                dn = edist.get(r["chip"])
+                dn = edist.get(k)
                 rt = self.result_type(dn)
                 pr = self.parse_typed(rt, r["result"], dn)
                 if pr:
-                    entered[r["chip"]] = pr
-                    rtype_of[r["chip"]] = rt
-        entries = {r["chip"]: r["bib"] for r in erows}
-        info = {r["chip"]: r for r in erows}
-        chip_wave = {r["chip"]: r["wave"] for r in erows if r["wave"]}
-        bib_chip = {r["bib"]: r["chip"] for r in erows}
+                    entered[k] = pr
+                    rtype_of[k] = rt
+        info = {r["id"]: r for r in erows}
+        ent_wave = {r["id"]: r["wave"] for r in erows if r["wave"]}
+        by_bib: dict = {}
+        for r in erows:
+            by_bib.setdefault(r["bib"], []).append(r)
         waves = self.store.waves(eid)
         wmeta = {w["name"]: w for w in waves}
         wave_order = {w["name"]: i for i, w in enumerate(waves)}
@@ -1441,7 +1342,6 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         wave_end = {w["name"]: parse_db(w["finished_at"]) for w in waves if w.get("finished_at")}
         ev_start = parse_db(ev["start_time"]) if ev.get("start_time") else None
         fin_dev = ev.get("finish_device") or ""
-        min_time = dt.timedelta(seconds=float(ev.get("min_time_sec") or 0))
         res = {"event": self._event_view(ev), "started": bool(ev_start or wave_start or entered),
                "devices": [], "finished": [], "on_course": [], "not_seen": [], "alerts": [],
                "manual_pending": 0, "unknown": [], "groups": []}
@@ -1454,27 +1354,29 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                     best = name
             return best
 
-        marks = []                    # (device, chip, ts, manual)
-        starts = [s for s in [ev_start, *wave_start.values()] if s]
-        if starts:
-            lo = min(starts)
-            for device, chip, ts_s in self.store.reads_window(lo, lo + dt.timedelta(hours=24)):
-                marks.append((device, chip, parse_db(ts_s), False))
+        marks = []                    # (точка, id строки, время)
+        lost = []
         for m in self.store.manual_list(eid):
             if not m["bib"]:
                 res["manual_pending"] += 1
                 continue
-            chip = bib_chip.get(m["bib"], "#" + m["bib"])
+            cands = by_bib.get(m["bib"]) or []
+            if not cands:
+                lost.append(m["bib"])
+                continue
             ts = parse_db(m["ts"])
-            if chip not in chip_wave and waves:
-                w = m.get("wave") or wave_of_ts(ts)
-                if w:
-                    chip_wave[chip] = w           # участник без заранее заданного забега: по отметке судьи
-            marks.append((m["device"], chip, ts, True))
+            w = m.get("wave") or None
+            row_ = next((c for c in cands if c["wave"] and c["wave"] == w), None) or cands[0]
+            k = row_["id"]
+            if k not in ent_wave and waves:
+                w2 = w or wave_of_ts(ts)
+                if w2:
+                    ent_wave[k] = w2           # участник без заранее заданного забега: по отметке судьи
+            marks.append((m["device"], k, ts))
         marks.sort(key=lambda x: x[2])
 
-        def start_of(chip: str) -> Optional[dt.datetime]:
-            w = chip_wave.get(chip)
+        def start_of(k: int) -> Optional[dt.datetime]:
+            w = ent_wave.get(k)
             if w and w in wave_start:
                 return wave_start[w]
             if w and waves:
@@ -1482,94 +1384,73 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ev_start
 
         first: dict = {}
-        manual_set = set()
-        fin_all: dict = {}
-        for device, chip, ts, man in marks:
-            st = start_of(chip)
+        for device, k, ts in marks:
+            st = start_of(k)
             if st is None or ts < st:
                 continue
-            w = chip_wave.get(chip)
+            w = ent_wave.get(k)
             if w in wave_end and ts > wave_end[w] + dt.timedelta(seconds=2):
                 continue                          # забег уже закрыт
-            if device == fin_dev:
-                if ts < st + min_time:
-                    continue
-                fin_all.setdefault(chip, []).append(ts)
-            per = first.setdefault(chip, {})
-            if device not in per:
-                per[device] = ts
-                if man:
-                    manual_set.add((chip, device))
+            first.setdefault(k, {}).setdefault(device, ts)
+        res["devices"] = sorted({d for per in first.values() for d in per})
 
-        dev_times: dict = {}
-        for chip, per in first.items():
-            st = start_of(chip)
-            for d, ts in per.items():
-                dev_times.setdefault(d, []).append((ts - st).total_seconds())
-        order = sorted(dev_times, key=lambda d: (d == fin_dev, sorted(dev_times[d])[len(dev_times[d]) // 2]))
-        res["devices"] = order
+        def secs(k, d):
+            s = (first[k][d] - start_of(k)).total_seconds()
+            return math.ceil(round(s * 10, 6)) / 10.0     # ручной хронометраж: округление вверх до 0,1 с
 
-        def secs(chip, d):
-            s = (first[chip][d] - start_of(chip)).total_seconds()
-            if (chip, d) in manual_set:
-                s = math.ceil(round(s * 10, 6)) / 10.0     # ручной хронометраж: округление вверх до 0,1 с
-            return s
-
-        def row(chip):
-            per = first.get(chip, {})
-            w = chip_wave.get(chip, "")
+        def row(k):
+            per = first.get(k, {})
+            w = ent_wave.get(k, "")
             meta = wmeta.get(w, {})
-            inf = info.get(chip, {})
-            return {"bib": self._bib_of(chip, entries), "chip": "" if chip.startswith("#") else chip,
+            inf = info.get(k, {})
+            return {"id": k, "bib": inf.get("bib") or "",
                     "wave": w, "category": inf.get("category") or meta.get("category") or "",
-                    "distance": edist.get(chip) or meta.get("distance") or "",
-                    "rt": self.result_type(edist.get(chip) or meta.get("distance")), "sex": inf.get("sex") or "",
+                    "distance": edist.get(k) or meta.get("distance") or "",
+                    "rt": self.result_type(edist.get(k) or meta.get("distance")), "sex": inf.get("sex") or "",
                     "done_rank": inf.get("done_rank") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
                     "points": inf.get("points"), "members": inf.get("members") or "", "rank": inf.get("rank") or "",
                     "sw": (inf.get("detail") or {}).get("t"), "attempts": (inf.get("detail") or {}).get("a"),
-                    "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
-                    "manual": sorted(d for d in per if (chip, d) in manual_set)}
+                    "splits": {d: self.fmt_elapsed(secs(k, d)) for d in per}}
 
-        def fin_sec(chip):
-            return entered[chip][0] if chip in entered else secs(chip, fin_dev)
+        def fin_sec(k):
+            return entered[k][0] if k in entered else secs(k, fin_dev)
 
-        finished = [c for c in first if fin_dev in first[c] and c not in entered and c not in status_of] + list(entered)
-        finished.sort(key=lambda c: (wave_order.get(chip_wave.get(c, ""), -1), fin_sec(c)))
+        finished = [k for k in first if fin_dev in first[k] and k not in entered and k not in status_of] + list(entered)
+        finished.sort(key=lambda k: (wave_order.get(ent_wave.get(k, ""), -1), fin_sec(k)))
         place_by_wave: dict = {}
         prev_by_wave: dict = {}
-        for chip in finished:
-            sec = fin_sec(chip)
-            w = chip_wave.get(chip, "")
+        for k in finished:
+            sec = fin_sec(k)
+            w = ent_wave.get(k, "")
             if wmeta.get(w, {}).get("distance") is None or wmeta.get(w, {}).get("distance") == "":
-                w = w + "\x00" + (edist.get(chip) or "")        # смешанный «общий список»: места отдельно по дисциплинам
+                w = w + "\x00" + (edist.get(k) or "")        # смешанный «общий список»: места отдельно по дисциплинам
             place_by_wave[w] = place_by_wave.get(w, 0) + 1
-            r = row(chip)
-            if chip in entered:
-                txt = entered[chip][1]
+            r = row(k)
+            if k in entered:
+                txt = entered[k][1]
                 pv = prev_by_wave.get(w)
                 place = pv[1] if pv and pv[0] == txt else place_by_wave[w]   # одинаковый результат — одно место
-                ra = info.get(chip, {}).get("result_at")
+                ra = info.get(k, {}).get("result_at")
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt, seconds=round(sec, 3),
                          finish_at=None, finish_epoch_ms=None, entered=True,
                          entered_epoch_ms=self._epoch_ms(parse_db(ra)) if ra else None)
-                if rtype_of.get(chip, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
-                    r.update(time=txt, seconds=None, rtype=rtype_of[chip], value=round(-sec, 2))
+                if rtype_of.get(k, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
+                    r.update(time=txt, seconds=None, rtype=rtype_of[k], value=round(-sec, 2))
             else:
                 txt = self.fmt_result(sec)
-                pv = prev_by_wave.get(w)
                 place = place_by_wave[w]
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt,
-                         seconds=round(sec, 3), finish_at=fmt_db(first[chip][fin_dev]),
-                         finish_epoch_ms=self._epoch_ms(first[chip][fin_dev]))
+                         seconds=round(sec, 3), finish_at=fmt_db(first[k][fin_dev]),
+                         finish_epoch_ms=self._epoch_ms(first[k][fin_dev]))
             prev_by_wave[w] = (txt, place)
             # выполненный разряд: по нормам ЕВСК; вписанный секретарём — главнее
-            if chip in entered:
-                val = entered[chip][0] if rtype_of.get(chip, "time") == "time" else -entered[chip][0]
+            if k in entered:
+                val = entered[k][0] if rtype_of.get(k, "time") == "time" else -entered[k][0]
                 hand = bool(r.get("sw")) or (ev.get("timing") or "") in ("manual", "judge")
             else:
-                val, hand = sec, (chip, fin_dev) in manual_set
+                val, hand = sec, True
             auto_rk = self.rank_for(ev, r["distance"], r["sex"], r["birth_year"], val, hand) if not r.get("members") else ""
             r["done_rank_auto"] = auto_rk
             # «—» — секретарь вручную отметил «разряд не выполнен»: расчёт системы не подставляется
@@ -1596,23 +1477,16 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         res["rank_cap"] = self.RANK_CAP.get(ev.get("level") or "region", "1 р.")
         if ev.get("team_best"):
             res["teams"] = self.team_standings(res["finished"], int(ev["team_best"]))
-        for chip, per in first.items():
-            if fin_dev not in per and chip not in entered and chip not in status_of:
-                last_dev = max(per, key=lambda d: per[d])
-                r = row(chip)
-                r.update(last_point=last_dev, last_time=self.fmt_elapsed(secs(chip, last_dev)))
-                res["on_course"].append(r)
-        res["on_course"].sort(key=lambda r: r["last_time"], reverse=True)
-        res["not_seen"] = [{"bib": r["bib"], "chip": "" if r["chip"].startswith("#") else r["chip"],
+        res["not_seen"] = [{"id": r["id"], "bib": r["bib"],
                             "wave": r["wave"] or "", "name": r["name"] or "", "birth_year": r["birth_year"] or "",
                             "team": r["team"] or "", "coach": r.get("coach") or "", "members": r.get("members") or "",
                             "rank": r.get("rank") or "", "sw": (r.get("detail") or {}).get("t"), "attempts": (r.get("detail") or {}).get("a"),
                             "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
-                            "distance": edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance") or "",
-                            "rt": self.result_type(edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance")),
+                            "distance": edist.get(r["id"]) or wmeta.get(r["wave"] or "", {}).get("distance") or "",
+                            "rt": self.result_type(edist.get(r["id"]) or wmeta.get(r["wave"] or "", {}).get("distance")),
                             "sex": r.get("sex") or "", "done_rank": r.get("done_rank") or "",
-                            **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
-                           for r in erows if (r["chip"] not in first or r["chip"] in status_of) and r["chip"] not in entered]
+                            **({"status": status_of[r["id"]]} if r["id"] in status_of else {})}
+                           for r in erows if (r["id"] not in first or r["id"] in status_of) and r["id"] not in entered]
 
         # ---- предупреждения
         A = res["alerts"]
@@ -1620,40 +1494,8 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             A.append({"level": "warn", "text": "Не выбрана точка финиша — результаты не считаются"})
         if res["manual_pending"]:
             A.append({"level": "warn", "text": f"Отсечек судьи без номера: {res['manual_pending']} — впишите номера"})
-        running = ev.get("status") == "running" and starts
-        if running:
-            silence = float(ev.get("alert_silence_min") or 10)
-            now = now_local()
-            used = set(dev_times) | {fin_dev}
-            for s in self.sources.values():
-                if s.cfg["mode"] == "http":
-                    continue
-                if not any(d == str(s.cfg["device"]) or (s.cfg["device_per_antenna"] and d.startswith(str(s.cfg["device"])))
-                           for d in used):
-                    continue
-                if not s.connected:
-                    A.append({"level": "bad", "text": f"Нет связи с точкой {s.cfg['device']}"})
-                elif silence > 0 and now - min(starts) > dt.timedelta(minutes=silence):
-                    last = s.last_read_at
-                    if last is None or now - last > dt.timedelta(minutes=silence):
-                        mins = "ни одной отметки" if last is None else f"{int((now - last).total_seconds() // 60)} мин без отметок"
-                        A.append({"level": "warn", "text": f"Точка {s.cfg['device']} молчит: {mins}"})
-        if entries:
-            unknown = sorted(c for c in first if c not in entries and not c.startswith("#"))
-            res["unknown"] = unknown
-            if unknown:
-                A.append({"level": "warn", "text": f"Чипы не из списка участников: {len(unknown)}"
-                                                   f" ({', '.join(u[-8:] for u in unknown[:5])}{'…' if len(unknown) > 5 else ''})"})
-        dup = []
-        for chip, times in fin_all.items():
-            clusters = 1
-            for a, b in zip(times, times[1:]):
-                if (b - a).total_seconds() > 30:
-                    clusters += 1
-            if clusters > 1:
-                dup.append(self._bib_of(chip, entries) or chip[-8:])
-        if dup:
-            A.append({"level": "info", "text": f"Повторное прохождение финиша (круги или ошибка): {', '.join(dup[:10])}"})
+        if lost:
+            A.append({"level": "warn", "text": f"Номера из отсечек судьи нет в списке участников: {', '.join(sorted(set(lost))[:10])}"})
         dup_bib = {}
         for m in self.store.manual_list(eid):
             if m["bib"] and m["device"] == fin_dev:
@@ -1661,23 +1503,6 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         twice = [b for (b, _), n in dup_bib.items() if n > 1]
         if twice:
             A.append({"level": "warn", "text": f"Номер вписан судьёй дважды: {', '.join(sorted(set(twice))[:10])}"})
-        seg: dict = {}
-        for chip, per in first.items():
-            seq = sorted(per.items(), key=lambda x: x[1])
-            for (d1, t1), (d2, t2) in zip(seq, seq[1:]):
-                seg.setdefault((d1, d2), []).append((chip, (t2 - t1).total_seconds()))
-        fast = []
-        for (d1, d2), lst in seg.items():
-            if len(lst) < 5:
-                continue
-            med = sorted(x for _, x in lst)[len(lst) // 2]
-            if med < 60:
-                continue
-            for chip, x in lst:
-                if x < 0.6 * med:
-                    fast.append(f"{self._bib_of(chip, entries) or chip[-8:]} ({d1}→{d2})")
-        if fast:
-            A.append({"level": "bad", "text": f"Подозрительно быстрый отрезок (срезка?): {', '.join(fast[:10])}"})
         return res
 ```
 
@@ -1687,13 +1512,13 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 > ВАЖНО для аудитора: в ТЗ функция `table()` названа находящейся в `ui.html`. Фактически она живёт в `hub/protocol.html` (одна страница печати для админки и публичного сайта). `ui.html` печатных таблиц не строит.
 
-#### `isTech` — `hub/protocol.html` строки 342–342
+#### `isTech` — `hub/protocol.html` строки 340–340
 
 ```js
 const isTech=(rtype,slots,att)=>rtype==="distance"||rtype==="height"||(slots||0)>0||att===true;
 ```
 
-#### `partsOf` — `hub/protocol.html` строки 345–356
+#### `partsOf` — `hub/protocol.html` строки 343–354
 
 ```js
 function partsOf(h){
@@ -1710,7 +1535,7 @@ function partsOf(h){
 }
 ```
 
-#### `startSheet` — `hub/protocol.html` строки 358–410
+#### `startSheet` — `hub/protocol.html` строки 356–408
 
 ```js
 function startSheet(o){
@@ -1768,7 +1593,7 @@ function startSheet(o){
 }
 ```
 
-#### `renderStart` — `hub/protocol.html` строки 496–502
+#### `renderStart` — `hub/protocol.html` строки 494–500
 
 ```js
 function renderStart(){
@@ -1784,7 +1609,7 @@ function renderStart(){
 
 ### 4.2 Переключение печатных стилей landscape / portrait — `hub/protocol.html`
 
-#### `setPage` — `hub/protocol.html` строки 333–338
+#### `setPage` — `hub/protocol.html` строки 331–336
 
 ```js
 function setPage(land){
@@ -1795,7 +1620,7 @@ function setPage(land){
 }
 ```
 
-#### `groupList` — `hub/protocol.html` строки 414–423
+#### `groupList` — `hub/protocol.html` строки 412–421
 
 ```js
 function groupList(start){
@@ -1810,7 +1635,7 @@ function groupList(start){
 }
 ```
 
-#### `tabsFor` — `hub/protocol.html` строки 424–432
+#### `tabsFor` — `hub/protocol.html` строки 422–430
 
 ```js
 function tabsFor(start){
@@ -1824,7 +1649,7 @@ function tabsFor(start){
 }
 ```
 
-#### `currentItem` — `hub/protocol.html` строки 434–437
+#### `currentItem` — `hub/protocol.html` строки 432–435
 
 ```js
 function currentItem(start){
@@ -1833,7 +1658,7 @@ function currentItem(start){
 }
 ```
 
-#### `sheetsFor` — `hub/protocol.html` строки 439–447
+#### `sheetsFor` — `hub/protocol.html` строки 437–445
 
 ```js
 function sheetsFor(it){
@@ -1847,7 +1672,7 @@ function sheetsFor(it){
 }
 ```
 
-#### `showSheets` — `hub/protocol.html` строки 449–459
+#### `showSheets` — `hub/protocol.html` строки 447–457
 
 ```js
 function showSheets(secs){
@@ -1863,7 +1688,7 @@ function showSheets(secs){
 }
 ```
 
-#### `drawTabs` — `hub/protocol.html` строки 472–478
+#### `drawTabs` — `hub/protocol.html` строки 470–476
 
 ```js
 function drawTabs(tabs){
@@ -1875,7 +1700,7 @@ function drawTabs(tabs){
 }
 ```
 
-#### `addTabToCart` — `hub/protocol.html` строки 483–495
+#### `addTabToCart` — `hub/protocol.html` строки 481–493
 
 ```js
 async function addTabToCart(){
@@ -1893,7 +1718,7 @@ async function addTabToCart(){
 }
 ```
 
-#### `buildFinal` — `hub/protocol.html` строки 532–637
+#### `buildFinal` — `hub/protocol.html` строки 530–633
 
 ```js
 function buildFinal(o={}){
@@ -1906,8 +1731,7 @@ function buildFinal(o={}){
   const anyPts=R.finished.some(x=>x.points!=null);
   const fmtPts=v=>v==null?"":String(v).replace(".",",");
   const coachOn=$("showCoach").checked&&R.finished.concat(R.not_seen).some(x=>x.coach);
-  const chip=!PUB&&$("showChip").checked, spl=$("showSplits").checked, dnf=$("showDnf").checked;
-  const fin=ev.finish_device, splitDevs=(R.devices||[]).filter(d=>d!==fin);
+  const dnf=$("showDnf").checked, fin=ev.finish_device||"JUDGE";
   const anyName=R.finished.concat(R.on_course,R.not_seen).some(x=>x.name), anyYear=R.finished.some(x=>x.birth_year)||R.not_seen.some(x=>x.birth_year);
   const anyTeam=!tf&&(R.finished.some(x=>x.team)||R.not_seen.some(x=>x.team)), hasHeats=ev.waves.length>0;
   const anyRank=R.finished.some(x=>x.rank)||R.not_seen.some(x=>x.rank);
@@ -1921,8 +1745,8 @@ function buildFinal(o={}){
 
   const head=(placeLbl,withHeat)=>`<thead><tr><th style="width:42px">${placeLbl}</th><th style="width:52px">Нагр. №</th>
     ${anyName?'<th>Фамилия, имя</th>':''}${anyYear?'<th style="width:46px">Год рожд.</th>':''}${anyRank?'<th style="width:46px">Разряд</th>':''}${anyTeam?'<th>Команда</th>':''}${coachOn?'<th>Тренер</th>':''}
-    ${withHeat?'<th style="width:70px">Забег</th>':''}${spl?splitDevs.map(d=>`<th style="width:70px">${esc(d)}</th>`).join(""):""}
-    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyDone?'<th style="width:56px">Вып. разряд</th>':''}${anyPts?'<th style="width:46px">Очки</th>':''}${chip?'<th>Чип</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
+    ${withHeat?'<th style="width:70px">Забег</th>':''}
+    ${anySw?'<th>Секундомеры</th>':''}${anyAtt?'<th>Попытки</th>':''}<th style="width:78px">Результат</th>${anyDone?'<th style="width:56px">Вып. разряд</th>':''}${anyPts?'<th style="width:46px">Очки</th>':''}<th style="width:46px">Прим.</th></tr></thead>`;
   // техника: на каждое место — все шесть попыток, чтобы был виден ход борьбы
   const techHead=withHeat=>`<thead><tr><th rowspan="2" style="width:42px">Место</th><th rowspan="2" style="width:52px">Нагр. №</th><th rowspan="2">Фамилия, имя</th><th rowspan="2" style="width:46px">Год рожд.</th>${anyRank?'<th rowspan="2" style="width:46px">Разряд</th>':''}${anyTeam?'<th rowspan="2">Команда</th>':''}${coachOn?'<th rowspan="2">Тренер</th>':''}<th colspan="6" class="sub" style="text-align:center">Попытки</th><th rowspan="2" style="width:84px">Лучший результат</th>${anyDone?'<th rowspan="2" style="width:56px">Вып. разряд</th>':''}</tr><tr>${[1,2,3,4,5,6].map(i=>`<th class="sub">Попытка ${i}</th>`).join("")}</tr></thead>`;
   const techTr=(x,place,res)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td><td>${esc(x.name)}</td><td class="c">${esc(x.birth_year)}</td>${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}${[0,1,2,3,4,5].map(i=>{const v=(x.attempts||[])[i]||""; return `<td class="c cellv${v&&res&&String(v).replace(",",".")===String(res).replace(",",".")?" bestv":""}">${esc(v)}</td>`;}).join("")}<td class="c"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}</tr>`;
@@ -1930,8 +1754,7 @@ function buildFinal(o={}){
   const tr=(x,place,withHeat,res,note)=>`<tr${typeof place==="number"&&place>=1&&place<=3?` class="pl${place}"`:""}><td class="c"><b>${place}</b></td><td class="c">${esc(x.bib)}</td>
     ${anyName?`<td>${esc(x.name)}${mem(x)}</td>`:''}${anyYear?`<td class="c">${esc(x.birth_year)}</td>`:''}${anyRank?`<td class="c">${esc(x.rank||"")}</td>`:''}${anyTeam?`<td>${esc(x.team)}</td>`:''}${coachOn?`<td>${esc(x.coach||"")}</td>`:''}
     ${withHeat?`<td class="c">${esc((x.wave||"").replace(/^Забег\s*/,""))}${x.place&&withHeat?` <small>(${x.place})</small>`:""}</td>`:''}
-    ${spl?splitDevs.map(d=>`<td class="r">${esc(x.splits?.[d]||"")}</td>`).join(""):""}
-    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}${chip?`<td style="font-size:10px">${esc(x.chip)}</td>`:''}<td class="c">${note}</td></tr>`;
+    ${anySw?`<td class="c" style="font-size:11px">${esc(swTxt(x))}</td>`:''}${anyAtt?`<td class="c" style="font-size:11px">${esc(attTxt(x))}</td>`:''}<td class="r"><b>${esc(res)}</b></td>${anyDone?`<td class="c">${esc(x.done_rank||"")}</td>`:''}${anyPts?`<td class="c">${esc(fmtPts(x.points))}</td>`:''}<td class="c">${note}</td></tr>`;
   const handNote=x=>man(x)&&!allManual?"р":"";
   // статус от секретаря (DNS/DNF/DQ/NM) важнее догадки по отметкам
   const outCode=x=>x.status||(x.last_point?"DNF":"DNS");
@@ -2004,7 +1827,7 @@ function buildFinal(o={}){
 }
 ```
 
-#### `render` — `hub/protocol.html` строки 521–530
+#### `render` — `hub/protocol.html` строки 519–528
 
 ```js
 function render(){
@@ -2019,7 +1842,7 @@ function render(){
 }
 ```
 
-#### `renderCart` — `hub/protocol.html` строки 504–515
+#### `renderCart` — `hub/protocol.html` строки 502–513
 
 ```js
 async function renderCart(){
@@ -2036,7 +1859,7 @@ async function renderCart(){
 }
 ```
 
-#### `syncStartCtl` — `hub/protocol.html` строки 516–519
+#### `syncStartCtl` — `hub/protocol.html` строки 514–517
 
 ```js
 function syncStartCtl(){
@@ -2047,7 +1870,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 2073–2130
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1629–1686
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -2111,16 +1934,19 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 2132–2515
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1688–2084
 
 ```js
 const wzp = (() => {
   const W = {disc: "", step: 1, ages: [], sex: "", lanes: 8, regs: [], sl: null, ev: null};
   // границы возрастных групп — только из справочника seed/disciplines.json (ages[].min/max), в коде их нет
   const ageBy = (id) => (DISC.ages || []).find(a => a.id === id);
-  const STEP_T = {
-    run:   ["Фильтр участников", "Нагрудные номера", "Забеги и стартовый протокол", "Ввод на финише", "Итоговый протокол"],
-    tech:  ["Фильтр участников", "Нагрудные номера", "Общий список и стартовый протокол", "Ввод с сектора", "Итоговый протокол"]};
+  // названия шагов одинаковы для бега и техники; различия — в уточнениях (подписях) шагов 3 и 4
+  const STEP_T = ["Дисциплина и фильтр", "Нагрудные номера", "Стартовый протокол", "Ввод результатов", "Итоговый протокол"];
+  const STEP_NOTE = {
+    run:  {3: "забеги, 3 секундомера, лист книжный", 4: "на финише"},
+    tech: {3: "общий список, 6 попыток, лист альбомный", 4: "с сектора"}};
+  const stepHead = (n, k) => `<h2>Шаг ${n}. ${STEP_T[n - 1]}${STEP_NOTE[k][n] ? ` <small class="muted" style="font:400 15px var(--body)">— ${STEP_NOTE[k][n]}</small>` : ""}</h2>`;
   // автоопределение: попытки или расстояние/высота — техника; время — бег; прочее (очки) ведём по беговой ветке
   const kindOf = (name) => { const d = discBy(name); if (!d) return "run"; if (d.attempts || d.result === "distance" || d.result === "height") return "tech"; return "run"; };
   const isPoints = (name) => { const d = discBy(name); return !!d && d.result === "points"; };
@@ -2136,7 +1962,7 @@ const wzp = (() => {
       if ((e.distance || h.distance) !== W.disc) return;
       if (W.sex && sexOfE(e) !== W.sex) return;
       if (!ageOk({birth_year: e.birth_year})) return;
-      out.push(Object.assign({}, e, {_heat: h.name})); }));
+      out.push(Object.assign({}, e, {_heat: h.name, distance: e.distance || h.distance})); }));
     return out;
   };
   const myHeats = () => W.sl ? W.sl.heats.filter(h => h.distance === W.disc || h.entries.some(e => e.distance === W.disc)) : [];
@@ -2144,7 +1970,7 @@ const wzp = (() => {
     const e0 = ev(); if (!e0) return;
     // судье на секторе заявки (личные данные) не нужны и не выдаются — работает по стартовому списку
     try{ const [r, sl, rs] = await Promise.all([api(`/api/events/${e0.id}/regs`), api(`/api/events/${e0.id}/startlist`), api(`/api/events/${e0.id}/results`).catch(() => null)]);
-      W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
+      W.regs = r.regs; W.sl = sl; W.auto = {}; if (rs) rs.finished.forEach(x => { W.auto[x.bib + "|" + (x.distance || "")] = x.done_rank_auto || ""; }); }catch(err){ console.warn(err); }
   }
   async function open(){
     const e0 = ev(); if (!e0) { $("wzpBody").innerHTML = '<p class="muted">Выберите соревнование в меню вверху.</p>'; return; }
@@ -2152,7 +1978,7 @@ const wzp = (() => {
     await loadDisc();
     if (W.evId !== e0.id) {
       // 6.0: активная дисциплина, шаг и фильтры — общие для всех секретарей, лежат в базе (таблица ui_state), а не в браузере
-      W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; W.uiRev = -1;
+      W.evId = e0.id; W.disc = ""; W.step = 1; W.ages = []; W.sex = ""; W.uiRev = -1; W.lanes = e0.reg_lanes || 8;
       try{ await uiSync(true); }catch(x){ console.warn(x); }
       if (W.forceStep) { W.step = W.forceStep; W.forceStep = 0; save(); }
     }
@@ -2160,7 +1986,7 @@ const wzp = (() => {
     const names = [...new Set([...distNames(e0), ...W.regs.map(r => r.distance), ...W.sl.heats.map(h => h.distance)].filter(Boolean))];
     $("wzpDisc").innerHTML = names.map(n => `<option ${n === W.disc ? "selected" : ""}>${esc(n)}</option>`).join("") || '<option value="">нет дисциплин</option>';
     if (!names.includes(W.disc)) W.disc = names[0] || "";
-    $("wzpDisc").value = W.disc; render();
+    $("wzpDisc").value = W.disc; render(); renderCart();
   }
   // запись общего состояния на сервер; ответ с номером версии запоминаем, чтобы собственное эхо не принимать за чужое
   function save(){
@@ -2190,7 +2016,10 @@ const wzp = (() => {
   function applyDraw(){ const sel = $("wzpDisc"); if (sel && [...sel.options].some(o => o.value === W.disc)) sel.value = W.disc; render(); }
   function go(n){
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Уйти с шага без сохранения?")) return;
-    W.bibDirty = false; W.deferred = false; W.step = Math.max(1, Math.min(5, n)); save(); render(); }
+    W.bibDirty = false; W.deferred = false; W.step = Math.max(1, Math.min(5, n)); save(); render();
+    if (W.step === 2 || W.step === 3) bgReload(W.step); }
+  // на шагах 2 и 3 заявки и список перезагружаем в фоне (их мог изменить другой секретарь); экран перерисовываем, только если человек ничего не вводит
+  async function bgReload(step){ await load(); if (W.step === step && !busyEditing() && document.body.dataset.view === "wizard") render(); }
   // перерисовка тела Мастера без прыжков: высота держится до конца отрисовки, прокрутка не трогается, фокус возвращается в ту же ячейку
   const focusKey = () => { const a = document.activeElement, b = $("wzpBody"); if (!a || !b.contains(a) || a === b) return null;
     const tr = a.closest("tr[data-bib]"); return {id: a.id || "", bib: tr ? tr.dataset.bib : "", cls: a.className || "", i: a.dataset.i ?? "", pos: a.selectionStart}; };
@@ -2205,9 +2034,9 @@ const wzp = (() => {
     requestAnimationFrame(() => { bd.style.minHeight = ""; });
   }
   function draw(){
-    const k = kind(), t = STEP_T[k];
+    const k = kind(), t = STEP_T;
     $("wzpKind").className = "wzp-kind " + k;
-    $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника · попытки · общий список" : "Бег · забеги и дорожки" + (isPoints(W.disc) ? " (очки)" : "");
+    $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
     const body = $("wzpBody");
     if (!W.disc) { body.innerHTML = '<p class="muted">В этом соревновании пока нет дисциплин. Добавьте их на этапе «Подготовка» и примите заявки.</p>'; return; }
@@ -2218,12 +2047,12 @@ const wzp = (() => {
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
     const ages = (DISC.ages || []);
-    body.innerHTML = `<h2>Шаг 1. Кого включаем</h2>
-      <p class="small muted" style="margin:0">Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
+    body.innerHTML = `${stepHead(1, k)}
+      <p class="small muted" style="margin:0">Дисциплина выбрана вверху. Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
       <fieldset class="pmode"><legend>Возрастная группа</legend><div class="wzp-opts">${ages.map(a => `<label><input type="checkbox" data-age="${esc(a.id)}" ${W.ages.includes(a.id) ? "checked" : ""}> ${esc(a.name)}</label>`).join("")}</div><span class="small muted">Ничего не отмечено — все возрасты.</span></fieldset>
       <fieldset class="pmode"><legend>Пол</legend><div class="wzp-opts">${[["", "Все"], ["М", "Мальчики / юноши / мужчины"], ["Ж", "Девочки / девушки / женщины"]].map(([v, t]) => `<label><input type="radio" name="wzpSex" value="${v}" ${W.sex === v ? "checked" : ""}> ${t}</label>`).join("")}</div></fieldset>
       <p><b>Подходит участников: ${cnt("")}</b> <span class="small muted">· мальчиков ${cnt("М")} · девочек ${cnt("Ж")}${pend ? ` · ещё ${pend} заявок ждут проверки во вкладке «Регистрация»` : ""}</span></p>
-      ${nav(false, "К сетке")}`;
+      ${nav(false, "К нагрудным номерам")}`;
   }
   function heatsTable(){
     const hs = myHeats();
@@ -2238,14 +2067,15 @@ const wzp = (() => {
   async function loadBibs(){ W.bibs = await api(`/api/events/${ev().id}/bibs?${bibQ()}`); return W.bibs; }
   function step2(body, k){
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
-    body.innerHTML = `<h2>Шаг 2. Регистрация нагрудных номеров</h2>
+    body.innerHTML = `${stepHead(2, k)}
       <p class="small muted" style="margin:0">${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))}.
         Впишите нагрудный номер каждому участнику с клавиатуры (Enter — к следующему) и нажмите «Сохранить нагрудные номера». Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните снова: стартовый список, отметки и результаты переедут на новый номер.</p>
+      <p class="small" style="margin:0"><b>Номер спортсмена, заявленного на несколько видов, один на все виды:</b> впишите его один раз — он запишется во все дисциплины.</p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary big" type="button" id="bibSave" disabled>💾 Сохранить нагрудные номера</button>
         <span class="wzp-sync" id="bibSync" role="status" aria-live="polite"></span></div>
-      ${nav(true, k === "tech" ? "К общему списку" : "К забегам")}`;
+      ${nav(true, "К стартовому протоколу")}`;
     loadBibs().then(renderBibs).catch(err => { $("bibBox").innerHTML = `<p class="wzp-lock">Не удалось загрузить участников: ${esc(err.message)}</p>`; });
   }
   function renderBibs(){
@@ -2253,10 +2083,15 @@ const wzp = (() => {
     if (!d.rows.length) { box.innerHTML = '<div class="card empty">Подтверждённых участников по фильтру шага 1 нет. Подтвердите заявки во вкладке «Регистрация» или измените фильтр.</div>'; return; }
     let last = null;
     const rows = d.rows.map((r, i) => { const c = r.category || "без категории", hd = c !== last ? `<tr class="wzp-cat"><td colspan="7">${esc(c)}</td></tr>` : ""; last = c;
-      return hd + `<tr data-ids="${r.ids.join(",")}" data-orig="${esc(r.bib)}">
+      const also = r.also || [], other = also.map(a => a.distance).join(", ");
+      const from = r.inherited ? (also.find(a => a.bib && a.bib === r.bib) || {}).distance : "";
+      const alsoHtml = also.length ? `<div class="small muted">также: ${esc(other)}</div>` : "";
+      const note = r.mismatch ? `<div class="small bibwarn">В других видах номер другой (${esc(also.map(a => a.distance + " — " + (a.bib || "без номера")).join("; "))}) — при сохранении выровняется</div>`
+        : r.inherited ? `<div class="small muted">Номер подставлен${from ? " из «" + esc(from) + "»" : " из другой дисциплины"}</div>` : "";
+      return hd + `<tr data-ids="${r.ids.join(",")}" data-orig="${esc(r.bib)}"${r.mismatch || r.inherited ? ' data-pending="1"' : ""}${r.mismatch ? ' class="mismatch"' : ""}>
         <td class="n">${i + 1}</td>
         <td><input class="bibin2" value="${esc(r.bib)}" maxlength="10" inputmode="numeric" autocomplete="off" aria-label="Нагрудный номер: ${esc(r.name)}" placeholder="№"></td>
-        <td><b>${esc(r.name)}</b>${r.members ? `<div class="small muted">${esc(r.members)}</div>` : ""}</td><td>${esc(r.birth_year)}</td><td class="small">${esc(r.rank)}</td><td class="small">${esc(r.team)}</td>
+        <td><b>${esc(r.name)}</b>${r.members ? `<div class="small muted">${esc(r.members)}</div>` : ""}${alsoHtml}${note}</td><td>${esc(r.birth_year)}</td><td class="small">${esc(r.rank)}</td><td class="small">${esc(r.team)}</td>
         <td class="small muted">${r.has_result ? "есть результат" : r.in_grid ? "в сетке" : ""}</td></tr>`; }).join("");
     box.innerHTML = `<p class="small" id="bibStat"></p>
       <div class="tbl"><table class="wzp-grid bibtbl"><thead><tr><th>№ п/п</th><th>Нагрудный номер</th><th>Фамилия, имя</th><th>Год рожд.</th><th>Разряд</th><th>Команда</th><th></th></tr></thead><tbody id="bibRows">${rows}</tbody></table></div>`;
@@ -2266,14 +2101,14 @@ const wzp = (() => {
   function bibCheck(){
     const trs = [...document.querySelectorAll("#bibRows tr[data-ids]")]; if (!trs.length) return;
     const cnt = {}; trs.forEach(tr => { const v = tr.querySelector("input").value.trim(); if (v) cnt[v] = (cnt[v] || 0) + 1; });
-    let empty = 0, dup = 0, dirty = 0;
+    let empty = 0, dup = 0, dirty = 0, changed = 0; const mism = trs.filter(tr => tr.classList.contains("mismatch")).length;
     trs.forEach(tr => { const i = tr.querySelector("input"), v = i.value.trim();
-      const isDup = v && cnt[v] > 1, isDirty = v !== tr.dataset.orig;
+      const isDup = v && cnt[v] > 1, isDirty = v !== tr.dataset.orig || tr.dataset.pending === "1";   // расхождение или подставленный номер тоже нужно сохранить
       i.classList.toggle("err", !!isDup); tr.classList.toggle("dirty", isDirty); tr.classList.toggle("nobib", !v);
-      if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; });
-    $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
+      if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; if (v !== tr.dataset.orig) changed++; });
+    $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${mism ? ` · <span class="warn">разные номера в видах: ${mism}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
     $("bibSave").disabled = !dirty || dup > 0;
-    W.bibDirty = dirty > 0;
+    W.bibDirty = changed > 0;          // предупреждение при уходе — только если человек что-то изменил руками
   }
   async function saveBibs(){
     const rows = [...document.querySelectorAll("#bibRows tr.dirty")].map(tr => ({ids: tr.dataset.ids.split(",").map(Number), bib: tr.querySelector("input").value.trim()}));
@@ -2293,14 +2128,14 @@ const wzp = (() => {
   // шаг 3: сетка и стартовый протокол на одном экране — ровно две кнопки управления сеткой, ниже бланк с вкладками групп
   function step3(body, k){
     const tech = k === "tech", n = regsIn().length, q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
-    body.innerHTML = `<h2>Шаг 3. ${tech ? "Общий список и стартовый протокол" : "Забеги и стартовый протокол"}</h2>
-      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожки заблокированы. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
+    body.innerHTML = `${stepHead(3, k)}
+      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
         : `<p class="small muted" style="margin:0">Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3».</p>
            <label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
       <div id="bibWarn"></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "⚡ Сформировать общий список" : "⚡ Сформировать забеги"}</button>
         <button class="danger" type="button" id="wzpReset" ${myHeats().length ? "" : "disabled"}>❌ Сбросить сетку / Удалить забеги</button>
-        <span class="small muted">${n} участников по фильтру шага 1</span></div>
+        <span class="small muted">${n} подтверждённых участников по фильтру шага 1</span></div>
       ${myHeats().length ? `<div class="row xlsrow"><a class="btn xls" id="wzpXlsx" href="/api/events/${ev().id}/startlist.xlsx?${bibQ()}">📊 Выгрузить стартовый протокол в Excel (.xlsx)</a>
         <span class="small muted">${tech ? "Порядок выполнения, 6 попыток и «Лучший результат» — пустые графы для записи ручкой на секторе." : "Забег, дорожка и три пустые графы «Секундомер 1–3» — для записи времени ручкой на финише."}</span></div>` : ""}
       ${myHeats().length ? `<p class="small muted" style="margin:0">Над бланком — вкладки: «Все участники», «Мальчики», «Девочки» и каждая категория. Нужную вкладку можно сразу положить в корзину печати.</p>
@@ -2309,9 +2144,9 @@ const wzp = (() => {
         : '<div class="card empty">Сетки по этой дисциплине пока нет — нажмите «⚡ Сформировать…».</div>'}
       ${nav(true, "К вводу результатов")}`;
     // без ручных номеров сетку не построить: показываем, сколько не хватает, и ведём на шаг 2
+    // кнопка «Сформировать» доступна всегда, когда есть подтверждённые участники; нехватку номеров только показываем
     loadBibs().then(d => { const miss = d.total - d.with_bib, w = $("bibWarn"); if (!w) return;
-      w.innerHTML = miss ? `<div class="wzp-lock">✍️ У ${miss} из ${d.total} участников нет нагрудного номера — сетку не сформировать. <button type="button" class="sm" data-s="2">Вписать номера на шаге 2</button></div>` : "";
-      const g = $("wzpGen"); if (g && miss) g.disabled = true; }).catch(() => {});
+      w.innerHTML = miss ? `<div class="wzp-lock">✍️ У ${miss} из ${d.total} участников нет нагрудного номера. <button type="button" class="sm" data-s="2">Вписать номера на шаге 2</button></div>` : ""; }).catch(() => {});
   }
   async function gen(){
     const e0 = ev(), tech = kind() === "tech";
@@ -2325,15 +2160,15 @@ const wzp = (() => {
   }
   async function reset(){
     const e0 = ev();
-    if (!confirm(`Сбросить сетку дисциплины «${W.disc}» и удалить все её забеги и списки? Номера участников сохранятся. Это действие нельзя отменить.`)) return;
-    try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves}, участников ${r.entries}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
+    if (!confirm(`Сбросить сетку дисциплины «${W.disc}»? Время старта будет обнулено, забеги удалены. Введённые результаты и номера сохранятся. После этого список можно сформировать заново — в него войдут все подтверждённые участники.`)) return;
+    try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves ?? 0}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
-    body.innerHTML = `<h2>Шаг 5. Итоговый протокол</h2>
+    body.innerHTML = `${stepHead(5, k)}
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -2342,6 +2177,7 @@ const wzp = (() => {
         <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол на сайте</b><span class="small muted"> — места, результаты и разряды</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
+      <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
       <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>
       <div class="row wzp-ctl" style="margin-top:14px"><button type="button" id="wzpFinish" class="${ev().status === "finished" ? "primary" : ""}">${ev().status === "finished" ? "↩️ Возобновить соревнование" : "🏁 Завершить соревнование"}</button>
@@ -2349,7 +2185,7 @@ const wzp = (() => {
   }
   // «Вып. разряд»: пусто — считает система по нормам ЕВСК (видно в подписи); «—» — вручную «не выполнен»; иначе — разряд секретаря
   const DONE_RANKS = ["МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн."];
-  const drSel = (r) => { const cur = r.done_rank || "", auto = (W.auto || {})[r.bib] || "";
+  const drSel = (r) => { const cur = r.done_rank || "", auto = (W.auto || {})[r.bib + "|" + W.disc] || "";
     const opts = [["", auto ? `Авто: ${auto}` : "Авто: нет"], ["—", "Не выполнен"], ...[...new Set([...DONE_RANKS, ...(cur && cur !== "—" ? [cur] : [])])].map(x => [x, x])];
     return `<select class="dr${cur ? " man" : ""}" aria-label="Выполненный разряд ${esc(r.bib)}" title="Авто — по нормам ЕВСК с учётом пола, возраста, хронометража и статуса соревнований. Выберите разряд, чтобы задать его вручную — он главнее расчёта.">${opts.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`; };
   /* шаг 4: экранная сетка ввода */
@@ -2368,8 +2204,8 @@ const wzp = (() => {
       || (a.lane ?? 99) - (b.lane ?? 99) || (parseInt(a.bib) || 0) - (parseInt(b.bib) || 0));
     let lastCat = null;
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
-    body.innerHTML = `<h2>Шаг 4. ${tech ? "Ввод с сектора" : "Ввод на финише"}</h2>
-      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговый протокол идёт только официальный результат."}
+    body.innerHTML = `${stepHead(4, k)}
+      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
@@ -2392,7 +2228,7 @@ const wzp = (() => {
     catch(err){ toast("Ошибка: " + err.message); }
   }
   const rowData = (tr) => {
-    const row = {bib: tr.dataset.bib, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
+    const row = {bib: tr.dataset.bib, distance: W.disc, status: tr.querySelector("select.stsel").value, auto: true, done_rank: tr.querySelector("select.dr").value};
     const sw = [...tr.querySelectorAll("input.sw")], at = [...tr.querySelectorAll("input.att")], one = tr.querySelector("input.one");
     if (sw.length) row.t = sw.map(i => i.value.trim()); if (at.length) row.a = at.map(i => i.value.trim()); if (one) row.result = one.value.trim();
     return row; };
@@ -2437,7 +2273,7 @@ const wzp = (() => {
     document.querySelectorAll("#wzpRows tr[data-bib]").forEach(tr => {
       const e = by[tr.dataset.bib]; if (!e || tr.classList.contains("dirty") || tr.contains(document.activeElement)) return;
       const out = tr.querySelector("[data-out]"); if (out) out.textContent = e.result || "";
-      const dr = tr.querySelector("select.dr"); if (dr && dr.options[0]) { const a = (W.auto || {})[e.bib] || ""; dr.options[0].textContent = a ? `Авто: ${a}` : "Авто: нет"; }
+      const dr = tr.querySelector("select.dr"); if (dr && dr.options[0]) { const a = (W.auto || {})[e.bib + "|" + W.disc] || ""; dr.options[0].textContent = a ? `Авто: ${a}` : "Авто: нет"; }
     });
   }
   async function clearAll(){
@@ -2445,7 +2281,7 @@ const wzp = (() => {
     if (!bibs.length) return;
     const lbl = `${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
     if (!confirm(`Удалить все результаты дисциплины «${lbl}» (${bibs.length} участников)?\n\nСотрутся секундомеры, попытки, отметки DNS/DNF и ручные разряды. Участники и сетка останутся. Это действие нельзя отменить.`)) return;
-    try{ const r = await api(`/api/events/${curId}/clearresults`, {bibs, label: lbl}); toast(`Протокол очищен: ${r.cleared}`); await load(); render(); loadResults(); }
+    try{ const r = await api(`/api/events/${curId}/clearresults`, {bibs, distance: W.disc, label: lbl}); toast(`Протокол очищен: ${r.cleared}`); await load(); render(); loadResults(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
   async function setPub(kind2, on){
@@ -2502,7 +2338,7 @@ const wzp = (() => {
 
 ### 4.5 Расчёт официального результата — только на сервере (`hub/hub.py`)
 
-#### `Hub.official_from_raw` — `hub/hub.py` строки 2357–2396
+#### `Hub.official_from_raw` — `hub/hub.py` строки 1580–1619
 
 ```python
     def official_from_raw(self, dn, rt: str, rw: dict) -> tuple:
@@ -2547,7 +2383,7 @@ const wzp = (() => {
         return detail, set_detail, auto_txt, errs
 ```
 
-#### `Hub.calc_official` — `hub/hub.py` строки 2398–2407
+#### `Hub.calc_official` — `hub/hub.py` строки 1621–1630
 
 ```python
     def calc_official(self, distance: str, rows: list) -> dict:
@@ -2566,7 +2402,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1885–1885
+#### `rankOpts` — `hub/ui.html` строки 1486–1486
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2686,11 +2522,11 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 310 из 310 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 303 из 303 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
-- ✅ 3.4: у участника в списке своя дисциплина, тип результата и число попыток (для бланка техники)
+- ✅ 3.4: у участника в списке своя дисциплина, тип результата и число попыток (для бланка техники); поля chip нет
 - ✅ 3.5: техника — только «Общий список», дорожки заблокированы, участницы не потеряны
 - ✅ 3.5: после списка мальчиков девочки на месте: 2 списка, 4 прыгуна, у всех slots=6, дорожек нет
 - ✅ 3.5: бег — забеги с дорожками, выборочная сетка не тронула технику
@@ -2702,7 +2538,7 @@ table.att,table.swt{table-layout:auto}
 - ✅ 3.6: вписанный секретарём разряд главнее расчётного
 - ✅ 3.6: на межрегиональных соревнованиях та же попытка 5.75 даёт КМС
 - ✅ 3.6: «Метание мяча/снаряда» есть в справочнике как техническая дисциплина (попытки, расстояние)
-- ✅ 3.5: в смешанном общем списке прыжок читается как расстояние (5.45), а не как время
+- ✅ 3.5: у соревнования с бегом и техникой прыжок читается как расстояние (5.45), а не как время
 - ✅ 3.5: «Выгрузить в общую сеть» открывает стартовый и итоговый протоколы на публичной странице
 - ✅ 3.5: выгрузка без указания, что выгружать, отклоняется
 - ✅ 3.5: сброс одной дисциплины убирает только её списки, забеги бега остаются
@@ -2739,6 +2575,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+6233695 2026-10-14 release: глобальная реконструкция платформы, запущен монолитный SakhStart v6.0.0
 39c6600 2026-10-14 audit: сформирован глобальный архитектурный дамп системы для ревизии
 d0ab416 2026-10-13 major: сквозной аудит АРМ секретаря, ручной ввод нагрудных номеров и экспорт протоколов в Excel v5.2.0
 c888b7b 2026-10-13 major: согласие отдельно от Политики, архив редакций согласий, обезличивание заявок и зашифрованные внешние копии v5.1.0
@@ -2752,6 +2589,5 @@ a331a84 2026-10-13 major: упорядочена система ролей (Ад
 c3e08b9 2026-10-13 major: запущен выделенный мобильный роут /sector для планшетов судей со сквозной трансляцией результатов на Табло v4.3.0
 b452b31 2026-10-13 fix: проведен тотальный аудит системы, ликвидирован откат Мастера соревнований и хаос в шестерёнке v4.2.0
 935b9f6 2026-10-13 major: ликвидирован хаос в настройках системы, внедрено разделение по вкладкам оборудования и VPN v4.1.0
-01ffe18 2026-10-13 major: запущен АРМ мобильного Судьи на секторе и оптимизирована компактная шапка бланков печати v4.0.0
 ```
 

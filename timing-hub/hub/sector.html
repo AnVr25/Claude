@@ -161,7 +161,7 @@ function fillDisc(){
   $("disc").innerHTML=names.map(n=>`<option ${n===S.disc?"selected":""}>${esc(n)}</option>`).join("")||'<option value="">в стартовом протоколе пока нет участников</option>';
 }
 // ---- отрисовка
-const autoOf=bib=>{const x=S.res&&S.res.finished.find(f=>f.bib===bib);return x?(x.done_rank_auto||""):"";};
+const autoOf=bib=>{const x=S.res&&S.res.finished.find(f=>f.bib===bib&&(!f.distance||f.distance===S.disc));return x?(x.done_rank_auto||""):"";};
 function render(){
   const ev=S.ev; $("evname").textContent=ev?ev.name:"Нет соревнований";
   $("lnkBoard").href=ev?"/board?event="+ev.id:"/board";
@@ -202,7 +202,7 @@ function recalc(r){
       out.textContent=r0.result;out.title=r0.errors.join("; ");out.classList.toggle("err",!!r0.errors.length);}
     catch(e){/* нет связи — итог посчитает сервер при отправке строки */}},120);
 }
-function rowData(r){const row={bib:r.dataset.bib,status:r.querySelector("select.st").value,done_rank:r.querySelector("select.dr").value,auto:true};
+function rowData(r){const row={bib:r.dataset.bib,distance:S.disc,status:r.querySelector("select.st").value,done_rank:r.querySelector("select.dr").value,auto:true};
   const sw=[...r.querySelectorAll("input.sw")],at=[...r.querySelectorAll("input.att")],one=r.querySelector("input.one");
   if(sw.length)row.t=sw.map(i=>i.value.trim());if(at.length)row.a=at.map(i=>i.value.trim());if(one)row.result=one.value.trim();return row;}
 // ---- мгновенная отправка: строка уходит на сервер при переходе к следующему полю; без связи — копится и уходит сама

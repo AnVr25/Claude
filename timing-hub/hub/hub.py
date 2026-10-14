@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-timing-hub — сервер хронометража.
+timing-hub (SakhStart) — судейско-секретарский АРМ стадиона и манежа.
 
 Что делает:
-  1. Принимает отметки от ридеров (F800 и любых других) тремя способами:
-       listen  — ридер сам подключается к серверу и шлёт строки;
-       connect — сервер сам подключается к ридеру (через VPN) и читает строки;
-       http    — любая программа присылает отметки POST-запросом.
-  2. Складывает ВСЕ сырые строки и распознанные отметки в базу SQLite (архив).
-  3. Отдаёт отметки в Wiclax по протоколу «generic acquisition»
-     (Wiclax подключается к серверу как к обычному ридеру).
-  4. Показывает страницу состояния и выгрузку в CSV.
+  1. Принимает онлайн-заявки (публичная форма /r/, кабинет тренера), ведёт соревнования, посев,
+     нагрудные номера (вписываются вручную, один номер на все виды спортсмена), забеги и общие списки.
+  2. Ввод результатов судьями вручную: 1–3 секундомера, попытки на секторе; официальный результат
+     считает только сервер; места, разряды ЕВСК, командный зачёт.
+  3. Протоколы (печать, Excel), табло, публикация результатов, личный кабинет тренера (152-ФЗ).
 
+Чиповый хронометраж (IPICO) и обмен с Wiclax вынесены в отдельный проект и с версии 7.0.0 здесь не поддерживаются.
 Только стандартная библиотека Python 3.10+. Внешних зависимостей нет.
 """
 from __future__ import annotations
@@ -38,11 +36,10 @@ import sys
 import random
 import time
 from collections import deque
-from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "6.0.0"
+VERSION = "7.0.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -58,11 +55,11 @@ def now_local() -> dt.datetime:
     return dt.datetime.now()
 
 
+
+
 def frac_to_us(frac: Optional[str]) -> int:
-    """'5' -> 500000, '123' -> 123000, '123456' -> 123456."""
-    if not frac:
-        return 0
-    return int((frac + "000000")[:6])
+    """Дробная часть секунд строкой («84», «5», «123») → микросекунды."""
+    return int((frac or "0").ljust(6, "0")[:6])
 
 
 def fmt_db(ts: dt.datetime) -> str:
@@ -278,25 +275,10 @@ def xlsx_read(blob: bytes, max_rows: int = 1000) -> list:
     return out
 
 
-def fmt_wiclax(ts: dt.datetime) -> str:
-    return ts.strftime("%d-%m-%Y %H:%M:%S.") + f"{ts.microsecond // 1000:03d}"
 
 
-def from_unix(value: float, tz_offset_hours: Optional[float]) -> dt.datetime:
-    if tz_offset_hours is None:
-        return dt.datetime.fromtimestamp(value)
-    utc = dt.datetime.fromtimestamp(value, dt.timezone.utc)
-    return (utc + dt.timedelta(hours=tz_offset_hours)).replace(tzinfo=None)
 
 
-def fix_midnight(ts: dt.datetime, rx: dt.datetime) -> dt.datetime:
-    """Если у строки было только время суток — подставили дату приёма.
-    Переход через полночь: отметка 23:59 принята в 00:01 -> вчерашняя дата."""
-    if ts - rx > dt.timedelta(hours=12):
-        return ts - dt.timedelta(days=1)
-    if rx - ts > dt.timedelta(hours=12):
-        return ts + dt.timedelta(days=1)
-    return ts
 
 
 # --------------------------------------------------------------------------- #
@@ -305,19 +287,6 @@ def fix_midnight(ts: dt.datetime, rx: dt.datetime) -> dt.datetime:
 DEFAULTS: dict[str, Any] = {
     "db_path": "/var/lib/timing-hub/reads.db",
     "log_level": "INFO",
-    "store_raw": True,
-    "raw_memory_lines": 200,
-    "clock_warn_sec": 2.0,
-    "wiclax": {
-        "listen_host": "127.0.0.1",
-        "listen_port": 9854,
-        "heartbeat_sec": 5,
-        "line_end": "\r",
-        "forward_filter_sec": 3.0,
-        "live_on_connect": True,
-        "devices": None,
-        "chip_lower": False,
-    },
     "web": {
         "listen_host": "127.0.0.1",
         "listen_port": 8080,
@@ -332,33 +301,6 @@ DEFAULTS: dict[str, Any] = {
         "listen_port": 8081,
         "url": "",                 # например https://reg.fla65.ru — для ссылки в админке
     },
-    "sources": [],
-}
-
-SOURCE_DEFAULTS: dict[str, Any] = {
-    "enabled": True,
-    "name": "",
-    "mode": "listen",              # listen | connect | http
-    "listen_host": "127.0.0.1",
-    "listen_port": None,
-    "host": None,
-    "port": None,
-    "init_commands": [],
-    "parser": "auto",              # auto | regex | wiclax | ipico
-    "pattern": None,
-    "datetime_format": "%Y-%m-%d %H:%M:%S.%f",
-    "date_format": "%Y-%m-%d",
-    "time_format": "%H:%M:%S.%f",
-    "unix_tz_offset_hours": None,
-    "device": None,                # код точки для Wiclax; по умолчанию = id
-    "device_per_antenna": False,   # True: код точки = device + номер антенны
-    "allow_receive_time": False,   # True: если в строке нет времени — брать время приёма
-    "chip_upper": True,
-    "chip_strip_leading_zeros": False,
-    "chip_take_last": 0,
-    "min_chip_len": 4,
-    "ipico_hundredths_hex": True,  # IPICO: сотые секунды в строке записаны шестнадцатерично
-    "chip_lower": None,            # чип в Wiclax строчными (None — как в wiclax.chip_lower)
 }
 
 VALID_ID = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
@@ -386,69 +328,17 @@ def load_config(path: str) -> dict:
         raise ConfigError(f"не найден файл настроек {path}")
     except json.JSONDecodeError as e:
         raise ConfigError(f"ошибка в JSON {path}: строка {e.lineno}, позиция {e.colno}: {e.msg}")
-    cfg = _merge(DEFAULTS, raw)
-    sources = []
-    seen = set()
-    for i, s in enumerate(raw.get("sources", [])):
-        src = _merge(SOURCE_DEFAULTS, s)
-        sid = src.get("id")
-        if not sid or not VALID_ID.match(str(sid)):
-            raise ConfigError(f"источник №{i + 1}: id обязателен, только латиница/цифры/_/- (до 32 символов)")
-        if sid in seen:
-            raise ConfigError(f"источник {sid}: id повторяется")
-        seen.add(sid)
-        if src["mode"] not in ("listen", "connect", "http"):
-            raise ConfigError(f"источник {sid}: mode должен быть listen, connect или http")
-        if src["mode"] == "listen" and not src["listen_port"]:
-            raise ConfigError(f"источник {sid}: для mode=listen нужен listen_port")
-        if src["mode"] == "connect" and (not src["host"] or not src["port"]):
-            raise ConfigError(f"источник {sid}: для mode=connect нужны host и port")
-        if src["parser"] not in ("auto", "regex", "wiclax", "ipico"):
-            raise ConfigError(f"источник {sid}: parser должен быть auto, regex, wiclax или ipico")
-        if src["parser"] == "regex":
-            if not src["pattern"]:
-                raise ConfigError(f"источник {sid}: для parser=regex нужен pattern")
-            try:
-                rx = re.compile(src["pattern"])
-            except re.error as e:
-                raise ConfigError(f"источник {sid}: ошибка в pattern: {e}")
-            if "chip" not in rx.groupindex:
-                raise ConfigError(f"источник {sid}: в pattern нужна группа (?P<chip>...)")
-            time_groups = {"datetime", "unix", "unix_ms", "time"}
-            if not (time_groups & set(rx.groupindex)) and not src["allow_receive_time"]:
-                raise ConfigError(
-                    f"источник {sid}: в pattern нужна группа времени "
-                    "(?P<datetime>...), (?P<time>...), (?P<unix>...) или (?P<unix_ms>...)")
-        if not src["device"]:
-            src["device"] = sid
-        if ";" in str(src["device"]):
-            raise ConfigError(f"источник {sid}: в device нельзя использовать ';'")
-        sources.append(src)
-    cfg["sources"] = sources
-    ports = []
-    for s in sources:
-        if s["enabled"] and s["mode"] == "listen":
-            ports.append((s["listen_host"], int(s["listen_port"]), s["id"]))
-    ports.append((cfg["wiclax"]["listen_host"], int(cfg["wiclax"]["listen_port"]), "wiclax"))
-    ports.append((cfg["web"]["listen_host"], int(cfg["web"]["listen_port"]), "web"))
+    # 7.0: чиповых источников и Wiclax больше нет — ключи sources и wiclax в старых config.json молча игнорируются
+    cfg = _merge(DEFAULTS, {k: v for k, v in raw.items() if k not in ("sources", "wiclax", "store_raw", "raw_memory_lines", "clock_warn_sec")})
+    ports = [(cfg["web"]["listen_host"], int(cfg["web"]["listen_port"]), "web")]
+    if (cfg.get("public") or {}).get("enabled"):
+        ports.append((cfg["public"]["listen_host"], int(cfg["public"]["listen_port"]), "public"))
     used = {}
     for host, port, who in ports:
         if port in used:
             raise ConfigError(f"порт {port} занят дважды: {used[port]} и {who}")
         used[port] = who
     return cfg
-
-
-# --------------------------------------------------------------------------- #
-#  Разбор строк от ридеров
-# --------------------------------------------------------------------------- #
-@dataclass
-class ParsedRead:
-    chip: str
-    ts: dt.datetime
-    antenna: Optional[str] = None
-    rssi: Optional[str] = None
-    from_rx: bool = False   # время взято из момента приёма, а не из строки
 
 
 _DT_YMD = re.compile(
@@ -463,185 +353,10 @@ _WICLAX_LINE = re.compile(
     r"^\s*([^;]+);(\d{1,2})-(\d{1,2})-(\d{4}) (\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d{1,6}))?(?:;([^;]*))?")
 
 
-def _mk(y, mo, d, h, mi, s, frac) -> Optional[dt.datetime]:
-    try:
-        return dt.datetime(int(y), int(mo), int(d), int(h), int(mi), int(s), frac_to_us(frac))
-    except ValueError:
-        return None
 
 
-def parse_any_time(value: Any, rx: dt.datetime, tz_offset_hours: Optional[float]) -> Optional[dt.datetime]:
-    """Время из JSON: число (unix, секунды или миллисекунды) или строка
-    '2026-10-06 10:15:30.123', '06-10-2026 10:15:30.123', '10:15:30.123'."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        v = float(value)
-        try:
-            return from_unix(v / 1000.0 if v > 1e12 else v, tz_offset_hours)
-        except (OverflowError, OSError, ValueError):
-            return None
-    s = str(value).strip()
-    m = _DT_YMD.fullmatch(s)
-    if m:
-        g = m.groups()
-        return _mk(g[0], g[1], g[2], g[3], g[4], g[5], g[6])
-    m = _DT_DMY.fullmatch(s)
-    if m:
-        g = m.groups()
-        return _mk(g[2], g[1], g[0], g[3], g[4], g[5], g[6])
-    m = _TIME_ONLY.fullmatch(s)
-    if m:
-        g = m.groups()
-        t = _mk(rx.year, rx.month, rx.day, g[0], g[1], g[2], g[3])
-        return fix_midnight(t, rx) if t else None
-    return None
 
 
-class LineParser:
-    def __init__(self, src: dict):
-        self.src = src
-        self.kind = src["parser"]
-        self.rx = re.compile(src["pattern"]) if self.kind == "regex" else None
-
-    # --- нормализация номера чипа
-    def norm_chip(self, chip: Optional[str]) -> Optional[str]:
-        if chip is None:
-            return None
-        c = chip.strip()
-        if self.src["chip_upper"]:
-            c = c.upper()
-        if self.src["chip_strip_leading_zeros"]:
-            c = c.lstrip("0") or "0"
-        n = int(self.src["chip_take_last"] or 0)
-        if n > 0:
-            c = c[-n:]
-        if not c or ";" in c:
-            return None
-        return c
-
-    def parse(self, line: str, rx_time: dt.datetime) -> Optional[ParsedRead]:
-        if not line or line.startswith("HEX:"):
-            return None
-        if self.kind == "wiclax":
-            rec = self._parse_wiclax(line)
-        elif self.kind == "ipico":
-            rec = self._parse_ipico(line)
-        elif self.kind == "regex":
-            rec = self._parse_regex(line, rx_time)
-        else:
-            rec = self._parse_auto(line, rx_time)
-        if rec is None:
-            return None
-        rec.chip = self.norm_chip(rec.chip)
-        if not rec.chip:
-            return None
-        return rec
-
-    def _parse_wiclax(self, line: str) -> Optional[ParsedRead]:
-        m = _WICLAX_LINE.match(line)
-        if not m:
-            return None
-        g = m.groups()
-        ts = _mk(g[3], g[2], g[1], g[4], g[5], g[6], g[7])
-        if ts is None:
-            return None
-        ant = (g[8] or "").strip() or None
-        return ParsedRead(chip=g[0], ts=ts, antenna=ant)
-
-    _IPICO = re.compile(r"aa([0-9a-fA-F]{2})([0-9a-fA-F]{12})([0-9a-fA-F]{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([0-9a-fA-F]{2})")
-
-    def _parse_ipico(self, line: str) -> Optional[ParsedRead]:
-        """IPICO (Lite/Elite), строка чтения:
-        aa · ID ридера (2) · чип (12 hex) · I/Q (4) · ГГММДД · ЧЧММСС · сотые (2) · контрольная сумма…"""
-        m = self._IPICO.search(line.strip())
-        if not m:
-            return None
-        rid, tag, _, yy, mo, dd, hh, mi, ss, cs = m.groups()
-        try:
-            hund = int(cs, 16) if self.src.get("ipico_hundredths_hex", True) else int(cs)
-        except ValueError:
-            return None
-        if hund > 99:
-            return None
-        ts = _mk(2000 + int(yy), mo, dd, hh, mi, ss, f"{hund:02d}")
-        if ts is None:
-            return None
-        return ParsedRead(chip=tag, ts=ts, antenna=rid)
-
-    def _parse_regex(self, line: str, rx_time: dt.datetime) -> Optional[ParsedRead]:
-        m = self.rx.search(line)
-        if not m:
-            return None
-        g = m.groupdict()
-        ts = None
-        from_rx = False
-        try:
-            if g.get("datetime"):
-                ts = dt.datetime.strptime(g["datetime"].strip(), self.src["datetime_format"])
-            elif g.get("unix_ms"):
-                ts = from_unix(float(g["unix_ms"]) / 1000.0, self.src["unix_tz_offset_hours"])
-            elif g.get("unix"):
-                ts = from_unix(float(g["unix"]), self.src["unix_tz_offset_hours"])
-            elif g.get("time"):
-                t = dt.datetime.strptime(g["time"].strip(), self.src["time_format"]).time()
-                if g.get("date"):
-                    d = dt.datetime.strptime(g["date"].strip(), self.src["date_format"]).date()
-                    ts = dt.datetime.combine(d, t)
-                else:
-                    ts = fix_midnight(dt.datetime.combine(rx_time.date(), t), rx_time)
-        except (ValueError, OverflowError, OSError):
-            return None
-        if ts is None:
-            if not self.src["allow_receive_time"]:
-                return None
-            ts, from_rx = rx_time, True
-        return ParsedRead(chip=g.get("chip") or "", ts=ts, antenna=g.get("antenna"),
-                          rssi=g.get("rssi"), from_rx=from_rx)
-
-    def _parse_auto(self, line: str, rx_time: dt.datetime) -> Optional[ParsedRead]:
-        ts = None
-        span = None
-        m = _DT_YMD.search(line)
-        if m:
-            g = m.groups()
-            ts = _mk(g[0], g[1], g[2], g[3], g[4], g[5], g[6])
-            span = m.span()
-        if ts is None:
-            m = _DT_DMY.search(line)
-            if m:
-                g = m.groups()
-                ts = _mk(g[2], g[1], g[0], g[3], g[4], g[5], g[6])
-                span = m.span()
-        if ts is None:
-            m = _TIME_ONLY.search(line)
-            if m:
-                g = m.groups()
-                t = _mk(rx_time.year, rx_time.month, rx_time.day, g[0], g[1], g[2], g[3])
-                if t is not None:
-                    ts = fix_midnight(t, rx_time)
-                    span = m.span()
-        if ts is None:
-            for um in _UNIX.finditer(line):
-                v = um.group(1)
-                val = float(v) / 1000.0 if (len(v) == 13 and "." not in v) else float(v)
-                if abs(val - time.time()) < 7 * 86400:
-                    ts = from_unix(val, self.src["unix_tz_offset_hours"])
-                    span = um.span()
-                    break
-        rest = line if span is None else (line[:span[0]] + " " + line[span[1]:])
-        tokens = _TOKEN.findall(rest)
-        min_len = int(self.src["min_chip_len"])
-        hex_tokens = [t for t in tokens if _HEX.match(t) and len(t) >= min_len]
-        chip = max(hex_tokens, key=len) if hex_tokens else None
-        if chip is None:
-            return None
-        from_rx = False
-        if ts is None:
-            if not self.src["allow_receive_time"]:
-                return None
-            ts, from_rx = rx_time, True
-        return ParsedRead(chip=chip, ts=ts, from_rx=from_rx)
 
 
 # --------------------------------------------------------------------------- #
@@ -656,61 +371,35 @@ class Store:
         self.con.execute("PRAGMA synchronous=NORMAL")
         self.con.executescript(
             """
-            CREATE TABLE IF NOT EXISTS reads(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT NOT NULL,
-                device TEXT NOT NULL,
-                chip TEXT NOT NULL,
-                ts TEXT NOT NULL,
-                antenna TEXT,
-                rssi TEXT,
-                time_from_receive INTEGER NOT NULL DEFAULT 0,
-                received_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_reads_ts ON reads(ts);
-            CREATE INDEX IF NOT EXISTS idx_reads_chip ON reads(chip);
-            CREATE UNIQUE INDEX IF NOT EXISTS uq_reads ON reads(source, device, chip, ts);
-            CREATE TABLE IF NOT EXISTS raw(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT NOT NULL,
-                line TEXT NOT NULL,
-                parsed INTEGER NOT NULL,
-                received_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_raw_received ON raw(received_at);
             CREATE TABLE IF NOT EXISTS events(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 date TEXT,
                 place TEXT,
                 finish_device TEXT,
-                min_time_sec REAL NOT NULL DEFAULT 0,
-                push_wiclax INTEGER NOT NULL DEFAULT 1,
                 start_time TEXT,
                 status TEXT NOT NULL DEFAULT 'planned',
                 notes TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS entries(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL,
-                bib TEXT NOT NULL,
-                chip TEXT NOT NULL,
-                PRIMARY KEY(event_id, chip)
+                bib TEXT NOT NULL
             );
             """
         )
         self._migrate()
 
     # ---- соревнования
-    EVENT_FIELDS = ("name", "date", "place", "finish_device", "min_time_sec", "push_wiclax", "notes",
-                    "alert_silence_min", "organizer", "chief_judge", "chief_secretary", "start_clock",
+    EVENT_FIELDS = ("name", "date", "place", "finish_device", "notes", "organizer", "chief_judge", "chief_secretary", "start_clock",
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
                     "reg_info", "reg_consent",
                     "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
                     "live_url", "photo_url", "links", "pub_start", "pub_results", "team_best",
                     "cover", "program", "contacts", "series")
-    KINDS = ("mass", "stadium")
-    TIMINGS = ("chips", "judge", "manual", "lynx")
+    KINDS = ("stadium",)
+    TIMINGS = ("judge", "manual", "lynx")
     LEVELS = ("russia", "dfo", "interregion", "region", "mass")
 
     def _migrate(self) -> None:
@@ -726,11 +415,9 @@ class Store:
                 if name not in have:
                     self.con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
-        add("events", (("check_since", "TEXT"), ("alert_silence_min", "REAL NOT NULL DEFAULT 10"),
-                       ("archived", "INTEGER NOT NULL DEFAULT 0"), ("finished_at", "TEXT"),
+        add("events", (("archived", "INTEGER NOT NULL DEFAULT 0"), ("finished_at", "TEXT"),
                        ("organizer", "TEXT"), ("chief_judge", "TEXT"), ("chief_secretary", "TEXT"),
                        ("start_clock", "TEXT"), ("heats_sequential", "INTEGER")))
-        add("readers", (("wiclax_port", "INTEGER"),))
         add("entries", (("points", "REAL"),))
         add("events", (("team_best", "INTEGER"),))
         add("users", (("note", "TEXT"), ("active", "INTEGER NOT NULL DEFAULT 1")))
@@ -836,24 +523,6 @@ class Store:
             );
             CREATE INDEX IF NOT EXISTS idx_reg_event ON registrations(event_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events(reg_slug);
-            CREATE TABLE IF NOT EXISTS readers(
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                box TEXT,
-                host TEXT NOT NULL,
-                port INTEGER NOT NULL,
-                device TEXT NOT NULL,
-                parser TEXT NOT NULL DEFAULT 'ipico',
-                enabled INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT,
-                updated_at TEXT,
-                wiclax_port INTEGER
-            );
-            CREATE TABLE IF NOT EXISTS wiclax_ports(
-                port INTEGER PRIMARY KEY,
-                devices TEXT NOT NULL,
-                name TEXT
-            );
             CREATE TABLE IF NOT EXISTS users(
                 login TEXT PRIMARY KEY,
                 name TEXT,
@@ -904,6 +573,43 @@ class Store:
             hash TEXT PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL)""")
         # 4.5: две роли — администратор и судья; секретарь и судья на секторе становятся судьями
         self.con.execute("UPDATE users SET role = 'judge' WHERE role NOT IN ('admin', 'judge')")
+        self._migrate_v7()
+
+    ENTRY_KEEP = ("bib", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed", "reg_id", "sex", "result",
+                  "status", "points", "picked_at", "members", "rank", "detail", "done_rank", "result_at")
+
+    def _migrate_v7(self) -> None:
+        """7.0: чипового хронометража в системе больше нет — из базы уходят таблицы reads, raw, readers, wiclax_ports,
+        ключ chip у участников и устаревшие поля соревнований. Строка участника (entries) получает собственный
+        номер id: один нагрудный номер может стоять у спортсмена в нескольких дисциплинах (по строке на дисциплину)."""
+        def cols(t):
+            return {r[1] for r in self.con.execute(f"PRAGMA table_info({t})")}
+        for t in ("reads", "raw", "readers", "wiclax_ports"):
+            self.con.execute(f"DROP TABLE IF EXISTS {t}")
+        if "chip" in cols("entries"):
+            k = ", ".join(self.ENTRY_KEEP)
+            self.con.execute("BEGIN")
+            try:
+                self.con.execute("DROP TABLE IF EXISTS entries_v7")
+                self.con.execute("CREATE TABLE entries_v7(id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, "
+                                 "bib TEXT NOT NULL, wave TEXT, name TEXT, birth_year TEXT, team TEXT, category TEXT, lane INTEGER, "
+                                 "coach TEXT, seed TEXT, reg_id INTEGER, sex TEXT, result TEXT, status TEXT, points REAL, "
+                                 "picked_at TEXT, members TEXT, rank TEXT, detail TEXT, done_rank TEXT, result_at TEXT)")
+                self.con.execute(f"INSERT INTO entries_v7(event_id, {k}) SELECT event_id, {k} FROM entries "
+                                 "ORDER BY event_id, CAST(bib AS INTEGER), bib, chip")
+                self.con.execute("DROP TABLE entries")
+                self.con.execute("ALTER TABLE entries_v7 RENAME TO entries")
+                self.con.execute("COMMIT")
+            except Exception:
+                self.con.execute("ROLLBACK")
+                raise
+        self.con.execute("CREATE INDEX IF NOT EXISTS idx_entries_event ON entries(event_id, bib)")
+        for col in ("push_wiclax", "check_since", "min_time_sec", "alert_silence_min"):
+            if col in cols("events"):
+                try:
+                    self.con.execute(f"ALTER TABLE events DROP COLUMN {col}")
+                except sqlite3.Error:
+                    pass          # старый SQLite без DROP COLUMN — столбец остаётся, сервер его не использует
 
     def get_scoreboard(self, eid: int) -> Optional[dict]:
         row = self.con.execute("SELECT state, updated_at FROM scoreboard WHERE event_id = ?", (eid,)).fetchone()
@@ -1031,62 +737,16 @@ class Store:
         self.con.execute("DELETE FROM trainers WHERE id = ?", (tid,))
         self.con.execute("DELETE FROM sessions WHERE login = ?", (f"trainer:{tid}",))
 
-    # ---- ридеры, заведённые через браузер
-    def readers(self) -> list:
-        return self._rows(self.con.execute("SELECT * FROM readers ORDER BY COALESCE(box,''), id"))
 
-    def get_reader(self, rid: str) -> Optional[dict]:
-        r = self._rows(self.con.execute("SELECT * FROM readers WHERE id = ?", (rid,)))
-        return r[0] if r else None
 
-    def save_reader(self, d: dict, orig_id: Optional[str] = None) -> None:
-        now = fmt_db(now_local())
-        with self.con:
-            if orig_id and orig_id != d["id"]:
-                self.con.execute("DELETE FROM readers WHERE id = ?", (orig_id,))
-            self.con.execute(
-                "INSERT INTO readers(id, name, box, host, port, device, parser, enabled, created_at, updated_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, box=excluded.box,"
-                " host=excluded.host, port=excluded.port, device=excluded.device, parser=excluded.parser,"
-                " enabled=excluded.enabled, updated_at=excluded.updated_at",
-                (d["id"], d.get("name") or "", d.get("box") or "", d["host"], int(d["port"]), d["device"],
-                 d.get("parser") or "ipico", 1 if d.get("enabled") else 0, now, now))
 
-    def set_reader_wiclax_port(self, rid: str, port: Optional[int]) -> None:
-        with self.con:
-            self.con.execute("UPDATE readers SET wiclax_port = ? WHERE id = ?", (port, rid))
 
-    def set_reader_device(self, rid: str, device: str) -> None:
-        with self.con:
-            self.con.execute("UPDATE readers SET device = ?, updated_at = ? WHERE id = ?",
-                             (device, fmt_db(now_local()), rid))
 
-    def set_reader_enabled(self, rid: str, on: bool) -> None:
-        with self.con:
-            self.con.execute("UPDATE readers SET enabled = ?, updated_at = ? WHERE id = ?",
-                             (1 if on else 0, fmt_db(now_local()), rid))
 
-    def delete_source_reads(self, source: str) -> int:
-        with self.con:
-            n = self.con.execute("DELETE FROM reads WHERE source = ?", (source,)).rowcount
-            self.con.execute("DELETE FROM raw WHERE source = ?", (source,))
-        return n
 
-    def delete_reader(self, rid: str) -> None:
-        with self.con:
-            self.con.execute("DELETE FROM readers WHERE id = ?", (rid,))
 
-    def wiclax_ports(self) -> list:
-        return self._rows(self.con.execute("SELECT * FROM wiclax_ports ORDER BY port"))
 
-    def save_wiclax_port(self, port: int, devices: str, name: str) -> None:
-        with self.con:
-            self.con.execute("INSERT INTO wiclax_ports(port, devices, name) VALUES(?,?,?) ON CONFLICT(port) DO UPDATE"
-                             " SET devices=excluded.devices, name=excluded.name", (port, devices, name))
 
-    def delete_wiclax_port(self, port: int) -> None:
-        with self.con:
-            self.con.execute("DELETE FROM wiclax_ports WHERE port = ?", (port,))
 
     def _rows(self, cur) -> list:
         cols = [c[0] for c in cur.description]
@@ -1108,12 +768,9 @@ class Store:
 
     def add_event(self, d: dict) -> int:
         cur = self.con.execute(
-            "INSERT INTO events(name, date, place, finish_device, min_time_sec, push_wiclax, notes,"
-            " alert_silence_min, organizer, chief_judge, chief_secretary, start_clock, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (d["name"], d.get("date"), d.get("place"), d.get("finish_device"),
-             float(d.get("min_time_sec") or 0), 1 if d.get("push_wiclax", True) else 0,
-             d.get("notes"), float(d.get("alert_silence_min") or 10), d.get("organizer"),
+            "INSERT INTO events(name, date, place, finish_device, notes, organizer, chief_judge, chief_secretary,"
+            " start_clock, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (d["name"], d.get("date"), d.get("place"), d.get("finish_device"), d.get("notes"), d.get("organizer"),
              d.get("chief_judge"), d.get("chief_secretary"), d.get("start_clock"), fmt_db(now_local())))
         eid = int(cur.lastrowid)
         if "heats_sequential" in d:
@@ -1125,16 +782,12 @@ class Store:
         for k in self.EVENT_FIELDS:
             if k in d:
                 v = d[k]
-                if k in ("min_time_sec", "alert_silence_min"):
-                    v = float(v or 0)
-                if k == "push_wiclax":
-                    v = 1 if v else 0
                 if k == "heats_sequential":
                     v = None if v is None or v == "" else (1 if v else 0)
                 if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results"):
                     v = 1 if v else 0
                 if k == "kind":
-                    v = v if v in self.KINDS else "mass"
+                    v = v if v in self.KINDS else "stadium"
                 if k == "timing":
                     v = v if v in self.TIMINGS else None
                 if k == "level":
@@ -1164,7 +817,7 @@ class Store:
 
     def set_event_field(self, eid: int, **kw) -> None:
         for k, v in kw.items():
-            if k not in ("start_time", "status", "check_since", "archived", "finished_at", "reg_slug", "pub_site", "ours",
+            if k not in ("start_time", "status", "archived", "finished_at", "reg_slug", "pub_site", "ours",
                          "level", "adaptive", "date_end", "city", "note", "kind", "links"):
                 raise ValueError(k)
             self.con.execute(f"UPDATE events SET {k} = ? WHERE id = ?", (v, eid))
@@ -1174,52 +827,27 @@ class Store:
             self.con.execute(f"DELETE FROM {t} WHERE event_id = ?", (eid,))
         self.con.execute("DELETE FROM events WHERE id = ?", (eid,))
 
-    # участники: номер, чип, забег, ФИО, год, команда, категория
-    _KEEP = ("picked_at", "members", "detail", "rank", "done_rank")      # поля, которые не теряются, если в новых строках их нет
-
-    def set_entries(self, eid: int, rows: list) -> None:
-        keep = {r[0]: dict(zip(self._KEEP, r[1:])) for r in self.con.execute(
-            "SELECT bib, picked_at, members, detail, rank, done_rank FROM entries WHERE event_id = ?", (eid,))}
-        self.con.execute("BEGIN")
-        try:
-            self.con.execute("DELETE FROM entries WHERE event_id = ?", (eid,))
-
-            def val(r, k):
-                v = r[k] if k in r else keep.get(r["bib"], {}).get(k)
-                return json.dumps(v, ensure_ascii=False) if k == "detail" and isinstance(v, dict) else v
-            self.con.executemany(
-                "INSERT OR REPLACE INTO entries(event_id, bib, chip, wave, name, birth_year, team, category,"
-                " lane, coach, seed, reg_id, sex, result, status, points, picked_at, members, detail, rank, done_rank)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                [(eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
-                  r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
-                  r.get("result"), r.get("status"), r.get("points"),
-                  val(r, "picked_at"), val(r, "members"), val(r, "detail"), val(r, "rank"), val(r, "done_rank"))
-                 for r in rows])
-            for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
-                self.con.execute("INSERT OR IGNORE INTO waves(event_id, name) VALUES (?,?)", (eid, w))
-            self.con.execute("COMMIT")
-        except Exception:
-            self.con.execute("ROLLBACK")
-            raise
-
+    # участники: строка = спортсмен в одной дисциплине. Ключ — id; один и тот же нагрудный номер bib может стоять в нескольких
+    # строках (спортсмен заявлен на несколько видов), но у разных людей номера не повторяются
     def upsert_entries(self, eid: int, rows: list) -> None:
-        """Выборочное формирование: участники других дисциплин и уже введённые результаты не трогаются."""
+        """Формирование сетки одной дисциплины: строки ищутся по заявке (reg_id); введённые результаты не трогаются,
+        участники других дисциплин остаются на месте."""
         self.con.execute("BEGIN")
         try:
             for r in rows:
-                have = self.con.execute("SELECT 1 FROM entries WHERE event_id = ? AND bib = ?", (eid, r["bib"])).fetchone()
+                have = self.con.execute("SELECT id FROM entries WHERE event_id = ? AND reg_id = ?", (eid, r["reg_id"])).fetchone() \
+                    if r.get("reg_id") else None
                 if have:
                     self.con.execute(
-                        "UPDATE entries SET wave = ?, lane = ?, name = ?, birth_year = ?, team = ?, category = ?, coach = ?,"
-                        " seed = ?, reg_id = ?, sex = ?, rank = ?, members = COALESCE(?, members) WHERE event_id = ? AND bib = ?",
-                        (r.get("wave"), r.get("lane"), r.get("name"), r.get("birth_year"), r.get("team"), r.get("category"),
-                         r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"), r.get("rank"), r.get("members"), eid, r["bib"]))
+                        "UPDATE entries SET bib = ?, wave = ?, lane = ?, name = ?, birth_year = ?, team = ?, category = ?, coach = ?,"
+                        " seed = ?, sex = ?, rank = ?, members = COALESCE(?, members) WHERE id = ?",
+                        (r["bib"], r.get("wave"), r.get("lane"), r.get("name"), r.get("birth_year"), r.get("team"), r.get("category"),
+                         r.get("coach"), r.get("seed"), r.get("sex"), r.get("rank"), r.get("members"), have[0]))
                 else:
                     self.con.execute(
-                        "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-                        " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (eid, r["bib"], r["chip"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+                        "INSERT INTO entries(event_id, bib, wave, name, birth_year, team, category, lane, coach, seed,"
+                        " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (eid, r["bib"], r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
                          r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
                          r.get("members"), r.get("rank")))
             for w in dict.fromkeys(r["wave"] for r in rows if r.get("wave")):
@@ -1229,16 +857,11 @@ class Store:
             self.con.execute("ROLLBACK")
             raise
 
-    def entries_full(self, eid: int) -> list:
-        return self.con.execute(
-            "SELECT bib, chip, wave FROM entries WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib",
-            (eid,)).fetchall()
-
     def entries_rows(self, eid: int) -> list:
         rows = self._rows(self.con.execute(
-            "SELECT bib, chip, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
+            "SELECT id, bib, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
             " picked_at, members, rank, detail, done_rank, result_at FROM entries"
-            " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib", (eid,)))
+            " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib, id", (eid,)))
         for r in rows:
             try:
                 r["detail"] = json.loads(r["detail"]) if r.get("detail") else None
@@ -1246,27 +869,28 @@ class Store:
                 r["detail"] = None
         return rows
 
-    def set_entry_result(self, eid: int, bib: str, result: Optional[str], status: Optional[str],
+    def set_entry_result(self, eid: int, entry_id: int, result: Optional[str], status: Optional[str],
                          detail: Optional[dict] = None, set_detail: bool = False) -> int:
-        """Итог участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
+        """Итог строки участника. detail — показания секундомеров {"t": [...]} и попытки {"a": [...]}; None при set_detail стирает."""
         at = fmt_db(now_local()) if (result or status or detail) else None      # время ввода — табло показывает свежие сверху
         if set_detail:
             dj = json.dumps(detail, ensure_ascii=False) if detail else None
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ?, result_at = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, dj, at, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, detail = ?, result_at = ? WHERE event_id = ? AND id = ?",
+                                   (result or None, status or None, dj, at, eid, entry_id))
         else:
-            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, result_at = ? WHERE event_id = ? AND bib = ?",
-                                   (result or None, status or None, at, eid, bib))
+            cur = self.con.execute("UPDATE entries SET result = ?, status = ?, result_at = ? WHERE event_id = ? AND id = ?",
+                                   (result or None, status or None, at, eid, entry_id))
         return cur.rowcount
 
     def set_picked(self, eid: int, bib: str, ts: Optional[str]) -> int:
+        """Выдача номера на руки — одна на человека: отмечаются все его строки (все дисциплины)."""
         return self.con.execute("UPDATE entries SET picked_at = ? WHERE event_id = ? AND bib = ?",
                                 (ts, eid, bib)).rowcount
 
     def set_file_public(self, fid: int, public: bool) -> None:
         self.con.execute("UPDATE files SET public = ? WHERE id = ?", (1 if public else 0, fid))
 
-    def update_entry(self, eid: int, bib: str, **kw) -> int:
+    def update_entry(self, eid: int, entry_id: int, **kw) -> int:
         sets, args = [], []
         for k, v in kw.items():
             if k not in ("wave", "lane", "name", "birth_year", "team", "category", "coach", "seed", "rank", "done_rank"):
@@ -1275,36 +899,30 @@ class Store:
             args.append(v)
         if not sets:
             return 0
-        return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND bib = ?",
-                                (*args, eid, bib)).rowcount
+        return self.con.execute(f"UPDATE entries SET {', '.join(sets)} WHERE event_id = ? AND id = ?",
+                                (*args, eid, entry_id)).rowcount
 
-    def add_entry(self, eid: int, r: dict) -> None:
-        # 5.2: нагрудный номер вписывает только судья/секретарь — автоматической выдачи номеров нет
+    def add_entry(self, eid: int, r: dict) -> int:
+        # нагрудный номер вписывает только судья/секретарь — автоматической выдачи номеров нет
         bib = str(r.get("bib") or "").strip()
         if not bib:
-            raise ValueError("нет нагрудного номера — впишите его на шаге 2 «Регистрация номеров»")
-
-        # Если чип не указан, используем номер с префиксом #
-        chip = r.get("chip")
-        if not chip or str(chip).strip() == "":
-            chip = "#" + str(bib)
-
-        self.con.execute(
-            "INSERT INTO entries(event_id, bib, chip, wave, name, birth_year, team, category, lane, coach, seed,"
-            " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (eid, bib, chip, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
+            raise ValueError("нет нагрудного номера — впишите его на шаге 2 «Нагрудные номера»")
+        cur = self.con.execute(
+            "INSERT INTO entries(event_id, bib, wave, name, birth_year, team, category, lane, coach, seed,"
+            " reg_id, sex, members, rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (eid, bib, r.get("wave"), r.get("name"), r.get("birth_year"), r.get("team"),
              r.get("category"), r.get("lane"), r.get("coach"), r.get("seed"), r.get("reg_id"), r.get("sex"),
              r.get("members"), r.get("rank")))
+        return int(cur.lastrowid)
 
     def rename_bib(self, eid: int, old: str, new: str) -> None:
-        """Сменить нагрудный номер участника везде: в списке, заявках и ручных отметках судей."""
-        self.con.execute("UPDATE entries SET bib = ?, chip = CASE WHEN chip = ? THEN ? ELSE chip END"
-                         " WHERE event_id = ? AND bib = ?", (new, "#" + old, "#" + new, eid, old))
+        """Сменить нагрудный номер везде: во всех строках участника (дисциплинах), заявках и ручных отметках судей."""
+        self.con.execute("UPDATE entries SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
         self.con.execute("UPDATE registrations SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
         self.con.execute("UPDATE manual SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
 
-    def delete_entry(self, eid: int, bib: str) -> None:
-        self.con.execute("DELETE FROM entries WHERE event_id = ? AND bib = ?", (eid, bib))
+    def delete_entry(self, eid: int, entry_id: int) -> None:
+        self.con.execute("DELETE FROM entries WHERE event_id = ? AND id = ?", (eid, entry_id))
 
     # заявки с публичной формы
     REG_FIELDS = ("last_name", "first_name", "middle_name", "birth_date", "sex", "team", "coach", "distance",
@@ -1446,324 +1064,14 @@ class Store:
             cur = self.con.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))
         return self._rows(cur)
 
-    def reads_since(self, since_id: int, limit: int) -> list:
-        rows = self.con.execute(
-            "SELECT id, source, device, chip, ts FROM reads WHERE id > ? ORDER BY id DESC LIMIT ?",
-            (since_id, limit)).fetchall()
-        return list(reversed(rows))
-
-    def reads_after_time(self, since: dt.datetime, limit: int) -> list:
-        return self.con.execute(
-            "SELECT id, source, device, chip, ts FROM reads WHERE ts >= ? ORDER BY id DESC LIMIT ?",
-            (fmt_db(since), limit)).fetchall()
-
-    def chips_after_time(self, since: dt.datetime) -> dict:
-        return {c: (d, t) for c, d, t in self.con.execute(
-            "SELECT chip, device, MAX(ts) FROM reads WHERE ts >= ? GROUP BY chip", (fmt_db(since),))}
-
-    def last_id(self) -> int:
-        return int(self.con.execute("SELECT COALESCE(MAX(id), 0) FROM reads").fetchone()[0])
-
-    def reads_window(self, start: dt.datetime, end: dt.datetime) -> list:
-        return self.con.execute(
-            "SELECT device, chip, ts FROM reads WHERE ts >= ? AND ts <= ? ORDER BY ts, id",
-            (fmt_db(start), fmt_db(end))).fetchall()
-
-    def devices(self) -> list:
-        return [r[0] for r in self.con.execute("SELECT DISTINCT device FROM reads ORDER BY device LIMIT 100")]
-
-    def add_read(self, source: str, device: str, r: ParsedRead, rx: dt.datetime) -> bool:
-        """True — новая отметка; False — точный повтор уже сохранённой
-        (например, ридер после обрыва связи заново выгрузил память)."""
-        cur = self.con.execute(
-            "INSERT OR IGNORE INTO reads(source, device, chip, ts, antenna, rssi, time_from_receive, received_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (source, device, r.chip, fmt_db(r.ts), r.antenna, r.rssi, 1 if r.from_rx else 0, fmt_db(rx)),
-        )
-        return cur.rowcount > 0
-
-    def add_raw(self, source: str, line: str, parsed: bool, rx: dt.datetime) -> None:
-        self.con.execute(
-            "INSERT INTO raw(source, line, parsed, received_at) VALUES (?,?,?,?)",
-            (source, line[:2000], 1 if parsed else 0, fmt_db(rx)),
-        )
-
-    def query_reads(self, start: Optional[dt.datetime], end: Optional[dt.datetime],
-                    devices: Optional[list] = None, source: Optional[str] = None) -> list:
-        q = "SELECT source, device, chip, ts, antenna, rssi, time_from_receive, received_at FROM reads WHERE 1=1"
-        args: list = []
-        if start is not None:
-            q += " AND ts >= ?"
-            args.append(fmt_db(start))
-        if end is not None:
-            q += " AND ts <= ?"
-            args.append(fmt_db(end))
-        if devices:
-            q += " AND device IN (%s)" % ",".join("?" * len(devices))
-            args.extend(devices)
-        if source:
-            q += " AND source = ?"
-            args.append(source)
-        q += " ORDER BY ts, id"
-        return self.con.execute(q, args).fetchall()
-
-    def last_reads(self, n: int) -> list:
-        return self.con.execute(
-            "SELECT source, device, chip, ts, antenna, time_from_receive, received_at"
-            " FROM reads ORDER BY id DESC LIMIT ?", (n,)).fetchall()
-
-    def totals(self) -> dict:
-        reads = self.con.execute("SELECT COUNT(*) FROM reads").fetchone()[0]
-        raw = self.con.execute("SELECT COUNT(*) FROM raw").fetchone()[0]
-        return {"reads": reads, "raw_lines": raw}
 
 
-# --------------------------------------------------------------------------- #
-#  Фильтр повторов для Wiclax
-# --------------------------------------------------------------------------- #
-class PassingFilter:
-    """Ридер видит чип 5–20 раз за одно прохождение. В Wiclax отправляем первую
-    отметку прохождения; следующие отметки того же чипа на той же точке,
-    идущие с интервалом меньше gap секунд, считаются тем же прохождением.
-    В базе при этом хранятся ВСЕ отметки."""
-
-    MAX_WINDOWS = 64
-
-    def __init__(self, gap_sec: float):
-        self.gap = dt.timedelta(seconds=float(gap_sec or 0))
-        self.windows: dict[tuple, list] = {}
-
-    def accept(self, device: str, chip: str, ts: dt.datetime) -> bool:
-        if self.gap.total_seconds() <= 0:
-            return True
-        wins = self.windows.setdefault((device, chip), [])
-        for w in wins:
-            # отметка попадает в уже известное прохождение (с запасом gap) —
-            # расширяем его и в Wiclax повторно не отправляем
-            if w[0] - self.gap <= ts <= w[1] + self.gap:
-                if ts < w[0]:
-                    w[0] = ts
-                if ts > w[1]:
-                    w[1] = ts
-                return False
-        wins.append([ts, ts])
-        if len(wins) > self.MAX_WINDOWS:
-            wins.pop(0)
-        return True
 
 
-# --------------------------------------------------------------------------- #
-#  Состояние источника
-# --------------------------------------------------------------------------- #
-class SourceState:
-    def __init__(self, cfg: dict, memory_lines: int):
-        self.cfg = cfg
-        self.id: str = cfg["id"]
-        self.parser = LineParser(cfg)
-        self.connected = 0
-        self.peer: Optional[str] = None
-        self.lines = 0
-        self.reads = 0
-        self.duplicates = 0
-        self.parse_errors = 0
-        self.last_line: Optional[str] = None
-        self.last_line_at: Optional[dt.datetime] = None
-        self.last_read_at: Optional[dt.datetime] = None
-        self.last_offset: Optional[float] = None
-        self.last_error: Optional[str] = None
-        self.tail: deque = deque(maxlen=memory_lines)
-
-    def device_for(self, antenna: Optional[str]) -> str:
-        dev = str(self.cfg["device"])
-        if self.cfg["device_per_antenna"] and antenna:
-            dev = f"{dev}{antenna}"
-        return dev
 
 
-def set_keepalive(sock: Optional[socket.socket]) -> None:
-    """Быстро замечаем «мёртвое» 4G-соединение."""
-    if sock is None:
-        return
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        if hasattr(socket, "TCP_KEEPIDLE"):
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
-    except OSError:
-        pass
 
 
-def _is_binary(b: bytes) -> bool:
-    if not b:
-        return False
-    bad = sum(1 for c in b if (c < 32 and c not in (9,)) or c == 127)
-    return bad / len(b) > 0.1
-
-
-class LineSplitter:
-    """Режет поток на строки по \\r, \\n или \\r\\n. Двоичные данные
-    сохраняет как 'HEX:...' — чтобы потом разобраться в формате."""
-    MAX = 4096
-
-    _SEP = re.compile(rb"[\r\n]")
-
-    def __init__(self):
-        self.buf = b""
-
-    def feed(self, data: bytes) -> list:
-        self.buf += data
-        parts = self._SEP.split(self.buf)
-        self.buf = parts.pop()  # хвост без конца строки ждёт следующих данных
-        out = [self._decode(p) for p in parts if p]
-        out = [x for x in out if x]
-        if len(self.buf) > self.MAX:
-            out.append("HEX:" + self.buf.hex())
-            self.buf = b""
-        return out
-
-    @staticmethod
-    def _decode(chunk: bytes) -> str:
-        if _is_binary(chunk):
-            return "HEX:" + chunk.hex()
-        return chunk.decode("utf-8", errors="replace").strip()
-
-
-# --------------------------------------------------------------------------- #
-#  Клиент Wiclax
-# --------------------------------------------------------------------------- #
-class WiclaxClient:
-    def __init__(self, hub: "Hub", reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                 devices: Optional[set] = None, port: Optional[int] = None, sources: Optional[set] = None):
-        self.hub = hub
-        self.devices = devices          # None — все точки; иначе только эти коды точек
-        self.sources = sources          # личный порт ридера: только отметки этих ридеров
-        self.port = port
-        self.reader = reader
-        self.writer = writer
-        wc = hub.cfg["wiclax"]
-        self.line_end = wc["line_end"]
-        self.heartbeat = float(wc["heartbeat_sec"] or 0)
-        self.live = bool(wc["live_on_connect"])
-        self.queue: asyncio.Queue = asyncio.Queue(maxsize=500000)
-        peer = writer.get_extra_info("peername")
-        self.peer = f"{peer[0]}:{peer[1]}" if peer else "?"
-        self.since = now_local()
-        self.sent = 0
-        self.commands: deque = deque(maxlen=20)
-
-    def offer(self, line: str, rewind: bool = False) -> None:
-        if not self.live and not rewind:
-            return
-        try:
-            self.queue.put_nowait(line)
-        except asyncio.QueueFull:
-            log.warning("Wiclax %s: очередь переполнена, отметка пропущена (есть в базе)", self.peer)
-
-    def command(self, line: str) -> None:
-        """Служебная команда для Wiclax (например RACESTART) — уходит всегда, даже на паузе."""
-        try:
-            self.queue.put_nowait(line)
-        except asyncio.QueueFull:
-            log.warning("Wiclax %s: очередь переполнена, команда не отправлена", self.peer)
-
-    def _write(self, text: str) -> None:
-        self.writer.write((text + self.line_end).encode("utf-8"))
-
-    async def run(self) -> None:
-        log.info("Wiclax подключился: %s", self.peer)
-        set_keepalive(self.writer.get_extra_info("socket"))
-        self.hub.wiclax_clients.add(self)
-        tasks = [asyncio.ensure_future(self._reader_loop()), asyncio.ensure_future(self._writer_loop())]
-        try:
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in pending:
-                t.cancel()
-            for t in done:
-                exc = t.exception()
-                if exc and not isinstance(exc, (ConnectionError, asyncio.IncompleteReadError)):
-                    log.warning("Wiclax %s: %r", self.peer, exc)
-        finally:
-            self.hub.wiclax_clients.discard(self)
-            try:
-                self.writer.close()
-            except Exception:
-                pass
-            log.info("Wiclax отключился: %s", self.peer)
-
-    async def _writer_loop(self) -> None:
-        while True:
-            try:
-                if self.heartbeat > 0:
-                    line = await asyncio.wait_for(self.queue.get(), timeout=self.heartbeat)
-                else:
-                    line = await self.queue.get()
-                self._write(line)
-                self.sent += 1
-                # пачкой выгребаем всё, что накопилось
-                while not self.queue.empty() and self.writer.transport.get_write_buffer_size() < 1 << 20:
-                    self._write(self.queue.get_nowait())
-                    self.sent += 1
-            except asyncio.TimeoutError:
-                self._write("*")
-            await self.writer.drain()
-
-    async def _reader_loop(self) -> None:
-        splitter = LineSplitter()
-        while True:
-            data = await self.reader.read(4096)
-            if not data:
-                return
-            for cmd in splitter.feed(data):
-                await self._handle(cmd)
-
-    async def _handle(self, cmd: str) -> None:
-        c = cmd.strip()
-        if not c:
-            return
-        up = c.upper()
-        self.commands.append(f"{now_local():%H:%M:%S} {c}")
-        log.debug("Wiclax %s -> %s", self.peer, c)
-        if up.startswith("HELLO"):
-            return
-        if up == "CLOCK":
-            self._write(f"CLOCK {now_local():%d-%m-%Y %H:%M:%S}")
-        elif up.startswith("CLOCK "):
-            # Wiclax хочет «установить время устройства». Сервер своё время
-            # не сдвигает: время отметок задают сами ридеры. Запоминаем
-            # расхождение и показываем на странице состояния.
-            try:
-                wt = dt.datetime.strptime(c[6:].strip(), "%d-%m-%Y %H:%M:%S")
-                diff = (wt - now_local()).total_seconds()
-                self.hub.wiclax_clock_diff = (now_local(), diff)
-                if abs(diff) > float(self.hub.cfg["clock_warn_sec"]):
-                    log.warning("Часы компьютера Wiclax расходятся с сервером на %.1f с", diff)
-            except ValueError:
-                pass
-            self._write("CLOCKOK")
-        elif up == "STARTREAD":
-            self.live = True
-            self._write("READOK")
-        elif up == "STOPREAD":
-            self.live = False
-            self._write("READOK")
-        elif up.startswith("REWIND"):
-            parts = c.split()
-            try:
-                start = dt.datetime.strptime(f"{parts[1]} {parts[2]}", "%d-%m-%Y %H:%M:%S")
-                end = dt.datetime.strptime(f"{parts[3]} {parts[4]}", "%d-%m-%Y %H:%M:%S")
-                end = end.replace(microsecond=999999)
-            except (IndexError, ValueError):
-                log.warning("Wiclax %s: непонятная команда REWIND: %s", self.peer, c)
-                return
-            n = 0
-            for line in self.hub.rewind_lines(start, end, self.devices, self.sources):
-                self.offer(line, rewind=True)
-                n += 1
-            log.info("Wiclax %s: REWIND %s — %s, отправлено %d", self.peer, start, end, n)
-        else:
-            log.info("Wiclax %s: неизвестная команда: %s", self.peer, c)
-        await self.writer.drain()
 
 
 # --------------------------------------------------------------------------- #
@@ -1773,106 +1081,12 @@ class Hub:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.store = Store(cfg["db_path"])
-        mem = int(cfg["raw_memory_lines"])
-        self.sources: dict[str, SourceState] = {
-            s["id"]: SourceState(s, mem) for s in cfg["sources"] if s["enabled"]}
-        self.wiclax_clients: set = set()
-        self.live_filter = PassingFilter(cfg["wiclax"]["forward_filter_sec"])
-        # для личных портов ридеров — свой фильтр на каждый ридер: дублирующий финиш
-        # не должен «съедаться» отметкой основного ридера той же точки
-        self.src_filter = PassingFilter(cfg["wiclax"]["forward_filter_sec"])
         self.servers: list = []
         self.tasks: list = []
         self._rate: dict = {}
         self._clients: dict = {}       # кто открывал страницы сервера: IP → последнее обращение
         self.started_at = now_local()
-        self.wiclax_clock_diff: Optional[tuple] = None
         self.stopping = asyncio.Event()
-        devs = cfg["wiclax"].get("devices")
-        self.wiclax_devices = set(devs) if devs else None
-        self.reader_tasks: dict = {}           # ридеры из браузера: id → задача подключения
-        self.db_reader_parsers: dict = {r["id"]: r["parser"] for r in self.store.readers()}
-        self.wiclax_port_servers: dict = {}    # доп. порты Wiclax по точкам: порт → сервер
-        self.wiclax_port_errors: dict = {}
-
-    # ---- приём строки
-    def handle_line(self, src: SourceState, line: str, rx: Optional[dt.datetime] = None) -> bool:
-        rx = rx or now_local()
-        return self.handle_parsed(src, line, src.parser.parse(line, rx), rx)
-
-    def handle_parsed(self, src: SourceState, line: str, rec: Optional[ParsedRead],
-                      rx: dt.datetime) -> bool:
-        src.lines += 1
-        src.last_line = line
-        src.last_line_at = rx
-        src.tail.append((rx, line, rec is not None))
-        if self.cfg["store_raw"]:
-            try:
-                self.store.add_raw(src.id, line, rec is not None, rx)
-            except sqlite3.Error as e:
-                log.error("База: не удалось сохранить сырую строку: %s", e)
-        if rec is None:
-            src.parse_errors += 1
-            return False
-        device = src.device_for(rec.antenna)
-        try:
-            is_new = self.store.add_read(src.id, device, rec, rx)
-        except sqlite3.Error as e:
-            log.error("База: не удалось сохранить отметку: %s", e)
-            is_new = True  # лучше отдать в Wiclax, чем потерять
-        if not is_new:
-            src.duplicates += 1
-            return True
-        src.reads += 1
-        src.last_read_at = rx
-        if not rec.from_rx:
-            src.last_offset = (rec.ts - rx).total_seconds()
-        self._forward(device, rec, src.id)
-        return True
-
-    def _chip_lower(self, source: Optional[str]) -> bool:
-        src = self.sources.get(source) if source else None
-        flag = src.cfg.get("chip_lower") if src else None
-        if flag is None and source in self.db_reader_parsers:
-            flag = self.db_reader_parsers[source] == "ipico"
-        if flag is None:
-            flag = bool(self.cfg["wiclax"].get("chip_lower"))
-        return bool(flag)
-
-    def _wiclax_line(self, chip: str, ts: dt.datetime, device: str, rewind: bool, source: Optional[str] = None) -> str:
-        if self._chip_lower(source):
-            chip = chip.lower()       # IPICO в Wiclax хранится строчными: 58003a9f837
-        return f"{chip};{fmt_wiclax(ts)};{device};;;{1 if rewind else 0}"
-
-    def _forward(self, device: str, rec: ParsedRead, source: Optional[str] = None) -> None:
-        main_ok = self.live_filter.accept(device, rec.chip, rec.ts)
-        src_ok = self.src_filter.accept("src:" + (source or ""), rec.chip, rec.ts)
-        if not (main_ok or src_ok):
-            return
-        line = self._wiclax_line(rec.chip, rec.ts, device, False, source)
-        for c in list(self.wiclax_clients):
-            if c.sources is not None:
-                if src_ok and source in c.sources:
-                    c.offer(line)
-            elif main_ok and (c.devices is None or device in c.devices):
-                c.offer(line)
-
-    def rewind_lines(self, start: dt.datetime, end: dt.datetime, devices: Optional[set] = None,
-                     sources: Optional[set] = None):
-        f = PassingFilter(self.cfg["wiclax"]["forward_filter_sec"])
-        if sources:
-            for sid in sorted(sources):
-                for row in self.store.query_reads(start, end, source=sid):
-                    device, chip, ts = row[1], row[2], parse_db(row[3])
-                    if f.accept(sid, chip, ts):
-                        yield self._wiclax_line(chip, ts, device, True, sid)
-            return
-        devs = sorted(devices) if devices else None
-        for row in self.store.query_reads(start, end, devices=devs):
-            source, device, chip, ts_s = row[0], row[1], row[2], row[3]
-            ts = parse_db(ts_s)
-            if f.accept(device, chip, ts):
-                yield self._wiclax_line(chip, ts, device, True, source)
 
     # ----------------------------------------------------------------------- #
     #  Соревнования: API для веб-интерфейса
@@ -1895,7 +1109,6 @@ class Hub:
         out = dict(ev)
         st = parse_db(ev["start_time"]) if ev.get("start_time") else None
         out["start_epoch_ms"] = self._epoch_ms(st)
-        out["push_wiclax"] = bool(ev.get("push_wiclax"))
         seq = ev.get("heats_sequential")
         out["heats_sequential"] = bool(seq) if seq is not None else (ev.get("finish_device") or "").upper() == "JUDGE"
         waves = self.store.waves(ev["id"])
@@ -1909,8 +1122,8 @@ class Hub:
         out["reg_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") else ""
         out["reg_path"] = f"/r/{ev['reg_slug']}" if ev.get("reg_slug") else ""
         out["reg_lanes"] = ev.get("reg_lanes") or 8
-        out["kind"] = ev.get("kind") or ("stadium" if (ev.get("finish_device") or "").upper() == "JUDGE" else "mass")
-        out["timing"] = ev.get("timing") or ("chips" if out["kind"] == "mass" else "judge")
+        out["kind"] = ev.get("kind") or "stadium"
+        out["timing"] = ev.get("timing") if ev.get("timing") in Store.TIMINGS else "judge"
         for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results"):
             out[k] = bool(ev.get(k)) if ev.get(k) is not None else (k == "ours")
         out["page_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") and base else out["reg_path"]
@@ -2147,10 +1360,18 @@ class Hub:
     def pickup_view(self, ev: dict) -> dict:
         """Выдача стартовых пакетов: кто получил номер, кто ещё не пришёл."""
         dist = {w["name"]: w.get("distance") or "" for w in self.store.waves(ev["id"])}
-        rows = [{"bib": r["bib"], "name": r["name"] or "", "team": r["team"] or "", "category": r["category"] or "",
-                 "birth_year": r["birth_year"] or "", "wave": r["wave"] or "", "distance": dist.get(r["wave"] or "", ""),
-                 "members": r.get("members") or "", "picked_at": r.get("picked_at")}
-                for r in self.store.entries_rows(ev["id"])]
+        rd = {r["id"]: r.get("distance") or "" for r in self.store.registrations(ev["id"])}
+        people: dict = {}          # номер выдаётся один на человека, даже если он заявлен на несколько видов
+        for r in self.store.entries_rows(ev["id"]):
+            d = dist.get(r["wave"] or "", "") or rd.get(r.get("reg_id"), "")
+            p = people.setdefault(r["bib"], {"bib": r["bib"], "name": r["name"] or "", "team": r["team"] or "",
+                                             "category": r["category"] or "", "birth_year": r["birth_year"] or "",
+                                             "wave": r["wave"] or "", "distances": [], "members": r.get("members") or "",
+                                             "picked_at": r.get("picked_at")})
+            if d and d not in p["distances"]:
+                p["distances"].append(d)
+            p["picked_at"] = p["picked_at"] or r.get("picked_at")
+        rows = [dict(p, distance=", ".join(p["distances"])) for p in people.values()]
         picked = sum(1 for r in rows if r["picked_at"])
         return {"rows": rows, "total": len(rows), "picked": picked, "left": len(rows) - picked}
 
@@ -2172,21 +1393,20 @@ class Hub:
         return out
 
     @staticmethod
-    def _no_chips(rows: list) -> list:
-        return [{k: val for k, val in r.items() if k not in ("chip", "reg_id", "picked_at", "detail")} for r in rows]
+    def _public_rows(rows: list) -> list:
+        return [{k: val for k, val in r.items() if k not in ("id", "reg_id", "picked_at", "detail")} for r in rows]
 
     def public_results(self, ev: dict) -> dict:
         r = self.compute(ev)
-        return {"event": self._public_event(ev), "started": r["started"], "devices": r["devices"],
-                "finished": self._no_chips(r["finished"]), "on_course": self._no_chips(r["on_course"]),
-                "not_seen": self._no_chips(r["not_seen"]), "groups": r["groups"], "teams": r.get("teams") or [],
+        return {"event": self._public_event(ev), "started": r["started"],
+                "finished": self._public_rows(r["finished"]), "not_seen": self._public_rows(r["not_seen"]), "groups": r["groups"], "teams": r.get("teams") or [],
                 "final": (ev.get("status") == "finished")}
 
     def public_startlist(self, ev: dict) -> dict:
         sl = self.startlist(ev)
         for h in sl["heats"]:
-            h["entries"] = self._no_chips(h["entries"])
-        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._no_chips(sl["no_heat"])}
+            h["entries"] = self._public_rows(h["entries"])
+        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._public_rows(sl["no_heat"])}
 
     def import_calendar(self, year: int, who: str) -> dict:
         p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed", f"calendar-{int(year)}.json")
@@ -2223,16 +1443,7 @@ class Hub:
         self.store.audit(who, None, "Импорт календаря", f"{year}: добавлено {added}" + (f", обновлено {updated}" if updated else ""))
         return {"added": added, "updated": updated, "total": len(items)}
 
-    def known_devices(self) -> list:
-        devs = {str(s.cfg["device"]) for s in self.sources.values()}
-        devs.update(self.store.devices())
-        return sorted(devs)
 
-    @staticmethod
-    def _bib_of(chip: str, entries: dict) -> str:
-        if chip in entries:
-            return entries[chip]
-        return chip[1:] if chip.startswith("#") else ""
 
     def _refresh_event_start(self, eid: int) -> None:
         """Общее время старта соревнования = самый ранний старт забега."""
@@ -2353,6 +1564,18 @@ class Hub:
             rev = self.store.ui_put(eid, "cart", items, who, cid)
             return 200, {"key": key, "rev": rev, "value": items, "added": added}
         return 400, {"error": "неизвестный раздел состояния"}
+
+    def _entry_of(self, bib: str, cands: list, distance, ed: dict) -> tuple:
+        """Строка участника по номеру. Номер многоборца стоит в нескольких дисциплинах — тогда нужно название дисциплины."""
+        if not cands:
+            return None, "нет такого номера"
+        dist = str(distance or "").strip()
+        if dist:
+            hit = [c for c in cands if self._dkey(ed.get(c["id"]) or "") == self._dkey(dist)]
+            return (hit[0], None) if hit else (None, f"номер {bib} не заявлен на «{dist}»")
+        if len(cands) == 1:
+            return cands[0], None
+        return None, "номер стоит в нескольких дисциплинах — укажите дисциплину"
 
     def official_from_raw(self, dn, rt: str, rw: dict) -> tuple:
         """ЕДИНСТВЕННОЕ место, где считается официальный результат по сырым цифрам (6.0).
@@ -2600,11 +1823,11 @@ class Hub:
         return "run" if d.get("result") == "time" else "other"
 
     def entry_dists(self, eid: int, erows: Optional[list] = None) -> dict:
-        """chip → дисциплина участника: дистанция забега, а у смешанного «общего списка» — из заявки."""
+        """id строки участника → её дисциплина: дистанция забега, а у смешанного «общего списка» — из заявки."""
         erows = erows if erows is not None else self.store.entries_rows(eid)
         wd = {w["name"]: w.get("distance") for w in self.store.waves(eid)}
         rd = {r["id"]: r.get("distance") for r in self.store.registrations(eid)}
-        return {e["chip"]: (wd.get(e["wave"] or "") or rd.get(e.get("reg_id")) or None) for e in erows}
+        return {e["id"]: (wd.get(e["wave"] or "") or rd.get(e.get("reg_id")) or None) for e in erows}
 
     @classmethod
     def result_type(cls, name) -> str:
@@ -2684,24 +1907,28 @@ class Hub:
         return out
 
     def compute(self, ev: dict) -> dict:
+        """Результаты соревнования: введённые вручную итоги (секундомеры, попытки, очки) и отсечки судьи JUDGE.
+        Строка участника = спортсмен в одной дисциплине (ключ — id), поэтому у многоборца места считаются по каждому виду отдельно."""
         eid = ev["id"]
         erows = self.store.entries_rows(eid)
         entered, status_of, rtype_of = {}, {}, {}
-        edist = self.entry_dists(eid, erows)          # дисциплина участника: у забега или, если забег смешанный, из заявки
+        edist = self.entry_dists(eid, erows)          # дисциплина строки: у забега или, если забег смешанный, из заявки
         for r in erows:
+            k = r["id"]
             if r.get("status") in self.STATUSES:
-                status_of[r["chip"]] = r["status"]
+                status_of[k] = r["status"]
             elif r.get("result"):
-                dn = edist.get(r["chip"])
+                dn = edist.get(k)
                 rt = self.result_type(dn)
                 pr = self.parse_typed(rt, r["result"], dn)
                 if pr:
-                    entered[r["chip"]] = pr
-                    rtype_of[r["chip"]] = rt
-        entries = {r["chip"]: r["bib"] for r in erows}
-        info = {r["chip"]: r for r in erows}
-        chip_wave = {r["chip"]: r["wave"] for r in erows if r["wave"]}
-        bib_chip = {r["bib"]: r["chip"] for r in erows}
+                    entered[k] = pr
+                    rtype_of[k] = rt
+        info = {r["id"]: r for r in erows}
+        ent_wave = {r["id"]: r["wave"] for r in erows if r["wave"]}
+        by_bib: dict = {}
+        for r in erows:
+            by_bib.setdefault(r["bib"], []).append(r)
         waves = self.store.waves(eid)
         wmeta = {w["name"]: w for w in waves}
         wave_order = {w["name"]: i for i, w in enumerate(waves)}
@@ -2709,7 +1936,6 @@ class Hub:
         wave_end = {w["name"]: parse_db(w["finished_at"]) for w in waves if w.get("finished_at")}
         ev_start = parse_db(ev["start_time"]) if ev.get("start_time") else None
         fin_dev = ev.get("finish_device") or ""
-        min_time = dt.timedelta(seconds=float(ev.get("min_time_sec") or 0))
         res = {"event": self._event_view(ev), "started": bool(ev_start or wave_start or entered),
                "devices": [], "finished": [], "on_course": [], "not_seen": [], "alerts": [],
                "manual_pending": 0, "unknown": [], "groups": []}
@@ -2722,27 +1948,29 @@ class Hub:
                     best = name
             return best
 
-        marks = []                    # (device, chip, ts, manual)
-        starts = [s for s in [ev_start, *wave_start.values()] if s]
-        if starts:
-            lo = min(starts)
-            for device, chip, ts_s in self.store.reads_window(lo, lo + dt.timedelta(hours=24)):
-                marks.append((device, chip, parse_db(ts_s), False))
+        marks = []                    # (точка, id строки, время)
+        lost = []
         for m in self.store.manual_list(eid):
             if not m["bib"]:
                 res["manual_pending"] += 1
                 continue
-            chip = bib_chip.get(m["bib"], "#" + m["bib"])
+            cands = by_bib.get(m["bib"]) or []
+            if not cands:
+                lost.append(m["bib"])
+                continue
             ts = parse_db(m["ts"])
-            if chip not in chip_wave and waves:
-                w = m.get("wave") or wave_of_ts(ts)
-                if w:
-                    chip_wave[chip] = w           # участник без заранее заданного забега: по отметке судьи
-            marks.append((m["device"], chip, ts, True))
+            w = m.get("wave") or None
+            row_ = next((c for c in cands if c["wave"] and c["wave"] == w), None) or cands[0]
+            k = row_["id"]
+            if k not in ent_wave and waves:
+                w2 = w or wave_of_ts(ts)
+                if w2:
+                    ent_wave[k] = w2           # участник без заранее заданного забега: по отметке судьи
+            marks.append((m["device"], k, ts))
         marks.sort(key=lambda x: x[2])
 
-        def start_of(chip: str) -> Optional[dt.datetime]:
-            w = chip_wave.get(chip)
+        def start_of(k: int) -> Optional[dt.datetime]:
+            w = ent_wave.get(k)
             if w and w in wave_start:
                 return wave_start[w]
             if w and waves:
@@ -2750,94 +1978,73 @@ class Hub:
             return ev_start
 
         first: dict = {}
-        manual_set = set()
-        fin_all: dict = {}
-        for device, chip, ts, man in marks:
-            st = start_of(chip)
+        for device, k, ts in marks:
+            st = start_of(k)
             if st is None or ts < st:
                 continue
-            w = chip_wave.get(chip)
+            w = ent_wave.get(k)
             if w in wave_end and ts > wave_end[w] + dt.timedelta(seconds=2):
                 continue                          # забег уже закрыт
-            if device == fin_dev:
-                if ts < st + min_time:
-                    continue
-                fin_all.setdefault(chip, []).append(ts)
-            per = first.setdefault(chip, {})
-            if device not in per:
-                per[device] = ts
-                if man:
-                    manual_set.add((chip, device))
+            first.setdefault(k, {}).setdefault(device, ts)
+        res["devices"] = sorted({d for per in first.values() for d in per})
 
-        dev_times: dict = {}
-        for chip, per in first.items():
-            st = start_of(chip)
-            for d, ts in per.items():
-                dev_times.setdefault(d, []).append((ts - st).total_seconds())
-        order = sorted(dev_times, key=lambda d: (d == fin_dev, sorted(dev_times[d])[len(dev_times[d]) // 2]))
-        res["devices"] = order
+        def secs(k, d):
+            s = (first[k][d] - start_of(k)).total_seconds()
+            return math.ceil(round(s * 10, 6)) / 10.0     # ручной хронометраж: округление вверх до 0,1 с
 
-        def secs(chip, d):
-            s = (first[chip][d] - start_of(chip)).total_seconds()
-            if (chip, d) in manual_set:
-                s = math.ceil(round(s * 10, 6)) / 10.0     # ручной хронометраж: округление вверх до 0,1 с
-            return s
-
-        def row(chip):
-            per = first.get(chip, {})
-            w = chip_wave.get(chip, "")
+        def row(k):
+            per = first.get(k, {})
+            w = ent_wave.get(k, "")
             meta = wmeta.get(w, {})
-            inf = info.get(chip, {})
-            return {"bib": self._bib_of(chip, entries), "chip": "" if chip.startswith("#") else chip,
+            inf = info.get(k, {})
+            return {"id": k, "bib": inf.get("bib") or "",
                     "wave": w, "category": inf.get("category") or meta.get("category") or "",
-                    "distance": edist.get(chip) or meta.get("distance") or "",
-                    "rt": self.result_type(edist.get(chip) or meta.get("distance")), "sex": inf.get("sex") or "",
+                    "distance": edist.get(k) or meta.get("distance") or "",
+                    "rt": self.result_type(edist.get(k) or meta.get("distance")), "sex": inf.get("sex") or "",
                     "done_rank": inf.get("done_rank") or "",
                     "name": inf.get("name") or "", "birth_year": inf.get("birth_year") or "",
                     "team": inf.get("team") or "", "coach": inf.get("coach") or "",
                     "points": inf.get("points"), "members": inf.get("members") or "", "rank": inf.get("rank") or "",
                     "sw": (inf.get("detail") or {}).get("t"), "attempts": (inf.get("detail") or {}).get("a"),
-                    "splits": {d: self.fmt_elapsed(secs(chip, d)) for d in per},
-                    "manual": sorted(d for d in per if (chip, d) in manual_set)}
+                    "splits": {d: self.fmt_elapsed(secs(k, d)) for d in per}}
 
-        def fin_sec(chip):
-            return entered[chip][0] if chip in entered else secs(chip, fin_dev)
+        def fin_sec(k):
+            return entered[k][0] if k in entered else secs(k, fin_dev)
 
-        finished = [c for c in first if fin_dev in first[c] and c not in entered and c not in status_of] + list(entered)
-        finished.sort(key=lambda c: (wave_order.get(chip_wave.get(c, ""), -1), fin_sec(c)))
+        finished = [k for k in first if fin_dev in first[k] and k not in entered and k not in status_of] + list(entered)
+        finished.sort(key=lambda k: (wave_order.get(ent_wave.get(k, ""), -1), fin_sec(k)))
         place_by_wave: dict = {}
         prev_by_wave: dict = {}
-        for chip in finished:
-            sec = fin_sec(chip)
-            w = chip_wave.get(chip, "")
+        for k in finished:
+            sec = fin_sec(k)
+            w = ent_wave.get(k, "")
             if wmeta.get(w, {}).get("distance") is None or wmeta.get(w, {}).get("distance") == "":
-                w = w + "\x00" + (edist.get(chip) or "")        # смешанный «общий список»: места отдельно по дисциплинам
+                w = w + "\x00" + (edist.get(k) or "")        # смешанный «общий список»: места отдельно по дисциплинам
             place_by_wave[w] = place_by_wave.get(w, 0) + 1
-            r = row(chip)
-            if chip in entered:
-                txt = entered[chip][1]
+            r = row(k)
+            if k in entered:
+                txt = entered[k][1]
                 pv = prev_by_wave.get(w)
                 place = pv[1] if pv and pv[0] == txt else place_by_wave[w]   # одинаковый результат — одно место
-                ra = info.get(chip, {}).get("result_at")
+                ra = info.get(k, {}).get("result_at")
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt, seconds=round(sec, 3),
                          finish_at=None, finish_epoch_ms=None, entered=True,
                          entered_epoch_ms=self._epoch_ms(parse_db(ra)) if ra else None)
-                if rtype_of.get(chip, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
-                    r.update(time=txt, seconds=None, rtype=rtype_of[chip], value=round(-sec, 2))
+                if rtype_of.get(k, "time") != "time":    # прыжки, метания, многоборья: больше — лучше
+                    r.update(time=txt, seconds=None, rtype=rtype_of[k], value=round(-sec, 2))
             else:
                 txt = self.fmt_result(sec)
-                pv = prev_by_wave.get(w)
                 place = place_by_wave[w]
                 r.update(place=place, time=self.fmt_elapsed(sec), result=txt,
-                         seconds=round(sec, 3), finish_at=fmt_db(first[chip][fin_dev]),
-                         finish_epoch_ms=self._epoch_ms(first[chip][fin_dev]))
+                         seconds=round(sec, 3), finish_at=fmt_db(first[k][fin_dev]),
+                         finish_epoch_ms=self._epoch_ms(first[k][fin_dev]))
             prev_by_wave[w] = (txt, place)
             # выполненный разряд: по нормам ЕВСК; вписанный секретарём — главнее
-            if chip in entered:
-                val = entered[chip][0] if rtype_of.get(chip, "time") == "time" else -entered[chip][0]
+            if k in entered:
+                val = entered[k][0] if rtype_of.get(k, "time") == "time" else -entered[k][0]
                 hand = bool(r.get("sw")) or (ev.get("timing") or "") in ("manual", "judge")
             else:
-                val, hand = sec, (chip, fin_dev) in manual_set
+                val, hand = sec, True
             auto_rk = self.rank_for(ev, r["distance"], r["sex"], r["birth_year"], val, hand) if not r.get("members") else ""
             r["done_rank_auto"] = auto_rk
             # «—» — секретарь вручную отметил «разряд не выполнен»: расчёт системы не подставляется
@@ -2864,23 +2071,16 @@ class Hub:
         res["rank_cap"] = self.RANK_CAP.get(ev.get("level") or "region", "1 р.")
         if ev.get("team_best"):
             res["teams"] = self.team_standings(res["finished"], int(ev["team_best"]))
-        for chip, per in first.items():
-            if fin_dev not in per and chip not in entered and chip not in status_of:
-                last_dev = max(per, key=lambda d: per[d])
-                r = row(chip)
-                r.update(last_point=last_dev, last_time=self.fmt_elapsed(secs(chip, last_dev)))
-                res["on_course"].append(r)
-        res["on_course"].sort(key=lambda r: r["last_time"], reverse=True)
-        res["not_seen"] = [{"bib": r["bib"], "chip": "" if r["chip"].startswith("#") else r["chip"],
+        res["not_seen"] = [{"id": r["id"], "bib": r["bib"],
                             "wave": r["wave"] or "", "name": r["name"] or "", "birth_year": r["birth_year"] or "",
                             "team": r["team"] or "", "coach": r.get("coach") or "", "members": r.get("members") or "",
                             "rank": r.get("rank") or "", "sw": (r.get("detail") or {}).get("t"), "attempts": (r.get("detail") or {}).get("a"),
                             "category": r["category"] or wmeta.get(r["wave"] or "", {}).get("category") or "",
-                            "distance": edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance") or "",
-                            "rt": self.result_type(edist.get(r["chip"]) or wmeta.get(r["wave"] or "", {}).get("distance")),
+                            "distance": edist.get(r["id"]) or wmeta.get(r["wave"] or "", {}).get("distance") or "",
+                            "rt": self.result_type(edist.get(r["id"]) or wmeta.get(r["wave"] or "", {}).get("distance")),
                             "sex": r.get("sex") or "", "done_rank": r.get("done_rank") or "",
-                            **({"status": status_of[r["chip"]]} if r["chip"] in status_of else {})}
-                           for r in erows if (r["chip"] not in first or r["chip"] in status_of) and r["chip"] not in entered]
+                            **({"status": status_of[r["id"]]} if r["id"] in status_of else {})}
+                           for r in erows if (r["id"] not in first or r["id"] in status_of) and r["id"] not in entered]
 
         # ---- предупреждения
         A = res["alerts"]
@@ -2888,40 +2088,8 @@ class Hub:
             A.append({"level": "warn", "text": "Не выбрана точка финиша — результаты не считаются"})
         if res["manual_pending"]:
             A.append({"level": "warn", "text": f"Отсечек судьи без номера: {res['manual_pending']} — впишите номера"})
-        running = ev.get("status") == "running" and starts
-        if running:
-            silence = float(ev.get("alert_silence_min") or 10)
-            now = now_local()
-            used = set(dev_times) | {fin_dev}
-            for s in self.sources.values():
-                if s.cfg["mode"] == "http":
-                    continue
-                if not any(d == str(s.cfg["device"]) or (s.cfg["device_per_antenna"] and d.startswith(str(s.cfg["device"])))
-                           for d in used):
-                    continue
-                if not s.connected:
-                    A.append({"level": "bad", "text": f"Нет связи с точкой {s.cfg['device']}"})
-                elif silence > 0 and now - min(starts) > dt.timedelta(minutes=silence):
-                    last = s.last_read_at
-                    if last is None or now - last > dt.timedelta(minutes=silence):
-                        mins = "ни одной отметки" if last is None else f"{int((now - last).total_seconds() // 60)} мин без отметок"
-                        A.append({"level": "warn", "text": f"Точка {s.cfg['device']} молчит: {mins}"})
-        if entries:
-            unknown = sorted(c for c in first if c not in entries and not c.startswith("#"))
-            res["unknown"] = unknown
-            if unknown:
-                A.append({"level": "warn", "text": f"Чипы не из списка участников: {len(unknown)}"
-                                                   f" ({', '.join(u[-8:] for u in unknown[:5])}{'…' if len(unknown) > 5 else ''})"})
-        dup = []
-        for chip, times in fin_all.items():
-            clusters = 1
-            for a, b in zip(times, times[1:]):
-                if (b - a).total_seconds() > 30:
-                    clusters += 1
-            if clusters > 1:
-                dup.append(self._bib_of(chip, entries) or chip[-8:])
-        if dup:
-            A.append({"level": "info", "text": f"Повторное прохождение финиша (круги или ошибка): {', '.join(dup[:10])}"})
+        if lost:
+            A.append({"level": "warn", "text": f"Номера из отсечек судьи нет в списке участников: {', '.join(sorted(set(lost))[:10])}"})
         dup_bib = {}
         for m in self.store.manual_list(eid):
             if m["bib"] and m["device"] == fin_dev:
@@ -2929,23 +2097,6 @@ class Hub:
         twice = [b for (b, _), n in dup_bib.items() if n > 1]
         if twice:
             A.append({"level": "warn", "text": f"Номер вписан судьёй дважды: {', '.join(sorted(set(twice))[:10])}"})
-        seg: dict = {}
-        for chip, per in first.items():
-            seq = sorted(per.items(), key=lambda x: x[1])
-            for (d1, t1), (d2, t2) in zip(seq, seq[1:]):
-                seg.setdefault((d1, d2), []).append((chip, (t2 - t1).total_seconds()))
-        fast = []
-        for (d1, d2), lst in seg.items():
-            if len(lst) < 5:
-                continue
-            med = sorted(x for _, x in lst)[len(lst) // 2]
-            if med < 60:
-                continue
-            for chip, x in lst:
-                if x < 0.6 * med:
-                    fast.append(f"{self._bib_of(chip, entries) or chip[-8:]} ({d1}→{d2})")
-        if fast:
-            A.append({"level": "bad", "text": f"Подозрительно быстрый отрезок (срезка?): {', '.join(fast[:10])}"})
         return res
 
     def event_results(self, ev: dict) -> dict:
@@ -2988,114 +2139,7 @@ class Hub:
             self._refresh_event_start(ev["id"])
         else:
             self.store.set_event_field(ev["id"], start_time=fmt_db(st), status="running")
-        if ev.get("push_wiclax"):
-            line = f"RACESTART {st:%H:%M:%S},{st.microsecond // 1000:03d}"
-            for c in list(self.wiclax_clients):
-                c.command(line)
-            log.info("Старт «%s»%s в %s отправлен в Wiclax (%d подключений)", ev["name"],
-                     f" / {wave}" if wave else "", fmt_db(st), len(self.wiclax_clients))
         return self._event_view(self.store.get_event(ev["id"]))
-
-    ENTRY_COLS = ("bib", "chip", "wave", "name", "birth_year", "team", "category", "lane", "coach", "seed",
-                  "result", "points", "rank")
-    _HEAD = (("bib", ("номер", "нагрудн", "№", "bib", "ст.н", "старт.ном")),
-             ("chip", ("чип", "chip", "транспонд", "метка")),
-             ("wave", ("забег", "волна", "heat", "старт")),
-             ("name", ("фио", "фамилия", "участник", "спортсмен", "name")),
-             ("birth_year", ("год", "г.р", "рожд", "birth")),
-             ("team", ("команд", "клуб", "организац", "регион", "город", "team")),
-             ("category", ("категор", "группа", "пол", "category")),
-             ("lane", ("дорожк", "lane")),
-             ("coach", ("тренер", "coach")),
-             ("seed", ("заявл", "лучш", "seed")),
-             ("result", ("результат", "итог", "result")),
-             ("points", ("очк", "балл", "points")),
-             ("rank", ("разряд", "звани", "rank")),
-             ("distance", ("дистанц", "distance")))
-
-    @classmethod
-    def parse_entries(cls, text: str) -> tuple:
-        """Строки участников. Порядок колонок по умолчанию: номер;чип;забег;ФИО;год;команда;категория.
-        Если первая строка — заголовки (Номер, Чип, ФИО, Год, Команда, Категория, Забег), колонки
-        берутся по ним в любом порядке."""
-        rows, bad = [], []
-        seen = set()
-        cols = list(cls.ENTRY_COLS)
-        lines = text.splitlines()
-        for n, line in enumerate(lines, 1):
-            line = line.strip().lstrip("﻿")
-            if not line or line.startswith("#"):
-                continue
-            sep = next((c for c in (";", "\t", ",") if c in line), None)
-            parts = [p.strip().strip('"') for p in (line.split(sep) if sep else line.split())]
-            if not rows and not bad and not re.search(r"\d", parts[0]):
-                mapped = []
-                for p in parts:
-                    low = p.lower()
-                    key = next((k for k, words in cls._HEAD if any(w in low for w in words)), None)
-                    mapped.append(key if key not in mapped else None)
-                if "bib" in mapped:
-                    cols = mapped
-                    continue
-            rec = {k: parts[i] for i, k in enumerate(cols) if k and i < len(parts)}
-            bib = re.sub(r"[^0-9A-Za-z-]", "", rec.get("bib", ""))[:12]
-            chip = re.sub(r"\s", "", rec.get("chip", "")).upper()
-            if not bib or (chip and not re.fullmatch(r"[0-9A-Z]+", chip)):
-                bad.append(n)
-                continue
-            if not chip:
-                chip = "#" + bib          # участник без чипа: только ручные отметки судьи
-            if chip in seen:
-                bad.append(n)
-                continue
-            seen.add(chip)
-            year = rec.get("birth_year", "")
-            m = re.search(r"(19|20)\d\d", year)
-            rows.append({"bib": bib, "chip": chip, "wave": rec.get("wave", "")[:40] or None,
-                         "name": rec.get("name", "")[:80] or None, "birth_year": m.group(0) if m else (year[:4] or None),
-                         "team": rec.get("team", "")[:80] or None, "category": rec.get("category", "")[:40] or None,
-                         "lane": int(rec["lane"]) if rec.get("lane", "").isdigit() else None,
-                         "coach": rec.get("coach", "")[:80] or None, "seed": rec.get("seed", "")[:12] or None})
-            if rec.get("distance"):
-                rows[-1]["distance"] = rec["distance"][:20]
-            if "rank" in rec:
-                rows[-1]["rank"] = cls.norm_rank(rec["rank"]) or None
-            if "result" in rec:         # колонка есть: итог уже проведённого старта (протокол из другой системы)
-                val = rec["result"].strip()
-                st = val.upper().rstrip(".")
-                if st in cls.STATUSES:
-                    rows[-1].update(result=None, status=st)
-                elif val and cls.parse_typed(cls.result_type(rec.get("distance")), val, rec.get("distance")) is None:
-                    rows.pop()
-                    bad.append(n)
-                    continue
-                else:
-                    rows[-1].update(result=val or None, status=None)
-            if "points" in rec:
-                try:
-                    rows[-1]["points"] = float(rec["points"].replace(",", ".")) if rec["points"].strip() else None
-                except ValueError:
-                    rows[-1]["points"] = None
-        return rows, bad
-
-    # ---- проверка чипов перед стартом
-    def check_view(self, ev: dict) -> dict:
-        full = [r for r in self.store.entries_full(ev["id"]) if not r[1].startswith("#")]
-        entries = {c: b for b, c, _ in full}
-        since = parse_db(ev["check_since"]) if ev.get("check_since") else None
-        out = {"since": ev.get("check_since"), "total": len(full), "checked": 0,
-               "unchecked": [], "unknown": [], "last": []}
-        if since is None:
-            out["unchecked"] = [b for b, _, _ in full]
-            return out
-        seen = self.store.chips_after_time(since)
-        out["checked"] = sum(1 for c in entries if c in seen)
-        out["unchecked"] = [b for b, c, _ in full if c not in seen]
-        out["unknown"] = sorted(c for c in seen if c not in entries)
-        for rid, source, device, chip, ts_s in self.store.reads_after_time(since, 15):
-            out["last"].append({"id": rid, "chip": chip, "device": device, "time": ts_s[11:21],
-                                "bib": entries.get(chip, ""), "known": chip in entries})
-        return out
 
     # ---- API
     def _api(self, method: str, path: str, qs: dict, body: bytes, actor: str = "", headers: Optional[dict] = None):
@@ -3107,24 +2151,6 @@ class Hub:
 
         def err(msg, code=400):
             return code, J, json.dumps({"error": msg}, ensure_ascii=False), None
-
-        mc = re.fullmatch(r"/api/events/(\d+)/clax", path)
-        if mc and method == "POST":
-            ev = self.store.get_event(int(mc.group(1)))
-            if ev is None:
-                return err("соревнование не найдено", 404)
-            if any(w.get("start_time") for w in self.store.waves(ev["id"])) or ev.get("start_time"):
-                return err("у соревнования уже был старт — импортируйте в новое соревнование")
-            try:
-                if qs.get("check"):
-                    d = self.parse_clax(body)
-                    return ok({"source": d["name"], "dates": d["dates"], "entries": len(d["entries"]),
-                               "with_chip": sum(1 for e in d["entries"] if e["chip"]), "parcours": list(d["parcours"])})
-                out = self.import_clax(ev, body, with_names=qs.get("names", "1") != "0")
-            except Exception as e:  # noqa
-                return err(f"не удалось прочитать файл Wiclax: {e}")
-            self.store.audit(actor, ev["id"], "Импорт из Wiclax", f"{out['source']}: {out['entries']} участников, чипов {out['with_chip']}")
-            return ok(out)
 
         mi = re.fullmatch(r"/api/events/(\d+)/import", path)
         if mi and method == "POST":
@@ -3168,17 +2194,11 @@ class Hub:
             return err("неверный JSON")
         if not isinstance(data, dict):
             return err("ожидается JSON-объект")
-        if path.startswith(("/api/readers", "/api/wiclax-ports")):
-            res = self._reader_api(method, path, data, actor)
-            if res is not None:
-                return res[0], J, json.dumps(res[1], ensure_ascii=False), None
         judge = str(data.get("judge") or "").strip()[:40]
         who = f"{actor} / {judge}" if judge else actor
 
         if path == "/api/clock":
             return ok({"server_epoch_ms": int(time.time() * 1000), "server_time": fmt_db(now_local())})
-        if path == "/api/devices":
-            return ok({"devices": self.known_devices()})
         if path == "/api/system":
             return ok(self.system_view())
         if path == "/api/system/update":
@@ -3188,34 +2208,6 @@ class Hub:
             return code, J, json.dumps(out, ensure_ascii=False), None
         if path == "/api/log":
             return ok({"log": self.store.audit_list(None)})
-        if path == "/api/live":
-            try:
-                since = int(qs.get("since", "0") or 0)
-                limit = max(1, min(int(qs.get("limit", "100") or 100), 500))
-            except ValueError:
-                return err("since/limit — числа")
-            ev = None
-            if qs.get("event", "").isdigit():
-                ev = self.store.get_event(int(qs["event"]))
-            rows = self.store.reads_since(max(self.store.last_id() - limit, 0) if since <= 0 else since, limit)
-            full = self.store.entries_full(ev["id"]) if ev else []
-            entries = {c: b for b, c, _ in full}
-            chip_wave = {c: w for _, c, w in full if w}
-            wave_start = {w["name"]: parse_db(w["start_time"]) for w in self.store.waves(ev["id"])
-                          if w.get("start_time")} if ev else {}
-            ev_st = parse_db(ev["start_time"]) if ev and ev.get("start_time") else None
-            out = []
-            for rid, source, device, chip, ts_s in rows:
-                item = {"id": rid, "source": source, "device": device, "chip": chip,
-                        "time": ts_s[11:21], "bib": entries.get(chip, "")}
-                st = wave_start.get(chip_wave.get(chip, ""), ev_st)
-                if st is not None and parse_db(ts_s) >= st:
-                    item["elapsed"] = self.fmt_elapsed((parse_db(ts_s) - st).total_seconds())
-                if ev:
-                    item["finish"] = bool(ev.get("finish_device") and device == ev["finish_device"])
-                out.append(item)
-            last = out[-1]["id"] if out else (since if since > 0 else self.store.last_id())
-            return ok({"last_id": last, "reads": out})
         if path == "/api/system/scoreboard/control":
             return 302, "text/plain; charset=utf-8", "", {"Location": "/scoreboard" + (f"?event={int(qs['event'])}" if str(qs.get("event", "")).isdigit() else "")}
         if path == "/api/scoreboard/state":
@@ -3304,7 +2296,7 @@ class Hub:
                 lines = []
                 for r in rows:
                     pts = r.get("points")
-                    vals = [r["bib"], "" if r["chip"].startswith("#") else r["chip"], r["wave"] or "",
+                    vals = [r["bib"], r["wave"] or "",
                             r["name"] or "", r["birth_year"] or "", r["team"] or "", r["category"] or "",
                             str(r["lane"] or ""), r["coach"] or "", r["seed"] or "",
                             r.get("status") or r.get("result") or "",
@@ -3314,8 +2306,6 @@ class Hub:
                         vals.pop()
                     lines.append(";".join(vals))
                 return ok({"text": "\n".join(lines), "count": len(rows)})
-            if action == "check":
-                return ok(self.check_view(ev))
             if action == "manual":
                 marks = self.store.manual_list(eid)
                 for mk in marks:
@@ -3349,10 +2339,6 @@ class Hub:
                 return ok(self.pickup_view(ev))
             if action == "template.xlsx":
                 return self._template_response(ev)
-            if action == "wiclax.csv":
-                return self._wiclax_csv(ev)
-            if action == "event.clax":
-                return self._wiclax_clax(ev)
             if action == "qr.png":
                 base = (self.cfg.get("public", {}).get("url") or "").rstrip("/")
                 if not (base and ev.get("reg_slug")):
@@ -3440,9 +2426,11 @@ class Hub:
             return ok(self._event_view(self.store.get_event(eid)))
         if action == "results" and isinstance(data.get("rows"), list):
             bad, n = [], 0
-            old = {e["bib"]: e for e in self.store.entries_rows(eid)}
-            ed_ = self.entry_dists(eid, list(old.values()))
-            dn_of = {b_: ed_.get(e["chip"]) for b_, e in old.items()}
+            all_rows = self.store.entries_rows(eid)
+            ed_ = self.entry_dists(eid, all_rows)
+            old: dict = {}                      # номер → строки этого номера (по одной на дисциплину)
+            for e_ in all_rows:
+                old.setdefault(e_["bib"], []).append(e_)
             for rw in data["rows"][:2000]:
                 if not isinstance(rw, dict):
                     continue
@@ -3452,10 +2440,11 @@ class Hub:
                 if st and st not in self.STATUSES:
                     bad.append(f"{bib}: неизвестная отметка {st}")
                     continue
-                if bib not in old:
-                    bad.append(f"{bib}: нет такого номера")
+                row_, why = self._entry_of(bib, old.get(bib) or [], rw.get("distance"), ed_)
+                if row_ is None:
+                    bad.append(f"{bib}: {why}")
                     continue
-                dn = dn_of.get(bib)
+                dn = ed_.get(row_["id"])
                 rt = self.result_type(dn)
                 detail, set_detail, auto_txt, errs = self.official_from_raw(dn, rt, rw)
                 if errs:
@@ -3474,11 +2463,11 @@ class Hub:
                     # пусто — разряд считает система по ЕВСК; «—» — вручную «не выполнен»; иначе — разряд секретаря
                     dr = str(rw.get("done_rank") or "").strip()
                     dr = self.NO_RANK if dr in ("—", "-", "–", "нет") else self.norm_rank(dr)
-                    self.store.update_entry(eid, bib, done_rank=dr or None)
-                    if not (set(rw) - {"bib", "done_rank", "auto"}):
+                    self.store.update_entry(eid, row_["id"], done_rank=dr or None)
+                    if not (set(rw) - {"bib", "distance", "done_rank", "auto"}):
                         n += 1             # прислан только разряд — результат и отметку не трогаем
                         continue
-                if self.store.set_entry_result(eid, bib, pr[1] if pr else None, st or None, detail or None, set_detail):
+                if self.store.set_entry_result(eid, row_["id"], pr[1] if pr else None, st or None, detail or None, set_detail):
                     n += 1
             if n:
                 self.store.audit(who, eid, "Введены результаты", f"строк: {n}")
@@ -3525,32 +2514,6 @@ class Hub:
                                  "идёт" if new == "running" else "ждёт старта",
                                  "регистрация открыта" if reg_ok else f"регистрация: {why.lower()}") if x))
             return ok(self._event_view(nv_))
-        if action == "entries":
-            rows, bad = self.parse_entries(str(data.get("text", "")))
-            old = {e["bib"]: e for e in self.store.entries_rows(eid)}
-            for r in rows:
-                o = old.get(r["bib"]) or {}
-                r["reg_id"] = o.get("reg_id")    # связь с заявкой и пол сохраняются по номеру
-                r["sex"] = o.get("sex")
-                if "result" not in r:            # в списке нет колонки результата — введённые итоги не теряются
-                    r["result"], r["status"] = o.get("result"), o.get("status")
-                if "points" not in r:
-                    r["points"] = o.get("points")
-            self.store.set_entries(eid, rows)
-            waves = {w["name"]: w for w in self.store.waves(eid)}
-            for r in rows:                       # дистанция и категория забега — из колонок файла, если у забега их нет
-                w = waves.get(r.get("wave") or "")
-                if not w:
-                    continue
-                kw = {}
-                if r.get("distance") and not w.get("distance"):
-                    kw["distance"] = w["distance"] = r["distance"]
-                if r.get("category") and not w.get("category"):
-                    kw["category"] = w["category"] = r["category"]
-                if kw:
-                    self.store.update_wave(eid, w["name"], **kw)
-            self.store.audit(who, eid, "Загружен список участников", f"{len(rows)} строк")
-            return ok({"count": len(rows), "bad_lines": bad})
         if action == "waves":
             waves = self.store.waves(eid)
             cat = str(data.get("category") or "").strip()[:40] or None
@@ -3663,14 +2626,16 @@ class Hub:
                 return err("фамилия и имя обязательны")
             self.store.update_registration(sub_id, **upd)
             # участник уже в забеге — обновляем и стартовый список (эстафета — запись команды, её не трогаем)
-            if r.get("bib") and not r.get("relay"):
+            if not r.get("relay"):
                 e = {"name": " ".join(x for x in (upd.get("last_name", r["last_name"]), upd.get("first_name", r["first_name"])) if x),
                      "team": upd.get("team", r["team"]), "coach": upd.get("coach", r["coach"]),
                      "category": upd.get("category", r["category"]), "seed": upd.get("best", r["best"]),
                      "birth_year": upd.get("birth_date", r["birth_date"])[:4], "rank": upd.get("rank", r.get("rank"))}
-                self.store.update_entry(eid, r["bib"], **e)
+                for en in [x for x in self.store.entries_rows(eid) if x.get("reg_id") == sub_id]:
+                    self.store.update_entry(eid, en["id"], **e)
+                    if upd.get("status") == "rejected":
+                        self.store.delete_entry(eid, en["id"])
                 if upd.get("status") == "rejected":
-                    self.store.delete_entry(eid, r["bib"])
                     self.store.update_registration(sub_id, bib=None)
             what = {"approved": "Заявка подтверждена", "rejected": "Заявка отклонена", "pending": "Заявка возвращена"}
             self.store.audit(who, eid, what.get(upd.get("status"), "Заявка изменена"),
@@ -3681,11 +2646,15 @@ class Hub:
             bibs = {str(b) for b in (data.get("bibs") or []) if str(b).strip()}
             if not bibs:
                 return err("не указано, чьи результаты очистить")
-            have = {e["bib"] for e in self.store.entries_rows(eid)}
+            dist = str(data.get("distance") or "").strip()
+            rows_ = self.store.entries_rows(eid)
+            ed_ = self.entry_dists(eid, rows_)
             n = 0
-            for b in sorted(bibs & have):
-                self.store.set_entry_result(eid, b, None, None, None, True)
-                self.store.update_entry(eid, b, done_rank=None)
+            for e_ in rows_:                    # номер многоборца стоит в нескольких дисциплинах — чистим только указанную
+                if e_["bib"] not in bibs or (dist and self._dkey(ed_.get(e_["id"]) or "") != self._dkey(dist)):
+                    continue
+                self.store.set_entry_result(eid, e_["id"], None, None, None, True)
+                self.store.update_entry(eid, e_["id"], done_rank=None)
                 n += 1
             self.store.audit(who, eid, "Очищены результаты", f"{data.get('label') or ''} участников: {n}".strip())
             return ok({"cleared": n})
@@ -3715,7 +2684,8 @@ class Hub:
                 out = self.reset_heats(ev, data.get("distance"))
             except ValueError as e:
                 return err(str(e))
-            self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}")
+            self.store.audit(who, eid, "Сброшена сетка забегов", f"забегов удалено: {out['waves']}, участников возвращено в нераспределённые: {out['entries']}"
+                             + (f"; сброшено время старта: {', '.join(out['stopped'])}" if out["stopped"] else ""))
             return ok(out)
         if action == "ui":
             code, out = self.ui_write(ev, data, who)
@@ -3725,15 +2695,14 @@ class Hub:
             return code, J, json.dumps(out, ensure_ascii=False), None
         if action == "heats":
             try:
-                if str(data.get("distance") or "").strip():       # мастер протоколов: одна дисциплина
-                    out = self.generate_scoped(ev, data.get("lanes") or ev.get("reg_lanes") or 8, data)
-                else:
-                    out = self.generate_heats(ev, data.get("lanes") or ev.get("reg_lanes") or 8, "list" if data.get("mode") == "list" else "heats")
+                if not str(data.get("distance") or "").strip():
+                    return err("выберите дисциплину")
+                out = self.generate_scoped(ev, data.get("lanes") or ev.get("reg_lanes") or 8, data)
             except ValueError as e:
                 return err(str(e))
             if data.get("lanes"):
                 self.store.update_event(eid, {"reg_lanes": data["lanes"]})
-            self.store.audit(who, eid, "Сформирован общий список" if data.get("mode") == "list" or out.get("mode") == "list" else "Сформированы забеги",
+            self.store.audit(who, eid, "Сформирован общий список" if out.get("mode") == "list" else "Сформированы забеги",
                              f"{data.get('distance') + ': ' if data.get('distance') else ''}{len(out['heats'])} забегов, {out['entries']} участников")
             try:
                 self.save_file(eid, f"Стартовый список {now_local():%Y-%m-%d %H-%M}.csv",
@@ -3742,14 +2711,7 @@ class Hub:
                 log.exception("стартовый список в папку «Для судей»")
             return ok(out)
         if action == "entry":
-            def clean_bib(v, used):
-                v = str(v or "").strip()
-                if not v or len(v) > 10 or not re.fullmatch(r"[0-9A-Za-zА-Яа-я\-]+", v):
-                    return None, "номер — до 10 символов: цифры или буквы, без пробелов"
-                if v in used or "#" + v in {e["chip"] for e in self.store.entries_rows(eid)}:
-                    return None, f"номер {v} уже занят другим участником"
-                return v, None
-            # перенос участника в другой забег / дорожку, или добавление подтверждённой заявки в забег
+            # добавление подтверждённой заявки в сетку (поздний участник), перенос участника в другой забег / на другую дорожку
             wave = str(data.get("wave") or "").strip()[:40] or None
             if wave and not self.store.get_wave(eid, wave):
                 return err(f"нет забега «{wave}»")
@@ -3766,20 +2728,23 @@ class Hub:
                     team = [x for x in self.store.registrations(eid) if x["status"] == "approved"
                             and x["distance"] == r["distance"] and (x.get("relay") or "").lower() == r["relay"].lower()]
                     r = self.relay_entry(team)
-                rows = self.store.entries_rows(eid)
                 ids = r.get("_ids") or [r["id"]]
-                if any(x.get("reg_id") in ids for x in rows) or (r.get("bib") and any(e["bib"] == r["bib"] for e in rows)):
+                rows = self.store.entries_rows(eid)
+                if any(x.get("reg_id") in ids for x in rows):
                     return err("участник уже в стартовом списке")
-                # 5.2: номер только ручной — из поля рядом с заявкой или вписанный на шаге 2 «Регистрация номеров»
-                bib, e_ = clean_bib(data.get("set_bib") or r.get("bib"), {e["bib"] for e in rows})
-                if not str(data.get("set_bib") or r.get("bib") or "").strip():
-                    return err("впишите нагрудный номер участника (шаг 2 Мастера «Регистрация номеров»)")
-                if e_:
-                    return err(e_)
+                typed = str(data.get("set_bib") or "").strip()
+                if typed:                                # вписанный номер ложится на все дисциплины человека, с проверкой повторов
+                    code_, out_ = self.save_bibs(ev, [{"ids": ids, "bib": typed}], who)
+                    if code_ != 200:
+                        return err((out_.get("errors") or [{}])[0].get("error") or out_.get("error") or "номер не сохранён")
+                st = self._bib_state(eid)
+                bib = self._reg_bib(st["regs"][ids[0]], st)
+                if not bib:
+                    return err("впишите нагрудный номер участника (шаг 2 Мастера «Нагрудные номера»)")
                 if lane is None and wave:
                     taken = {e["lane"] for e in rows if e["wave"] == wave}
                     lane = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
-                self.store.add_entry(eid, {"bib": bib, "chip": "#" + bib, "wave": wave,
+                self.store.add_entry(eid, {"bib": bib, "wave": wave,
                                            "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                                            "birth_year": r["birth_date"][:4].strip(),
                                            "team": r["team"], "category": r["category"], "lane": lane,
@@ -3790,38 +2755,39 @@ class Hub:
                 self.store.audit(who, eid, "Участник добавлен в забег", f"№{bib} {r['last_name']} → {wave or 'без забега'}")
                 return ok({"bib": bib})
             bib = str(data.get("bib") or "").strip()
-            row = next((e for e in self.store.entries_rows(eid) if e["bib"] == bib), None)
+            all_rows = self.store.entries_rows(eid)
+            row, why = self._entry_of(bib, [e for e in all_rows if e["bib"] == bib], data.get("distance"), self.entry_dists(eid, all_rows))
             if not row:
-                return err("нет участника с таким номером", 404)
+                return err(why if any(e["bib"] == bib for e in all_rows) else "нет участника с таким номером", 404)
             if row["wave"] and (self.store.get_wave(eid, row["wave"]) or {}).get("start_time") and "wave" in data \
                     and wave != row["wave"]:
                 return err("забег участника уже стартовал")
             if "new_bib" in data:
-                if str(data["new_bib"]).strip() == bib:
+                nb = str(data["new_bib"] or "").strip()
+                if nb == bib:
                     return ok({"bib": bib})
-                nb, e_ = clean_bib(data["new_bib"], {e["bib"] for e in self.store.entries_rows(eid)})
-                if e_:
-                    return err(e_)
-                self.store.rename_bib(eid, bib, nb)
+                if row.get("reg_id"):                    # номер меняется у человека во всех его дисциплинах
+                    code_, out_ = self.save_bibs(ev, [{"ids": [row["reg_id"]], "bib": nb}], who)
+                    if code_ != 200:
+                        return err((out_.get("errors") or [{}])[0].get("error") or out_.get("error") or "номер не сохранён")
+                else:
+                    if not self.BIB_RE.fullmatch(nb) or any(e["bib"] == nb for e in all_rows):
+                        return err(f"номер {nb or '—'} не подходит или уже занят другим участником")
+                    self.store.rename_bib(eid, bib, nb)
                 self.store.audit(who, eid, "Изменён нагрудный номер", f"{row.get('name') or ''}: №{bib} → №{nb}")
                 return ok({"bib": nb})
             upd = {}
             if "wave" in data:
                 upd["wave"] = wave
                 if "lane" not in data and wave:
-                    taken = {e["lane"] for e in self.store.entries_rows(eid) if e["wave"] == wave}
+                    taken = {e["lane"] for e in all_rows if e["wave"] == wave}
                     upd["lane"] = next((x for x in self.lane_order(int(ev.get("reg_lanes") or 8)) if x not in taken), None)
             if "lane" in data:
                 upd["lane"] = lane
-            self.store.update_entry(eid, bib, **upd)
+            self.store.update_entry(eid, row["id"], **upd)
             self.store.audit(who, eid, "Перенос участника", f"№{bib}: {row['wave'] or '—'} → {upd.get('wave', row['wave']) or '—'}"
                              + (f", дорожка {upd['lane']}" if upd.get("lane") else ""))
             return ok({"ok": True})
-        if action == "check":
-            since = None if data.get("stop") else fmt_db(now_local())
-            self.store.set_event_field(eid, check_since=since)
-            self.store.audit(who, eid, "Проверка чипов: " + ("начата" if since else "остановлена"))
-            return ok(self.check_view(self.store.get_event(eid)))
         if action == "manual":
             if sub_id is None:
                 device = str(data.get("device") or ev.get("finish_device") or "").strip()
@@ -3990,34 +2956,82 @@ class Hub:
             out.append({**d, "taken": n, "left": max(0, d["limit"] - n) if d["limit"] else None})
         return out
 
-    # ---- 5.2: нагрудные номера — только вручную (шаг 2 Мастера «Регистрация номеров»)
+    # ---- нагрудные номера: вписываются вручную (шаг 2 Мастера), один номер на человека на все его дисциплины (7.0)
     BIB_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё\-]{1,10}")
 
     @staticmethod
-    def _reg_bib(r: dict, old_entry: Optional[dict]) -> str:
-        """Номер участника для сетки: вписанный секретарём в заявку, иначе — уже стоящий в стартовом списке."""
-        return str(r.get("bib") or (old_entry or {}).get("bib") or "").strip()
+    def _norm_name(v) -> str:
+        return re.sub(r"\s+", " ", str(v or "").strip().lower().replace("ё", "е"))
 
-    def _need_bibs(self, regs: list, old: dict) -> None:
-        """Сетка строится только когда у всех участников есть номера, вписанные вручную, и номера не повторяются."""
-        missing = [r for r in regs if not self._reg_bib(r, old.get(r["id"]))]
+    def _people(self, regs: list) -> dict:
+        """id заявки → ключ человека. Один человек = фамилия + имя + год рождения: заявленный на несколько дисциплин
+        получает один ключ и один номер. Эстафетная команда — по названию. Тёзки одного года рождения в одной и той же
+        дисциплине — разные люди."""
+        key_of: dict = {}
+        seen: dict = {}
+        for r in sorted(regs, key=lambda r: r["id"]):
+            if r.get("relay"):
+                key_of[r["id"]] = "relay:" + self._norm_name(r["relay"])
+                continue
+            k = "p:" + "|".join(self._norm_name(r.get(x)) for x in ("last_name", "first_name")) + "|" + str(r.get("birth_date") or "")[:4]
+            used = seen.setdefault(k, set())
+            if r.get("distance") in used:
+                k += f"#{r['id']}"
+            used.add(r.get("distance"))
+            key_of[r["id"]] = k
+        return key_of
+
+    def _bib_state(self, eid: int) -> dict:
+        """Единая картина номеров соревнования: заявки, строки участников, ключи людей и номер каждого человека."""
+        regs = {r["id"]: r for r in self.store.registrations(eid)}
+        entries = self.store.entries_rows(eid)
+        live = [r for r in regs.values() if r.get("status") != "rejected"]
+        key_of = self._people(live)
+        ent_by_reg = {e["reg_id"]: e for e in entries if e.get("reg_id")}
+        members: dict = {}
+        for r in live:
+            members.setdefault(key_of[r["id"]], []).append(r["id"])
+        person_bib: dict = {}
+        for k, ids in members.items():
+            for i in sorted(ids, key=lambda i: (i not in ent_by_reg, i)):        # сначала заявка, уже стоящая в сетке
+                b = self._own_bib(regs[i], ent_by_reg.get(i))
+                if b:
+                    person_bib[k] = b
+                    break
+        return {"regs": regs, "entries": entries, "key_of": key_of, "ent_by_reg": ent_by_reg,
+                "members": members, "person_bib": person_bib}
+
+    @staticmethod
+    def _own_bib(r: dict, e: Optional[dict]) -> str:
+        return str(r.get("bib") or (e or {}).get("bib") or "").strip()
+
+    def _reg_bib(self, r: dict, st: dict) -> str:
+        """Номер участника для сетки: свой (вписан в заявку или уже стоит в сетке), иначе — номер того же человека
+        из другой его дисциплины (вписывать второй раз не нужно)."""
+        return self._own_bib(r, st["ent_by_reg"].get(r["id"])) or st["person_bib"].get(st["key_of"].get(r["id"], ""), "")
+
+    def _need_bibs(self, regs: list, st: dict) -> None:
+        """Сетка строится только когда у всех участников есть номера, вписанные вручную, и номера не повторяются у разных людей."""
+        missing = [r for r in regs if not self._reg_bib(r, st)]
         if missing:
             names = ", ".join(" ".join(x for x in (m["last_name"], m["first_name"]) if x) for m in missing[:5])
             raise ValueError(f"нет нагрудных номеров у {len(missing)} участников ({names}{'…' if len(missing) > 5 else ''}) — "
-                             f"впишите их на шаге 2 «Регистрация номеров» и нажмите «Сохранить нагрудные номера»")
+                             f"впишите их на шаге 2 «Нагрудные номера» и нажмите «Сохранить нагрудные номера»")
         seen: dict = {}
         for r in regs:
-            b = self._reg_bib(r, old.get(r["id"]))
-            if b in seen:
+            b, k = self._reg_bib(r, st), st["key_of"].get(r["id"], f"r{r['id']}")
+            if seen.get(b, k) != k:
                 raise ValueError(f"номер {b} стоит у двух участников — исправьте на шаге 2")
-            seen[b] = r
+            seen[b] = k
 
     def bibs_view(self, ev: dict, scope: dict) -> dict:
-        """Шаг 2: подтверждённые участники дисциплины (с фильтром шага 1) и их нагрудные номера."""
+        """Шаг 2: подтверждённые участники дисциплины (с фильтром шага 1) и их нагрудные номера.
+        also — другие дисциплины этого же человека: номер у него один на все виды."""
         eid, dist = ev["id"], str(scope.get("distance") or "").strip()
         sex = str(scope.get("sex") or "").strip().upper()[:1]
         ages = [a for a in (scope.get("ages") or []) if a in self.age_limits()]
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+        st = self._bib_state(eid)
 
         def ok_(r):
             if r["status"] != "approved" or (dist and r["distance"] != dist):
@@ -4025,14 +3039,22 @@ class Hub:
             if sex in ("М", "Ж") and str(r.get("sex") or "").upper() != sex:
                 return False
             return self.age_ok(year, r["birth_date"], ages)
-        regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if ok_(r)])
-        ent = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
+        regs = self.collapse_relays(ev, [r for r in st["regs"].values() if ok_(r)])
         cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
         rows = []
         for r in sorted(regs, key=lambda r: (cat_order.get(r.get("category") or "", 99), r.get("category") or "",
                                              r["last_name"].lower(), r["first_name"].lower())):
-            e = ent.get(r["id"])
-            rows.append({"ids": r.get("_ids") or [r["id"]], "bib": self._reg_bib(r, e),
+            e = st["ent_by_reg"].get(r["id"])
+            own = self._own_bib(r, e)
+            bib = own or self._reg_bib(r, st)
+            also = []
+            if not r.get("relay"):
+                for i in st["members"].get(st["key_of"].get(r["id"]), []):
+                    x = st["regs"][i]
+                    if x["id"] != r["id"] and x.get("distance") != r.get("distance"):
+                        also.append({"distance": x.get("distance") or "", "bib": self._own_bib(x, st["ent_by_reg"].get(i))})
+            rows.append({"ids": r.get("_ids") or [r["id"]], "bib": bib, "also": also,
+                         "inherited": bool(bib and not own), "mismatch": any(a["bib"] and bib and a["bib"] != bib for a in also),
                          "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                          "birth_year": str(r["birth_date"])[:4].strip(), "sex": r.get("sex") or "",
                          "category": r.get("category") or "", "team": r.get("team") or "", "rank": r.get("rank") or "",
@@ -4041,74 +3063,83 @@ class Hub:
         return {"distance": dist, "rows": rows, "total": len(rows), "with_bib": sum(1 for x in rows if x["bib"])}
 
     def save_bibs(self, ev: dict, items: list, who: str) -> tuple:
-        """Сохранить номера, вписанные вручную. Ничего не пишется, пока весь набор не прошёл проверку."""
+        """Сохранить номера, вписанные вручную. Номер человека записывается во ВСЕ его заявки и строки сетки
+        (все дисциплины). Ничего не пишется, пока весь набор не прошёл проверку."""
         eid = ev["id"]
-        regs = {r["id"]: r for r in self.store.registrations(eid)}
-        entries = self.store.entries_rows(eid)
-        ent_by_reg = {e["reg_id"]: e for e in entries if e.get("reg_id")}
-        errors, plan = [], []          # plan: (ids, старый номер, новый номер)
+        st = self._bib_state(eid)
+        regs, entries, key_of, members, ent_by_reg = st["regs"], st["entries"], st["key_of"], st["members"], st["ent_by_reg"]
+        errors, plan = [], {}          # plan: ключ человека → (все его заявки, текущие номера, новый номер, имя)
         for it in items[:3000]:
             if not isinstance(it, dict):
                 continue
             ids = [int(x) for x in (it.get("ids") or []) if str(x).isdigit() and int(x) in regs]
-            if not ids:
+            if not ids or ids[0] not in key_of:
                 continue
             r0 = regs[ids[0]]
+            k = key_of[ids[0]]
+            group = members.get(k, ids)
             who_ = " ".join(x for x in (r0.get("relay") or r0["last_name"], "" if r0.get("relay") else r0["first_name"]) if x)
             new = str(it.get("bib") or "").strip()
-            old = self._reg_bib(r0, ent_by_reg.get(ids[0]))
             if new and not self.BIB_RE.fullmatch(new):
                 errors.append({"ids": ids, "error": f"{who_}: номер — до 10 цифр или букв, без пробелов"})
                 continue
-            if not new and ent_by_reg.get(ids[0]):
+            if not new and any(i in ent_by_reg for i in group):
                 errors.append({"ids": ids, "error": f"{who_}: уже в стартовом списке — номер нельзя стереть, только заменить"})
                 continue
-            if new != old:
-                plan.append((ids, old, new, who_))
-        # итоговая раскладка номеров по всему соревнованию: повторов быть не должно
-        final: dict = {}
-        changing = {i for p in plan for i in p[0]}
-        for rid, r in regs.items():
-            if rid in changing:
+            cur = {self._own_bib(regs[i], ent_by_reg.get(i)) for i in group}
+            if cur != {new}:
+                plan[k] = (group, cur, new, who_)
+        # итоговая раскладка по всему соревнованию: у двух разных людей один номер стоять не может
+        owners: dict = {}
+        for k, ids in members.items():
+            if k in plan:
                 continue
-            b = self._reg_bib(r, ent_by_reg.get(rid))
-            if b:
-                final.setdefault(b, set()).add((r.get("relay") or "").lower() or f"r{rid}")
+            for i in ids:
+                b = self._own_bib(regs[i], ent_by_reg.get(i))
+                if b:
+                    owners.setdefault(b, set()).add(k)
         for e in entries:
             if not e.get("reg_id") or e["reg_id"] not in regs:
-                final.setdefault(e["bib"], set()).add(f"e{e['bib']}")
-        for ids, old, new, who_ in plan:
+                owners.setdefault(e["bib"], set()).add(f"e{e['bib']}")
+        for k, (group, cur, new, who_) in plan.items():
             if new:
-                key = (regs[ids[0]].get("relay") or "").lower() or f"r{ids[0]}"
-                if final.get(new, set()) - {key}:
-                    errors.append({"ids": ids, "error": f"{who_}: номер {new} уже у другого участника"})
-                final.setdefault(new, set()).add(key)
+                if owners.get(new, set()) - {k}:
+                    errors.append({"ids": group, "error": f"{who_}: номер {new} уже у другого участника"})
+                owners.setdefault(new, set()).add(k)
         if errors:
             return 400, {"error": "Номера не сохранены — исправьте отмеченные строки", "errors": errors}
-        # запись: сначала временные номера (чтобы обмен номерами двух участников не конфликтовал), потом настоящие
-        self.store.con.execute("BEGIN")
+        # запись: сначала временные номера (обмен номерами двух участников не конфликтует), потом настоящие
+        con = self.store.con
+        con.execute("BEGIN")
         try:
-            moves = []
-            for n_, (ids, old, new, _) in enumerate(plan):
-                e = ent_by_reg.get(ids[0])
-                if e and new and e["bib"] != new:
-                    tmp = f"~{n_}~{e['bib']}"
-                    self.store.rename_bib(eid, e["bib"], tmp)
-                    moves.append((tmp, new))
-            for tmp, new in moves:
-                self.store.rename_bib(eid, tmp, new)
-            for ids, old, new, _ in plan:
-                for rid in ids:
-                    self.store.con.execute("UPDATE registrations SET bib = ? WHERE id = ? AND event_id = ?",
-                                           (new or None, rid, eid))
-            self.store.con.execute("COMMIT")
+            moves, n_ = [], 0
+            for k, (group, cur, new, _) in plan.items():
+                if not new:
+                    continue
+                for i in group:
+                    e = ent_by_reg.get(i)
+                    if e and e["bib"] != new:
+                        con.execute("UPDATE entries SET bib = ? WHERE id = ?", (f"~{n_}~{e['id']}", e["id"]))
+                        moves.append((e["id"], new))
+                        n_ += 1
+            for entry_id, new in moves:
+                con.execute("UPDATE entries SET bib = ? WHERE id = ?", (new, entry_id))
+            for k, (group, cur, new, _) in plan.items():
+                for i in group:
+                    con.execute("UPDATE registrations SET bib = ? WHERE id = ? AND event_id = ?", (new or None, i, eid))
+                for old in cur - {"", new}:        # ручные отметки судьи со старым номером переезжают на новый
+                    if new and not con.execute("SELECT 1 FROM entries WHERE event_id = ? AND bib = ?", (eid, old)).fetchone():
+                        con.execute("UPDATE manual SET bib = ? WHERE event_id = ? AND bib = ?", (new, eid, old))
+            con.execute("COMMIT")
         except Exception:
-            self.store.con.execute("ROLLBACK")
+            con.execute("ROLLBACK")
             raise
+        spread = sum(len(g) - 1 for g, _, _, _ in plan.values())
         if plan:
-            ch = [f"{w}: {o or '—'} → {n or '—'}" for _, o, n, w in plan[:30]]
-            self.store.audit(who, eid, "Нагрудные номера сохранены", f"{len(plan)}: " + "; ".join(ch))
-        return 200, {"ok": True, "saved": len(plan)}
+            ch = [f"{w}: {','.join(sorted(c - {''})) or '—'} → {n or '—'}" for _, c, n, w in plan.values()][:30]
+            self.store.audit(who, eid, "Нагрудные номера сохранены",
+                             f"{len(plan)}: " + "; ".join(ch) + (f"; продублировано на другие дисциплины: {spread}" if spread else ""))
+        return 200, {"ok": True, "saved": len(plan), "spread": spread}
 
     def consent_text(self, ev: dict) -> str:
         if ev.get("reg_consent"):
@@ -4633,7 +3664,7 @@ class Hub:
         lanes = max(1, min(int(lanes or 8), 50))
         waves = self.store.waves(eid)
         if any(w.get("start_time") for w in waves if (w.get("distance") or "") == dist):
-            raise ValueError("по этой дисциплине уже был старт забега — пересобрать нельзя")
+            raise ValueError("по этой дисциплине стоит время старта — нажмите «Сбросить сетку», затем сформируйте список заново")
         year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
 
         def in_scope(r):
@@ -4647,13 +3678,14 @@ class Hub:
         if not regs:
             raise ValueError("нет подтверждённых заявок по выбранным условиям: проверьте дисциплину, возраст и пол")
         mine = {r["id"] for r in regs}
-        entries = self.store.entries_rows(eid)
-        old = {e["reg_id"]: e for e in entries if e.get("reg_id")}
-        self._need_bibs(regs, old)                      # 5.2: без ручных номеров сетку не строим
-        theirs = {e["bib"] for e in entries if e.get("reg_id") not in mine}
-        clash = [self._reg_bib(r, old.get(r["id"])) for r in regs if self._reg_bib(r, old.get(r["id"])) in theirs]
+        st = self._bib_state(eid)
+        entries = st["entries"]
+        self._need_bibs(regs, st)                       # без ручных номеров сетку не строим
+        my_keys = {st["key_of"].get(i) for i in mine}
+        theirs = {e["bib"] for e in entries if e.get("reg_id") not in mine and st["key_of"].get(e.get("reg_id")) not in my_keys}
+        clash = [self._reg_bib(r, st) for r in regs if self._reg_bib(r, st) in theirs]
         if clash:
-            raise ValueError(f"номер {clash[0]} уже у участника другой дисциплины — исправьте на шаге 2")
+            raise ValueError(f"номер {clash[0]} уже у другого участника — исправьте на шаге 2")
         # удаляем только свои забеги: те, где нет участников вне выбранной группы
         by_wave: dict = {}
         for e in entries:
@@ -4707,10 +3739,8 @@ class Hub:
         for name, cat, chunk, use_lanes in plan:
             heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
             for i, r in enumerate(chunk):
-                e = old.get(r["id"])
-                bib = self._reg_bib(r, e)
-                chip = e["chip"] if e and e["bib"] == bib else "#" + bib
-                rows.append({"bib": bib, "chip": chip, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
+                bib = self._reg_bib(r, st)
+                rows.append({"bib": bib, "wave": name, "name": " ".join(x for x in (r["last_name"], r["first_name"]) if x),
                              "birth_year": r["birth_date"][:4].strip(), "team": r.get("team"), "category": r.get("category"),
                              "lane": order[i] if use_lanes else None, "coach": r.get("coach"), "seed": r.get("best"),
                              "reg_id": r["id"], "sex": r.get("sex"), "members": r.get("members"), "rank": r.get("rank"),
@@ -4723,94 +3753,47 @@ class Hub:
                 self.store.update_registration(rid, bib=r["bib"])
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 
-    def generate_heats(self, ev: dict, lanes: int, mode: str = "heats") -> dict:
-        """Подтверждённые заявки → забеги по категории и дистанции, посев по лучшему результату:
-        сильнейшие — в последнем забеге группы, внутри забега — на центральных дорожках."""
-        eid = ev["id"]
-        if any(w.get("start_time") for w in self.store.waves(eid)):
-            raise ValueError("уже был старт забега — пересобрать нельзя, переносите участников вручную")
-        lanes = max(1, min(int(lanes or 8), 50))
-        regs = self.collapse_relays(ev, [r for r in self.store.registrations(eid) if r["status"] == "approved"])
-        if not regs:
-            raise ValueError("нет подтверждённых заявок")
-        dist_order = {d: i for i, d in enumerate(self.reg_distances(ev))}
-        cat_order = {r["name"]: i for i, r in enumerate(self.parse_rules(ev.get("reg_rules") or ""))}
-        groups: dict = {}
-        for r in regs:
-            groups.setdefault((r["distance"], r.get("category") or ""), []).append(r)
-        old = {e["reg_id"]: e for e in self.store.entries_rows(eid) if e.get("reg_id")}
-        self._need_bibs(regs, old)                      # 5.2: номера только ручные
-
-        def bib_for(r):
-            e = old.get(r["id"])
-            b = self._reg_bib(r, e)
-            return b, (e["chip"] if e and e["bib"] == b else "#" + b)
-
-        heats, rows, n = [], [], 0
-        plan = []        # (дистанция, категория, участники, дорожки?)
-        if mode == "list":
-            # «Общим списком»: никакого деления на забеги и дорожки — один сквозной список
-            dists = {r["distance"] for r in regs}
-            lst = sorted(regs, key=lambda r: (dist_order.get(r["distance"], 99), cat_order.get(r.get("category") or "", 99), r["id"]))
-            plan.append((dists.pop() if len(dists) == 1 else "", "", lst, False))
-        else:
-            for key in sorted(groups, key=lambda k: (dist_order.get(k[0], 99), k[0], cat_order.get(k[1], 99), k[1])):
-                sign = 1 if self.result_type(key[0]) == "time" else -1        # в прыжках и метаниях лучший — наибольший результат
-                lst = sorted(groups[key], key=lambda r: (r["best_sec"] is None, sign * (r["best_sec"] or 0), r["id"]))
-                k = math.ceil(len(lst) / lanes)
-                base, extra = divmod(len(lst), k)
-                sizes = [base + (1 if i >= k - extra else 0) for i in range(k)]   # полные забеги — последние
-                chunks, pos = [], 0
-                for size in reversed(sizes):            # от сильнейших
-                    chunks.append(lst[pos:pos + size])
-                    pos += size
-                chunks.reverse()                        # слабые забеги — первыми, сильнейший — последний
-                plan += [(key[0], key[1], chunk, True) for chunk in chunks]
-        for dist, cat, chunk, use_lanes in plan:
-            n += 1
-            name = "Общий список" if mode == "list" else f"Забег {n}"
-            heats.append({"name": name, "distance": dist, "category": cat, "count": len(chunk)})
-            order = self.lane_order(lanes)
-            for i, r in enumerate(chunk):
-                bib, chip = bib_for(r)
-                full = " ".join(x for x in (r["last_name"], r["first_name"]) if x)
-                rows.append({"bib": bib, "chip": chip, "wave": name, "name": full, "birth_year": r["birth_date"][:4].strip(),
-                             "team": r.get("team"), "category": r.get("category"), "lane": order[i] if use_lanes else None,
-                             "coach": r.get("coach"), "seed": r.get("best"), "reg_id": r["id"], "sex": r.get("sex"),
-                             "members": r.get("members"), "rank": r.get("rank"), "_ids": r.get("_ids") or [r["id"]]})
-        self.store.con.execute("BEGIN")
-        try:
-            self.store.con.execute("DELETE FROM waves WHERE event_id = ?", (eid,))
-            self.store.con.execute("COMMIT")
-        except Exception:
-            self.store.con.execute("ROLLBACK")
-            raise
-        self.store.set_entries(eid, rows)
-        for h in heats:
-            self.store.update_wave(eid, h["name"], category=h["category"] or None, distance=h["distance"] or None)
-        for r in rows:
-            for rid in r["_ids"]:
-                self.store.update_registration(rid, bib=r["bib"])
-        return {"heats": heats, "entries": len(rows)}
-
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
-        """Полный сброс сетки: у участников очищаются забег и дорожка, забеги удаляются.
-        Номера и чипы сохраняются; участники возвращаются в «Не распределены». distance — только эта дисциплина."""
+        """Принудительный сброс сетки (кнопка «Сбросить сетку / Удалить забеги»). Никогда не блокируется тем, что у забега
+        стоит время старта — в том числе поставленное по ошибке: часы забегов останавливаются, start_time обнуляется
+        (NULL), забеги и дорожки удаляются, участники возвращаются в «Не распределены». Номера, заявки и введённые
+        результаты сохраняются; после сброса список формируется заново и подтягивает ВСЕХ подтверждённых участников."""
         eid = ev["id"]
-        waves = [w for w in self.store.waves(eid) if not distance or (w.get("distance") or "") == distance]
-        if any(w.get("start_time") for w in waves):
-            raise ValueError("уже был старт забега — сбросить сетку нельзя")
-        names = [w["name"] for w in waves]
-        n = 0
-        for r in self.store.entries_rows(eid):
-            if distance and r["wave"] not in names:
-                continue
-            if r["wave"] or r["lane"] is not None:
-                self.store.update_entry(eid, r["bib"], wave=None, lane=None)
-                n += 1
-        for name in names:
-            self.store.delete_wave(eid, name)
-        return {"waves": len(names), "entries": n}
+        rows = self.store.entries_rows(eid)
+        ed = self.entry_dists(eid, rows)
+        dkey = self._dkey(distance) if distance else None
+
+        def mine(w):
+            if not distance:
+                return True
+            if w.get("distance"):
+                return self._dkey(w["distance"]) == dkey
+            inside = [r for r in rows if r["wave"] == w["name"]]          # забег без дисциплины: по составу
+            return bool(inside) and all(self._dkey(ed.get(r["id"]) or "") == dkey for r in inside)
+        gone = [w for w in self.store.waves(eid) if mine(w)]
+        names = {w["name"] for w in gone}
+        stopped = [w["name"] for w in gone if w.get("start_time")]
+        con = self.store.con
+        con.execute("BEGIN")
+        try:
+            for w in gone:
+                con.execute("UPDATE waves SET start_time = NULL, finished_at = NULL WHERE event_id = ? AND name = ?", (eid, w["name"]))
+            n = 0
+            for r in rows:
+                inside = r["wave"] in names or (distance and self._dkey(ed.get(r["id"]) or "") == dkey
+                                                and (r["wave"] or r["lane"] is not None))
+                if inside:
+                    con.execute("UPDATE entries SET wave = NULL, lane = NULL WHERE id = ?", (r["id"],))
+                    n += 1
+            for name in names:
+                self.store.delete_wave(eid, name)
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        if not any(w.get("start_time") for w in self.store.waves(eid)):      # часы соревнования тоже остановлены
+            self.store.set_event_field(eid, start_time=None, status="finished" if ev.get("status") == "finished" else "planned")
+        return {"waves": len(names), "entries": n, "stopped": stopped}
 
     # ---- стадионное табло: режимы и активные группы (вид программы × категория)
     SB_MODES = {"auto": "авто-трансляция", "fixed": "фиксация дисциплины", "rotate": "ротация"}
@@ -5038,10 +4021,6 @@ class Hub:
             out["clients"].append({"ip": c["ip"], "profile": by_ip.get(c["ip"], "сервер" if c["ip"] in ("127.0.0.1", "::1") else ""),
                                    "device": self._ua_short(c.get("ua", "")), "page": c.get("page") or "",
                                    "ago": int(now - c["last"]), "user": c.get("user", "")})
-        st = self.status()
-        out["readers"] = st["sources"]
-        out["wiclax"] = st["wiclax_clients"]
-        out["clock_warn_sec"] = float(self.cfg["clock_warn_sec"])
         out["offsite"] = self.offsite_state()
         return out
 
@@ -5076,45 +4055,6 @@ class Hub:
         except OSError:
             return None
 
-    # ---- обмен с Wiclax: импорт файла соревнования .clax и экспорт стартового списка
-    @staticmethod
-    def parse_clax(blob: bytes) -> dict:
-        """Файл соревнования Wiclax (.clax, XML): участники, дистанции (Parcours), чипы из прохождений, старты."""
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(blob)
-        if root.tag != "Epreuve":
-            raise ValueError("это не файл соревнования Wiclax (.clax)")
-        dist = {p.get("nom"): p.get("distance") for p in root.iter("Pcs") if p.get("nom")}
-        chip_of: dict = {}
-        for el in root.iter("PucesDos"):          # таблица «чип.номер» — основной источник
-            for p in el:
-                chip, _, bib = (p.text or "").strip().rpartition(".")
-                if chip and bib:
-                    chip_of.setdefault(bib, chip.upper())
-        for tag in ("Pass_Arr", "Pass_Ptg1", "Pass_Ptg2", "Pass_Ptg3", "Pass_Ptg4"):
-            for el in root.iter(tag):
-                for p in el:
-                    f = (p.text or "").split("*")
-                    if len(f) >= 5 and f[1] and f[4]:
-                        chip_of.setdefault(f[1], f[4].upper())
-        starts = {}
-        for h in root.iter("H"):
-            m = re.search(r"Parcours = '(.+)'", h.get("filtre") or "")
-            if m and h.get("sdateheure") and h.get("actif") != "0":
-                starts[m.group(1)] = h.get("sdateheure")
-        entries = []
-        for e in root.iter("E"):
-            bib = (e.get("d") or "").strip()
-            if not bib:
-                continue
-            parts = (e.get("n") or "").split()
-            name = " ".join(w[:1].upper() + w[1:].lower() for w in parts[:2])
-            pc = e.get("p") or ""
-            entries.append({"bib": bib, "name": name, "full_name": " ".join(parts), "birth_year": e.get("a") or "",
-                            "sex": {"M": "М", "F": "Ж"}.get(e.get("x") or "", ""), "team": e.get("c") or "",
-                            "parcours": pc, "chip": chip_of.get(bib, "")})
-        return {"name": root.get("nom") or "", "dates": root.get("dates") or "", "parcours": dist,
-                "entries": entries, "starts": starts, "chips": len(chip_of)}
 
     @staticmethod
     def split_parcours(name: str, meters: Optional[str]) -> tuple:
@@ -5124,23 +4064,6 @@ class Hub:
             return m.group(1).strip(), m.group(2).strip() or ""
         return (f"{meters} м" if meters and meters != "0" else ""), (name or "").strip()
 
-    def import_clax(self, ev: dict, blob: bytes, with_names: bool = True) -> dict:
-        data = self.parse_clax(blob)
-        rows, seen = [], set()
-        for e in data["entries"]:
-            chip = e["chip"] if e["chip"] and e["chip"] not in seen else "#" + e["bib"]
-            seen.add(chip)
-            d, c = self.split_parcours(e["parcours"], data["parcours"].get(e["parcours"]))
-            rows.append({"bib": e["bib"][:12], "chip": chip, "wave": (e["parcours"] or None) and e["parcours"][:40],
-                         "name": e["name"][:80] if with_names else None, "birth_year": e["birth_year"][:4] or None,
-                         "team": e["team"][:80] or None, "category": c[:40] or None, "sex": e["sex"] or None})
-        self.store.set_entries(ev["id"], rows)
-        for pc, meters in data["parcours"].items():
-            if self.store.get_wave(ev["id"], pc[:40]):
-                d, c = self.split_parcours(pc, meters)
-                self.store.update_wave(ev["id"], pc[:40], distance=d or None, category=c or None)
-        return {"entries": len(rows), "with_chip": sum(1 for r in rows if not r["chip"].startswith("#")),
-                "parcours": len(data["parcours"]), "source": data["name"], "dates": data["dates"]}
 
     def _startlist_csv(self, ev: dict) -> str:
         sl = self.startlist(ev)
@@ -5153,34 +4076,6 @@ class Hub:
                             e["birth_year"] or "", e["team"] or "", e["coach"] or "", e["seed"] or ""])
         return "\ufeff" + buf.getvalue()
 
-    def _wiclax_csv(self, ev: dict):
-        """Стартовый список для импорта в Wiclax: номер, фамилия, имя, пол (M/F), год, клуб, дистанция (Parcours), чип."""
-        rows = self.store.entries_rows(ev["id"])
-        waves = {w["name"]: w for w in self.store.waves(ev["id"])}
-        regs = {r["id"]: r for r in self.store.registrations(ev["id"])}
-        buf = io.StringIO()
-        w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
-        w.writerow(["Номер", "Фамилия", "Имя", "Отчество", "Пол", "Год рождения", "Дата рождения", "Клуб", "Дистанция",
-                    "Категория", "Тренер", "Чип"])
-        for r in rows:
-            rg = regs.get(r.get("reg_id")) or {}
-            wv = waves.get(r["wave"] or "", {})
-            if rg:
-                last, first, mid = rg["last_name"], rg["first_name"], rg.get("middle_name") or ""
-                sex = rg["sex"]
-            else:
-                parts = (r["name"] or "").split()
-                last, first, mid = (parts + ["", "", ""])[:3]
-                sex = r.get("sex") or ""
-            dist = wv.get("distance") or ""
-            cat = r["category"] or wv.get("category") or ""
-            parcours = " ".join(x for x in (dist, cat) if x) or (r["wave"] or "")
-            w.writerow([r["bib"], last, first, mid, {"М": "M", "Ж": "F"}.get(sex, ""), r["birth_year"] or "",
-                        ".".join(reversed(rg["birth_date"].split("-"))) if rg.get("birth_date") and not rg.get("anonymized_at") else "",
-                        r["team"] or "", parcours, cat, r.get("coach") or "", "" if r["chip"].startswith("#") else r["chip"]])
-        from urllib.parse import quote
-        return 200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(), {
-            "Content-Disposition": f"attachment; filename=\"wiclax.csv\"; filename*=UTF-8''{quote('Wiclax ' + ev['name'] + '.csv')}"}
 
     # ---- обновление сервера из браузера (ставит root-служба timing-update, с автооткатом)
     @property
@@ -5411,67 +4306,8 @@ class Hub:
             return 502, {"error": f"не удалось скачать обновление с GitHub: {e}"}, None
         return 200, {"sha": sha}, out.getvalue()
 
-    @staticmethod
-    def _clax_module():
-        import importlib
-        here = os.path.dirname(os.path.abspath(__file__))
-        for d in (os.path.join(here, "tools"), os.path.join(os.path.dirname(here), "tools")):
-            if os.path.isfile(os.path.join(d, "make_clax.py")) and d not in sys.path:
-                sys.path.insert(0, d)
-        return importlib.import_module("make_clax")
 
-    def clax_spec(self, ev: dict) -> dict:
-        """Описание соревнования для Wiclax: дистанции (по забегам/категориям), старты, участники, чипы."""
-        rows = self.store.entries_rows(ev["id"])
-        waves = {w["name"]: w for w in self.store.waves(ev["id"])}
-        regs = {r["id"]: r for r in self.store.registrations(ev["id"])}
-        parcours, entries = {}, []
-        for r in rows:
-            rg = regs.get(r.get("reg_id")) or {}
-            wv = waves.get(r["wave"] or "", {})
-            if rg:
-                last, first, mid = rg["last_name"], rg["first_name"], rg.get("middle_name") or ""
-                sex = rg["sex"]
-            else:
-                parts = (r["name"] or "").split()
-                last, first, mid = (parts + ["", "", ""])[:3]
-                sex = r.get("sex") or ""
-            dist = wv.get("distance") or ""
-            cat = r["category"] or wv.get("category") or ""
-            pc = (r["wave"] or "") if len(waves) > 1 else (" ".join(x for x in (dist, cat) if x) or (r["wave"] or ""))
-            pc = (pc or "Общий").replace("'", "’")
-            if pc not in parcours:
-                m = re.search(r"(\d+(?:[.,]\d+)?)\s*(км|km|м|m)\b", dist or pc, re.I)
-                meters = 0
-                if m:
-                    meters = float(m.group(1).replace(",", ".")) * (1000 if m.group(2).lower() in ("км", "km") else 1)
-                start = None
-                if wv.get("start_time"):
-                    start = parse_db(wv["start_time"]).strftime("%H:%M:%S")
-                elif ev.get("start_clock"):
-                    start = str(ev["start_clock"])[:8]
-                parcours[pc] = {"name": pc, "distance": int(meters), "start": start}
-            entries.append({"bib": r["bib"], "name": " ".join(x for x in (last.upper(), first.upper(), mid) if x),
-                            "club": r["team"] or "", "sex": {"М": "M", "Ж": "F"}.get(sex, sex),
-                            "birth": (rg.get("birth_date") or None) if not rg.get("anonymized_at") else None,
-                            "year": r["birth_year"] or "",
-                            "parcours": pc, "chip": "" if (r["chip"] or "").startswith("#") else (r["chip"] or "")})
-        return {"name": ev["name"], "date": ev.get("date") or now_local().strftime("%Y-%m-%d"),
-                "organizer": ev.get("organizer") or "", "parcours": list(parcours.values()), "entries": entries}
 
-    def _wiclax_clax(self, ev: dict):
-        from urllib.parse import quote
-        spec = self.clax_spec(ev)
-        if not spec["parcours"]:
-            spec["parcours"] = [{"name": "Общий", "distance": 0}]
-        try:
-            data = self._clax_module().build_clax(spec)
-        except ValueError as e:
-            return 400, "application/json; charset=utf-8", json.dumps({"error": f"не получилось собрать .clax: {e}"},
-                                                                       ensure_ascii=False), None
-        fname = re.sub(r'[\\/:*?"<>|]+', " ", ev["name"]) + ".clax"
-        return 200, "application/octet-stream", data, {
-            "Content-Disposition": f"attachment; filename=\"event.clax\"; filename*=UTF-8''{quote(fname)}"}
 
     def startlist_xlsx(self, ev: dict, qs: dict):
         """5.2: стартовый протокол дисциплины в Excel для судей с ручкой. Бег — забег, дорожка и три графы
@@ -5550,19 +4386,14 @@ class Hub:
         r = self.compute(ev)
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
-        devs = [d for d in r["devices"] if d != ev.get("finish_device")]
         w.writerow(["Дистанция", "Категория", "Место общее", "Забег", "Место в забеге", "Номер", "ФИО", "Год",
-                    "Команда", "Результат", "Чип"] + devs + ["Примечание"])
+                    "Команда", "Результат", "Выполненный разряд"])
         for x in sorted(r["finished"], key=lambda x: (x["distance"], x["category"], x["place_overall"])):
             w.writerow([x["distance"], x["category"], x["place_overall"], x["wave"], x["place"], x["bib"], x["name"],
-                        x["birth_year"], x["team"], x["result"], x["chip"]]
-                       + [x["splits"].get(d, "") for d in devs] + ["ручной хронометраж" if x["manual"] else ""])
-        for x in r["on_course"]:
-            w.writerow([x["distance"], x["category"], "", x["wave"], "", x["bib"], x["name"], x["birth_year"], x["team"],
-                        "не финишировал", x["chip"]] + [x["splits"].get(d, "") for d in devs] + [""])
+                        x["birth_year"], x["team"], x["result"], x.get("done_rank") or ""])
         for x in r["not_seen"]:
             w.writerow([x["distance"], x["category"], "", x["wave"], "", x["bib"], x["name"], x["birth_year"], x["team"],
-                        "не стартовал", x["chip"]] + [""] * len(devs) + [""])
+                        x.get("status") or "нет результата", ""])
         fname = f"results-{ev['id']}"
         return (200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(),
                 {"Content-Disposition": f'attachment; filename="{fname}.csv"'})
@@ -5616,492 +4447,6 @@ class Hub:
         except OSError:
             return None
 
-    # ---- приём по сети
-    async def _read_stream(self, src: SourceState, reader: asyncio.StreamReader) -> None:
-        splitter = LineSplitter()
-        while True:
-            data = await reader.read(65536)
-            if not data:
-                return
-            for line in splitter.feed(data):
-                self.handle_line(src, line)
-
-    async def _ingest_conn(self, src: SourceState, reader, writer) -> None:
-        peer = writer.get_extra_info("peername")
-        src.peer = f"{peer[0]}:{peer[1]}" if peer else "?"
-        src.connected += 1
-        set_keepalive(writer.get_extra_info("socket"))
-        log.info("[%s] ридер подключился: %s", src.id, src.peer)
-        try:
-            await self._read_stream(src, reader)
-        except (ConnectionError, asyncio.IncompleteReadError, OSError) as e:
-            src.last_error = str(e)
-        finally:
-            src.connected -= 1
-            log.info("[%s] ридер отключился: %s", src.id, src.peer)
-            try:
-                writer.close()
-            except Exception:
-                pass
-
-    async def _run_connect(self, src: SourceState) -> None:
-        host, port = src.cfg["host"], int(src.cfg["port"])
-        backoff = 1.0
-        while not self.stopping.is_set():
-            writer = None
-            try:
-                reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=10)
-                set_keepalive(writer.get_extra_info("socket"))
-                src.connected = 1
-                src.peer = f"{host}:{port}"
-                src.last_error = None
-                backoff = 1.0
-                log.info("[%s] подключились к ридеру %s:%s", src.id, host, port)
-                for cmd in src.cfg["init_commands"]:
-                    writer.write(str(cmd).encode("utf-8"))
-                await writer.drain()
-                await self._read_stream(src, reader)
-                src.last_error = "ридер закрыл соединение"
-            except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError) as e:
-                src.last_error = f"{type(e).__name__}: {e}"
-            finally:
-                if src.connected:
-                    log.info("[%s] соединение с ридером потеряно (%s)", src.id, src.last_error)
-                src.connected = 0
-                if writer is not None:
-                    try:
-                        writer.close()
-                    except Exception:
-                        pass
-            try:
-                await asyncio.wait_for(self.stopping.wait(), timeout=backoff)
-            except asyncio.TimeoutError:
-                pass
-            backoff = min(backoff * 2, 15.0)
-
-    # ---- ридеры, заведённые через браузер (вкладка «Оборудование»)
-    READER_PARSERS = ("ipico", "auto", "wiclax", "sim")
-    _HOST_RE = re.compile(r"^(?:\d{1,3}(?:\.\d{1,3}){3}|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$")
-
-    def reader_src_cfg(self, r: dict) -> dict:
-        over = {"id": r["id"], "name": r.get("name") or "", "mode": "connect", "host": r["host"],
-                "port": int(r["port"]), "parser": r.get("parser") or "ipico", "device": r["device"]}
-        if over["parser"] in ("ipico", "sim"):
-            over.update(chip_strip_leading_zeros=True, chip_lower=True)   # 058003a9f837 → 58003a9f837, как в Wiclax
-        if over["parser"] == "sim":
-            over["parser"] = "auto"
-        return _merge(SOURCE_DEFAULTS, over)
-
-    def check_reader(self, d: dict) -> tuple:
-        """Проверка полей ридера из формы. Возвращает (чистые данные, ошибка)."""
-        rid = str(d.get("id") or "").strip()
-        host = str(d.get("host") or "").strip()
-        device = str(d.get("device") or "").strip().upper() or rid.upper()
-        parser = str(d.get("parser") or "ipico").strip().lower()
-        try:
-            port = int(d.get("port") or 10000)
-        except (TypeError, ValueError):
-            return None, "порт — число"
-        if not VALID_ID.match(rid):
-            return None, "название ридера: латиница, цифры, _ или - (до 32 символов), например IPICO1"
-        static = {s["id"] for s in self.cfg["sources"]}
-        if rid in static:
-            return None, f"{rid} уже описан в файле настроек сервера — выберите другое название"
-        if parser == "sim":       # виртуальный ридер-симулятор: никуда не подключается
-            host, port = "simulator", 0
-        bad_ip = re.fullmatch(r"[\d.]+", host) and not (
-            re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", host) and all(int(x) <= 255 for x in host.split(".")))
-        if not self._HOST_RE.match(host) or bad_ip:
-            return None, "адрес ридера: например 10.19.1.61"
-        if not 1 <= port <= 65535 and parser != "sim":
-            return None, "порт от 1 до 65535 (у IPICO обычно 10000)"
-        if not VALID_ID.match(device):
-            return None, "точка: латиница, цифры, _ или - (например FINISH, KM5)"
-        if parser not in self.READER_PARSERS:
-            return None, "формат: ipico, auto или wiclax"
-        return {"id": rid, "name": str(d.get("name") or "").strip()[:60], "box": str(d.get("box") or "").strip()[:40],
-                "host": host, "port": port, "device": device, "parser": parser,
-                "enabled": bool(d.get("enabled"))}, None
-
-    def start_db_reader(self, r: dict) -> None:
-        self.stop_db_reader(r["id"])
-        cfg = self.reader_src_cfg(r)
-        src = SourceState(cfg, int(self.cfg["raw_memory_lines"]))
-        self.sources[r["id"]] = src
-        self.db_reader_parsers[r["id"]] = cfg["parser"]
-        if (r.get("parser") or "") == "sim":
-            src.connected = 1
-            src.peer = "симулятор"
-            self.reader_tasks[r["id"]] = asyncio.ensure_future(self.stopping.wait())
-            log.info("[%s] виртуальный ридер-симулятор включён", r["id"])
-            return
-        self.reader_tasks[r["id"]] = asyncio.ensure_future(self._run_connect(src))
-        log.info("[%s] ридер из браузера: подключаюсь к %s:%s", r["id"], r["host"], r["port"])
-
-    # ---- симулятор гонки: «прогоняет» участников соревнования через виртуальный ридер
-    sim_jobs: dict = {}
-
-    async def _simulate(self, rid: str, chips: list, minutes: float, reads_per: int) -> None:
-        job = self.sim_jobs[rid]
-        random.shuffle(chips)
-        total = len(chips)
-        # первые финишируют плотнее, хвост растянут — похоже на настоящий финиш
-        offs = sorted(minutes * 60 * (random.random() ** 1.6) for _ in range(total))
-        t0 = time.monotonic()
-        try:
-            for chip, off in zip(chips, offs):
-                delay = off - (time.monotonic() - t0)
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                src = self.sources.get(rid)
-                if src is None or job.get("stop"):
-                    break
-                base = now_local()
-                for k in range(reads_per):            # ридер видит чип несколько раз за проход
-                    ts = base + dt.timedelta(milliseconds=120 * k + random.randint(0, 60))
-                    self.handle_parsed(src, f"SIM {chip} {fmt_db(ts)}", ParsedRead(chip=chip, ts=ts, antenna="1"), ts)
-                job["sent"] += 1
-        finally:
-            job["running"] = False
-            log.info("[%s] симуляция закончена: %s из %s", rid, job["sent"], total)
-
-    def sim_start(self, rid: str, d: dict, actor: str) -> tuple:
-        r = self.store.get_reader(rid)
-        if r is None or r.get("parser") != "sim":
-            return 400, {"error": "симуляция — только для виртуального ридера (формат «Симулятор»)"}
-        if rid not in self.reader_tasks:
-            return 400, {"error": "сначала нажмите «Подключить» у симулятора"}
-        if self.sim_jobs.get(rid, {}).get("running"):
-            return 409, {"error": "симуляция уже идёт"}
-        chips = []
-        eid = d.get("event_id")
-        if eid:
-            try:
-                chips = [c for c in self.store.entries(int(eid)) if c and not c.startswith("#")]
-            except (TypeError, ValueError):
-                chips = []
-        try:
-            n = max(1, min(int(d.get("count") or 0), 3000))
-        except (TypeError, ValueError):
-            n = 0
-        from_event = bool(chips)
-        if not chips:
-            n = n or 30
-            chips = ["58003A%05X" % random.randint(0, 0xFFFFF) for _ in range(n)]
-        elif d.get("count"):
-            chips = chips[:n]
-        try:
-            minutes = max(0.2, min(float(d.get("minutes") or 3), 180))
-        except (TypeError, ValueError):
-            minutes = 3.0
-        self.sim_jobs[rid] = {"running": True, "sent": 0, "total": len(chips), "stop": False,
-                              "minutes": minutes, "event_id": eid, "started": fmt_db(now_local())}
-        asyncio.ensure_future(self._simulate(rid, list(chips), minutes, 4))
-        self.store.audit(actor, int(eid) if eid else None, "Симуляция гонки",
-                         f"{rid}: {len(chips)} участников за {minutes:g} мин")
-        return 200, {"ok": True, "total": len(chips), "from_event": from_event}
-
-    def stop_db_reader(self, rid: str) -> None:
-        t = self.reader_tasks.pop(rid, None)
-        if t is not None:
-            t.cancel()
-            log.info("[%s] ридер отключён из браузера", rid)
-        if rid not in {s["id"] for s in self.cfg["sources"]}:
-            self.sources.pop(rid, None)
-
-    def parse_reader_list(self, text: str) -> tuple:
-        """Список из Excel/блокнота: «название; адрес; порт; точка; ящик» — по строке на ридер."""
-        rows, errors = [], []
-        for n, ln in enumerate(text.splitlines(), 1):
-            ln = ln.strip()
-            if not ln or ln.startswith("#"):
-                continue
-            parts = [p.strip() for p in re.split(r"[;\t,]", ln)]
-            if n == 1 and not re.search(r"\d+\.\d+\.\d+\.\d+", ln) and len(parts) > 1:
-                continue    # строка заголовков
-            parts += [""] * 5
-            d = {"id": parts[0], "host": parts[1], "port": parts[2] or 10000, "device": parts[3] or "FINISH",
-                 "box": parts[4], "name": parts[4], "parser": "ipico"}
-            clean, e = self.check_reader(d)
-            if e:
-                errors.append(f"строка {n}: {e}")
-            else:
-                rows.append(clean)
-        return rows, errors
-
-    _scan_lock: Optional[asyncio.Lock] = None
-
-    async def scan_readers(self, d: dict, actor: str) -> tuple:
-        """«Найти ридеры»: проверяем подсеть ящика (x.x.x.1–254), где открыт порт ридера."""
-        net = str(d.get("subnet") or "").strip()
-        m = re.fullmatch(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\.(?:0|x|\*)?(?:/24)?)?", net)
-        if not m or any(int(x) > 255 for x in m.groups()):
-            return 400, {"error": "сеть ящика — например 10.19.1"}
-        a, b, c = (int(x) for x in m.groups())
-        if not (a == 10 or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31)):
-            return 400, {"error": "искать можно только во внутренних сетях (10.x, 192.168.x, 172.16–31.x)"}
-        try:
-            port = int(d.get("port") or 10000)
-        except (TypeError, ValueError):
-            port = 10000
-        if not 1 <= port <= 65535:
-            return 400, {"error": "порт от 1 до 65535"}
-        if self._scan_lock is None:
-            self._scan_lock = asyncio.Lock()
-        if self._scan_lock.locked():
-            return 409, {"error": "поиск уже идёт — подождите несколько секунд"}
-        base = f"{a}.{b}.{c}"
-        known = {(r["host"], int(r["port"])): r["id"] for r in self.store.readers()}
-        sem = asyncio.Semaphore(128)
-        found = []
-
-        async def probe(i: int) -> None:
-            host = f"{base}.{i}"
-            async with sem:
-                try:
-                    _, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=1.5)
-                except (OSError, asyncio.TimeoutError):
-                    return
-                try:
-                    w.close()
-                except Exception:
-                    pass
-                found.append({"host": host, "port": port, "known": known.get((host, port))})
-
-        async with self._scan_lock:
-            await asyncio.gather(*(probe(i) for i in range(1, 255)))
-        found.sort(key=lambda x: int(x["host"].rsplit(".", 1)[1]))
-        self.store.audit(actor, None, "Поиск ридеров", f"{base}.0/24 порт {port}: найдено {len(found)}")
-        return 200, {"subnet": base, "port": port, "found": found}
-
-    def readers_view(self) -> dict:
-        st = {s["id"]: s for s in self.status()["sources"]}
-        db = []
-        for r in self.store.readers():
-            live = st.get(r["id"]) if r["id"] in self.reader_tasks else None
-            wp = int(r["wiclax_port"]) if r.get("wiclax_port") else None
-            db.append({**r, "enabled": bool(r["enabled"]), "live": live, "sim": self.sim_jobs.get(r["id"]), "wiclax": {
-                "port": wp, "listening": wp in self.wiclax_port_servers if wp else False,
-                "error": self.wiclax_port_errors.get(wp) if wp else None,
-                "clients": sum(1 for c in self.wiclax_clients if wp and c.port == wp)}})
-        static_ids = {s["id"] for s in self.cfg["sources"]}
-        static = [st[i] for i in st if i in static_ids]
-        wc = self.cfg["wiclax"]
-        ports = []
-        for wp in self.store.wiclax_ports():
-            p = int(wp["port"])
-            ports.append({**wp, "listening": p in self.wiclax_port_servers, "error": self.wiclax_port_errors.get(p),
-                          "clients": sum(1 for c in self.wiclax_clients if c.port == p)})
-        main_clients = sum(1 for c in self.wiclax_clients if c.port == int(wc["listen_port"]))
-        return {"readers": db, "static": static, "wiclax_ports": ports,
-                "wiclax_main": {"host": wc["listen_host"], "port": int(wc["listen_port"]), "clients": main_clients},
-                "devices": sorted({r["device"] for r in db} | {s["device"] for s in static})}
-
-    READER_PORT_MIN, READER_PORT_MAX = 9861, 9899
-
-    def next_reader_port(self) -> Optional[int]:
-        used = {int(r["wiclax_port"]) for r in self.store.readers() if r.get("wiclax_port")}
-        used |= {int(w["port"]) for w in self.store.wiclax_ports()}
-        for p in range(self.READER_PORT_MIN, self.READER_PORT_MAX + 1):
-            if p not in used:
-                return p
-        return None
-
-    def ensure_reader_port(self, rid: str) -> Optional[int]:
-        r = self.store.get_reader(rid)
-        if r is None:
-            return None
-        if not r.get("wiclax_port"):
-            p = self.next_reader_port()
-            self.store.set_reader_wiclax_port(rid, p)
-            return p
-        return int(r["wiclax_port"])
-
-    async def _open_reader_port(self, rid: str, port: int) -> None:
-        srv = self.wiclax_port_servers.pop(port, None)
-        if srv is not None:
-            srv.close()
-        try:
-            srv = await asyncio.start_server(
-                lambda r, w, s={rid}, p=port: WiclaxClient(self, r, w, None, p, s).run(),
-                self.cfg["wiclax"]["listen_host"], port)
-            self.wiclax_port_servers[port] = srv
-            self.wiclax_port_errors.pop(port, None)
-            log.info("Wiclax: порт %s — личный порт ридера %s", port, rid)
-        except OSError as e:
-            self.wiclax_port_errors[port] = str(e)
-            log.warning("Wiclax: порт %s (ридер %s) не открыт: %s", port, rid, e)
-
-    def _refresh_reader_port(self, rid: str, old_port: Optional[int] = None) -> None:
-        if old_port:
-            self._close_wiclax_port(int(old_port))
-        p = self.ensure_reader_port(rid)
-        if p:
-            asyncio.ensure_future(self._open_reader_port(rid, p))
-
-    async def _open_wiclax_port(self, port: int, devices: str) -> None:
-        srv = self.wiclax_port_servers.pop(port, None)
-        if srv is not None:
-            srv.close()
-        devs = {d.strip().upper() for d in devices.split(",") if d.strip()}
-        try:
-            srv = await asyncio.start_server(
-                lambda r, w, d=devs, p=port: WiclaxClient(self, r, w, d, p).run(),
-                self.cfg["wiclax"]["listen_host"], port)
-            self.wiclax_port_servers[port] = srv
-            self.wiclax_port_errors.pop(port, None)
-            log.info("Wiclax: порт %s — только точки %s", port, ", ".join(sorted(devs)))
-        except OSError as e:
-            self.wiclax_port_errors[port] = str(e)
-            log.warning("Wiclax: порт %s не открыт: %s", port, e)
-
-    def _close_wiclax_port(self, port: int) -> None:
-        srv = self.wiclax_port_servers.pop(port, None)
-        if srv is not None:
-            srv.close()
-        self.wiclax_port_errors.pop(port, None)
-        for c in list(self.wiclax_clients):
-            if c.port == port:
-                try:
-                    c.writer.close()
-                except Exception:
-                    pass
-
-    def _reader_api(self, method: str, path: str, data: dict, actor: str):
-        """Маршруты /api/readers и /api/wiclax-ports. None — путь не наш."""
-        if path == "/api/readers" and method == "GET":
-            return 200, self.readers_view()
-        if path == "/api/readers" and method == "POST":
-            clean, e = self.check_reader(data)
-            if e:
-                return 400, {"error": e}
-            orig = str(data.get("orig_id") or "") or None
-            if orig is None and self.store.get_reader(clean["id"]):
-                return 400, {"error": f"ридер {clean['id']} уже есть — измените его или выберите другое название"}
-            if orig and orig != clean["id"] and self.store.get_reader(clean["id"]):
-                return 400, {"error": f"ридер {clean['id']} уже есть"}
-            if orig:
-                was = self.store.get_reader(orig)
-                clean["enabled"] = bool(was and was["enabled"]) if "enabled" not in data else clean["enabled"]
-                self.stop_db_reader(orig)
-                self.db_reader_parsers.pop(orig, None)
-            prev = self.store.get_reader(orig or clean["id"])
-            self.store.save_reader(clean, orig)
-            prev_port = prev.get("wiclax_port") if prev else None
-            if prev_port:
-                self.store.set_reader_wiclax_port(clean["id"], int(prev_port))   # порт остаётся за ридером
-            self._refresh_reader_port(clean["id"], prev_port if (orig and orig != clean["id"]) else None)
-            self.db_reader_parsers[clean["id"]] = clean["parser"]
-            if clean["enabled"]:
-                self.start_db_reader(clean)
-            self.store.audit(actor, None, "Ридер сохранён",
-                             f"{clean['id']}: {clean['host']}:{clean['port']}, точка {clean['device']}")
-            return 200, {"ok": True}
-        if path == "/api/readers/bulk" and method == "POST":
-            rows, errors = self.parse_reader_list(str(data.get("text") or ""))
-            if errors:
-                return 400, {"error": "; ".join(errors[:5]) + (f" и ещё {len(errors) - 5}" if len(errors) > 5 else "")}
-            if not rows:
-                return 400, {"error": "список пуст"}
-            added = updated = 0
-            for r in rows:
-                was = self.store.get_reader(r["id"])
-                r["enabled"] = bool(was and was["enabled"])
-                self.store.save_reader(r)
-                if not was:
-                    self._refresh_reader_port(r["id"])
-                self.db_reader_parsers[r["id"]] = r["parser"]
-                if r["enabled"]:
-                    self.start_db_reader(r)
-                updated += 1 if was else 0
-                added += 0 if was else 1
-            self.store.audit(actor, None, "Список ридеров загружен", f"новых {added}, обновлено {updated}")
-            return 200, {"added": added, "updated": updated}
-        m = re.fullmatch(r"/api/readers/([A-Za-z0-9_-]{1,32})/(simulate|sim-stop|clear-reads)", path)
-        if m and method == "POST":
-            rid, act = m.group(1), m.group(2)
-            if act == "simulate":
-                return self.sim_start(rid, data, actor)
-            if act == "sim-stop":
-                if rid in self.sim_jobs:
-                    self.sim_jobs[rid]["stop"] = True
-                return 200, {"ok": True}
-            r = self.store.get_reader(rid)
-            if r is None or r.get("parser") != "sim":
-                return 400, {"error": "стирать отметки можно только у симулятора"}
-            n = self.store.delete_source_reads(rid)
-            src = self.sources.get(rid)
-            if src is not None:
-                src.reads = src.lines = src.duplicates = 0
-                src.tail.clear()
-            self.store.audit(actor, None, "Отметки симулятора стёрты", f"{rid}: {n}")
-            return 200, {"ok": True, "deleted": n}
-        m = re.fullmatch(r"/api/readers/([A-Za-z0-9_-]{1,32})/point", path)
-        if m and method == "POST":
-            # перестановка ридера на другую точку — без переподключения, сразу для новых отметок
-            rid = m.group(1)
-            r = self.store.get_reader(rid)
-            if r is None:
-                return 404, {"error": "ридер не найден"}
-            dev = str(data.get("device") or "").strip().upper()
-            if not VALID_ID.match(dev):
-                return 400, {"error": "точка: латиница, цифры, _ или - (например FINISH, KM5)"}
-            self.store.set_reader_device(rid, dev)
-            src = self.sources.get(rid)
-            if src is not None and rid in self.reader_tasks:
-                src.cfg["device"] = dev
-            self.store.audit(actor, None, "Ридер переставлен", f"{rid}: точка {r['device']} → {dev}")
-            return 200, {"ok": True, "device": dev}
-        m = re.fullmatch(r"/api/readers/([A-Za-z0-9_-]{1,32})/(connect|disconnect|delete)", path)
-        if m and method == "POST":
-            rid, act = m.group(1), m.group(2)
-            r = self.store.get_reader(rid)
-            if r is None:
-                return 404, {"error": "ридер не найден"}
-            if act == "connect":
-                self.store.set_reader_enabled(rid, True)
-                self.start_db_reader(r)
-                self.store.audit(actor, None, "Ридер подключён", f"{rid} ({r['host']}:{r['port']})")
-            elif act == "disconnect":
-                self.store.set_reader_enabled(rid, False)
-                self.stop_db_reader(rid)
-                self.store.audit(actor, None, "Ридер отключён", rid)
-            else:
-                self.stop_db_reader(rid)
-                if r.get("wiclax_port"):
-                    self._close_wiclax_port(int(r["wiclax_port"]))
-                self.store.delete_reader(rid)
-                self.db_reader_parsers.pop(rid, None)
-                self.store.audit(actor, None, "Ридер удалён", rid)
-            return 200, {"ok": True}
-        if path == "/api/wiclax-ports" and method == "POST":
-            try:
-                port = int(data.get("port") or 0)
-            except (TypeError, ValueError):
-                port = 0
-            devs = ",".join(sorted({d.strip().upper() for d in str(data.get("devices") or "").split(",") if d.strip()}))
-            used = {int(self.cfg["wiclax"]["listen_port"]), int(self.cfg["web"]["listen_port"]),
-                    int((self.cfg.get("public") or {}).get("listen_port") or 0)}
-            used |= {int(s["listen_port"]) for s in self.cfg["sources"] if s["mode"] == "listen" and s["listen_port"]}
-            if not 9855 <= port <= 9860:
-                return 400, {"error": "порт точки для Wiclax — от 9855 до 9860 (9854 — общий; 9861–9899 — личные порты ридеров)"}
-            if port in used:
-                return 400, {"error": f"порт {port} уже занят"}
-            if not devs or not all(VALID_ID.match(x) for x in devs.split(",")):
-                return 400, {"error": "укажите точку (или несколько через запятую), например KM5"}
-            self.store.save_wiclax_port(port, devs, str(data.get("name") or "").strip()[:40])
-            asyncio.ensure_future(self._open_wiclax_port(port, devs))
-            self.store.audit(actor, None, "Порт Wiclax", f"{port}: {devs}")
-            return 200, {"ok": True}
-        m = re.fullmatch(r"/api/wiclax-ports/(\d+)/delete", path)
-        if m and method == "POST":
-            port = int(m.group(1))
-            self.store.delete_wiclax_port(port)
-            self._close_wiclax_port(port)
-            self.store.audit(actor, None, "Порт Wiclax удалён", str(port))
-            return 200, {"ok": True}
-        return None
-
     # ---- сроки хранения ПДн (раздел 5 Политики конфиденциальности /privacy)
     RETENTION = {"unverified_days": 7, "trainer_idle_days": 3 * 365, "audit_days": 3 * 365}
 
@@ -6153,26 +4498,7 @@ class Hub:
 
     # ---- запуск
     async def start(self) -> None:
-        for src in self.sources.values():
-            mode = src.cfg["mode"]
-            if mode == "listen":
-                srv = await asyncio.start_server(
-                    lambda r, w, s=src: self._ingest_conn(s, r, w),
-                    src.cfg["listen_host"], int(src.cfg["listen_port"]))
-                self.servers.append(srv)
-                log.info("[%s] жду ридер на %s:%s", src.id, src.cfg["listen_host"], src.cfg["listen_port"])
-            elif mode == "connect":
-                self.tasks.append(asyncio.ensure_future(self._run_connect(src)))
-                log.info("[%s] буду подключаться к %s:%s", src.id, src.cfg["host"], src.cfg["port"])
-            else:
-                log.info("[%s] приём по HTTP: POST /api/reads?source=%s", src.id, src.id)
         self.tasks.append(asyncio.ensure_future(self._retention_loop()))
-        wc = self.cfg["wiclax"]
-        srv = await asyncio.start_server(
-            lambda r, w: WiclaxClient(self, r, w, self.wiclax_devices, int(wc["listen_port"])).run(),
-            wc["listen_host"], int(wc["listen_port"]))
-        self.servers.append(srv)
-        log.info("Wiclax: подключайтесь к %s:%s", wc["listen_host"], wc["listen_port"])
         web = self.cfg["web"]
         srv = await asyncio.start_server(self._http, web["listen_host"], int(web["listen_port"]))
         self.servers.append(srv)
@@ -6187,15 +4513,6 @@ class Hub:
                 log.warning("Форма регистрации не запущена: %s", e)
         if not web.get("password"):
             log.warning("В настройках web.password пусто — страница состояния без пароля")
-        for r in self.store.readers():
-            if r["enabled"]:
-                self.start_db_reader(r)
-        for wp in self.store.wiclax_ports():
-            await self._open_wiclax_port(int(wp["port"]), wp["devices"])
-        for r in self.store.readers():
-            p = self.ensure_reader_port(r["id"])
-            if p:
-                await self._open_reader_port(r["id"], p)
 
     async def stop(self) -> None:
         self.stopping.set()
@@ -6203,15 +4520,6 @@ class Hub:
             srv.close()
         for t in self.tasks:
             t.cancel()
-        for t in self.reader_tasks.values():
-            t.cancel()
-        for srv in self.wiclax_port_servers.values():
-            srv.close()
-        for c in list(self.wiclax_clients):
-            try:
-                c.writer.close()
-            except Exception:
-                pass
 
     # ----------------------------------------------------------------------- #
     #  HTTP: страница состояния, выгрузка, приём POST
@@ -6325,8 +4633,8 @@ class Hub:
             return {"login": "-", "name": "", "role": "admin"}
         return None
 
-    # только администратор: сервер и обновления, оборудование IPICO/Wiclax, VPN, учётные записи, сырые отметки
-    ADMIN_ONLY = re.compile(r"/api/(system|readers|wiclax-ports|users|trainers|consents)(/.*)?|/raw|/simple")
+    # только администратор: сервер и обновления, VPN, учётные записи, сырые отметки
+    ADMIN_ONLY = re.compile(r"/api/(system|users|trainers|consents)(/.*)?|/simple")
     JUDGE_OPEN = ("/api/system/scoreboard/control",)                 # пульт табло — судейский, хоть и под /api/system
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 
@@ -6793,12 +5101,6 @@ class Hub:
             url = urlsplit(target)
             qs = {k: v[-1] for k, v in parse_qs(url.query).items()}
             path = url.path
-            if method == "POST" and path == "/api/reads":
-                if not self._auth_ok(headers, allow_api_key=True):
-                    await self._send(writer, 401, "application/json", '{"error":"unauthorized"}')
-                    return
-                await self._send(writer, *self._api_reads(qs, headers, body))
-                return
             peer = writer.get_extra_info("peername")
             peer_ip = peer[0] if peer else "?"
             # через nginx (вход из интернета по https://reg.fla65.ru) — доверяем его заголовкам
@@ -6843,7 +5145,7 @@ class Hub:
                 return
             user = self.request_user(headers, proxied)
             if user is None:
-                if path.startswith("/api/") or path in ("/export.csv", "/raw") or method != "GET":
+                if path.startswith("/api/") or method != "GET":
                     await self._send(writer, 401, J, json.dumps({"error": "нужно войти", "login": "/login"}, ensure_ascii=False))
                 elif path == "/" and proxied:
                     await self._send(writer, 302, "text/plain", "", extra={"Location": "/r/"})
@@ -6984,12 +5286,6 @@ class Hub:
             elif path == "/api/status":
                 await self._send(writer, 200, "application/json; charset=utf-8",
                                  json.dumps(self.status(), ensure_ascii=False, indent=1))
-            elif path == "/raw":
-                await self._send(writer, 200, "text/plain; charset=utf-8", self._raw_text(qs))
-            elif path == "/export.csv":
-                code, ctype, data = self._export_csv(qs)
-                await self._send(writer, code, ctype, data,
-                                 extra={"Content-Disposition": 'attachment; filename="reads.csv"'})
             else:
                 await self._send(writer, 404, "text/plain", "нет такой страницы")
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError,
@@ -7239,175 +5535,30 @@ class Hub:
         writer.write(("\r\n".join(hdr) + "\r\n\r\n").encode("utf-8") + data)
         await writer.drain()
 
-    def _api_reads(self, qs: dict, headers: dict, body: bytes):
-        sid = qs.get("source")
-        src = self.sources.get(sid or "")
-        if src is None:
-            return 400, "application/json", json.dumps({"error": f"неизвестный source: {sid}"}, ensure_ascii=False)
-        text = body.decode("utf-8", errors="replace")
-        ok = bad = 0
-        if "json" in headers.get("content-type", ""):
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError:
-                return 400, "application/json", '{"error":"bad json"}'
-            items = data if isinstance(data, list) else [data]
-            for it in items:
-                if not isinstance(it, dict):
-                    bad += 1
-                    continue
-                rx = now_local()
-                rec = None
-                chip = src.parser.norm_chip(str(it.get("chip", "")))
-                ts = parse_any_time(it.get("time"), rx, src.cfg["unix_tz_offset_hours"])
-                if chip and ts is not None:
-                    ant = it.get("antenna")
-                    rec = ParsedRead(chip=chip, ts=ts, antenna=None if ant in (None, "") else str(ant),
-                                     rssi=None if it.get("rssi") is None else str(it.get("rssi")))
-                line = json.dumps(it, ensure_ascii=False)
-                if self.handle_parsed(src, line, rec, rx):
-                    ok += 1
-                else:
-                    bad += 1
-        else:
-            for line in LineSplitter().feed(body + b"\n"):
-                if self.handle_line(src, line):
-                    ok += 1
-                else:
-                    bad += 1
-        return 200, "application/json", json.dumps({"accepted": ok, "rejected": bad})
 
-    def _raw_text(self, qs: dict) -> str:
-        sid = qs.get("source")
-        out = []
-        for src in self.sources.values():
-            if sid and src.id != sid:
-                continue
-            out.append(f"=== {src.id} ({src.cfg['name']}) — последние {len(src.tail)} строк ===")
-            for rx, line, parsed in src.tail:
-                out.append(f"{fmt_db(rx)}  {'OK ' if parsed else '-- '} {line}")
-            out.append("")
-        return "\n".join(out) or "нет источников"
 
-    def _export_csv(self, qs: dict):
-        def p(name):
-            v = qs.get(name)
-            if not v:
-                return None
-            for f in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
-                try:
-                    return dt.datetime.strptime(v, f)
-                except ValueError:
-                    pass
-            raise ValueError(name)
-        try:
-            start, end = p("from"), p("to")
-        except ValueError as e:
-            return 400, "text/plain; charset=utf-8", f"неверный формат даты в параметре {e}; пример 2026-10-06 09:00"
-        if end is not None and len(qs.get("to", "")) <= 10:
-            end = end + dt.timedelta(days=1) - dt.timedelta(microseconds=1)
-        rows = self.store.query_reads(start, end, source=qs.get("source"))
-        if qs.get("filtered") == "1":
-            f = PassingFilter(self.cfg["wiclax"]["forward_filter_sec"])
-            rows = [r for r in rows if f.accept(r[1], r[2], parse_db(r[3]))]
-        buf = io.StringIO()
-        w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
-        w.writerow(["source", "device", "chip", "time", "antenna", "rssi", "time_from_receive", "received_at"])
-        for r in rows:
-            w.writerow(r)
-        return 200, "text/csv; charset=utf-8", "﻿" + buf.getvalue()
 
     # ---- состояние
     def status(self) -> dict:
         def t(x):
             return fmt_db(x) if x else None
-        srcs = []
-        for s in self.sources.values():
-            srcs.append({
-                "id": s.id, "name": s.cfg["name"], "mode": s.cfg["mode"], "device": s.cfg["device"],
-                "connected": bool(s.connected), "peer": s.peer, "lines": s.lines, "reads": s.reads,
-                "parse_errors": s.parse_errors, "duplicates": s.duplicates, "last_line": s.last_line, "last_line_at": t(s.last_line_at),
-                "last_read_at": t(s.last_read_at),
-                "clock_offset_sec": None if s.last_offset is None else round(s.last_offset, 3),
-                "last_error": s.last_error,
-            })
-        clients = [{"peer": c.peer, "port": c.port, "devices": sorted(c.devices) if c.devices else None,
-                    "since": t(c.since), "live": c.live, "sent": c.sent,
-                    "queue": c.queue.qsize(), "last_commands": list(c.commands)} for c in self.wiclax_clients]
-        st = {
-            "version": VERSION,
-            "build_date": BUILD_DATE,
-            "server_time": t(now_local()),
-            "server_epoch_ms": int(time.time() * 1000),
-            "timezone": time.strftime("%Z %z"),
-            "started_at": t(self.started_at),
-            "totals": self.store.totals(),
-            "sources": srcs,
-            "wiclax_clients": clients,
-        }
-        if self.wiclax_clock_diff:
-            st["wiclax_clock_diff_sec"] = round(self.wiclax_clock_diff[1], 1)
-        return st
+        return {"version": VERSION, "build_date": BUILD_DATE, "server_time": t(now_local()),
+                "server_epoch_ms": int(time.time() * 1000), "timezone": time.strftime("%Z %z"),
+                "started_at": t(self.started_at)}
 
     def _page_status(self) -> str:
         st = self.status()
         e = html.escape
-        warn_lim = float(self.cfg["clock_warn_sec"])
-        rows = []
-        for s in st["sources"]:
-            conn = ("🟢 на связи" if s["connected"] else "🔴 нет связи") if s["mode"] != "http" else "HTTP"
-            off = s["clock_offset_sec"]
-            off_txt = "—" if off is None else f"{off:+.2f} с"
-            off_cls = "warn" if (off is not None and abs(off) > warn_lim) else ""
-            rows.append(
-                f"<tr><td><b>{e(s['id'])}</b><br><small>{e(s['name'] or '')}</small></td>"
-                f"<td>{conn}<br><small>{e(s['peer'] or '')}</small></td>"
-                f"<td>{s['reads']} / {s['lines']}<br><small>не разобрано: {s['parse_errors']}"
-                f" · повторов: {s['duplicates']}</small></td>"
-                f"<td>{e(s['last_line_at'] or '—')}</td>"
-                f"<td class='{off_cls}'>{off_txt}</td>"
-                f"<td><a href='/raw?source={e(s['id'])}'>строки</a></td></tr>"
-                + (f"<tr><td colspan=6><small class='err'>{e(s['last_error'])}</small></td></tr>"
-                   if s["last_error"] and not s["connected"] else ""))
-        cl = "".join(
-            f"<li>{e(c['peer'])} — с {e(c['since'])}, {'приём идёт' if c['live'] else 'ПАУЗА (STOPREAD)'}, "
-            f"отправлено {c['sent']}</li>" for c in st["wiclax_clients"]) or "<li>Wiclax не подключён</li>"
-        last = "".join(
-            f"<tr><td>{e(r[3])}</td><td>{e(r[2])}</td><td>{e(r[1])}</td><td>{e(r[0])}</td>"
-            f"<td>{'время приёма' if r[5] else ''}</td></tr>" for r in self.store.last_reads(30))
-        clock = ""
-        if "wiclax_clock_diff_sec" in st:
-            d = st["wiclax_clock_diff_sec"]
-            cls = "warn" if abs(d) > warn_lim else ""
-            clock = f"<p class='{cls}'>Часы компьютера Wiclax относительно сервера: {d:+.1f} с</p>"
         return f"""<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5">
-<title>Хронометраж — сервер</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="10">
+<title>SakhStart — сервер</title>
 <style>
 body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:16px;color:#1b1f24;background:#f6f7f9}}
-h1{{font-size:20px;margin:0 0 4px}} h2{{font-size:16px;margin:20px 0 8px}}
-table{{border-collapse:collapse;width:100%;background:#fff;font-size:14px}}
-td,th{{border-bottom:1px solid #e3e6ea;padding:6px 8px;text-align:left;vertical-align:top}}
-th{{background:#eef1f4}} small{{color:#5b6570}} .warn{{color:#b42318;font-weight:600}} .err{{color:#b42318}}
-.box{{overflow-x:auto}} a{{color:#175cd3}}
+h1{{font-size:20px;margin:0 0 4px}} small{{color:#5b6570}} a{{color:#175cd3}}
 </style></head><body>
-<h1>Сервер хронометража</h1>
-<small>Время сервера: <b>{e(st['server_time'])}</b> ({e(st['timezone'])}) · всего отметок: {st['totals']['reads']}
- · версия {VERSION}</small>
-{clock}
-<h2>Ридеры</h2><div class="box"><table>
-<tr><th>Точка</th><th>Связь</th><th>Отметок / строк</th><th>Последняя строка</th><th>Часы ридера</th><th></th></tr>
-{''.join(rows) or '<tr><td colspan=6>источники не настроены</td></tr>'}
-</table></div>
-<small>«Часы ридера» — насколько время в последней отметке отличается от времени сервера в момент приёма.
-Проверяйте перед стартом тестовым чипом: должно быть в пределах ±{warn_lim:g} с.</small>
-<h2>Wiclax</h2><ul>{cl}</ul>
-<h2>Последние отметки</h2><div class="box"><table>
-<tr><th>Время</th><th>Чип</th><th>Точка</th><th>Источник</th><th></th></tr>{last}</table></div>
-<h2>Выгрузка</h2>
-<p><a href="/export.csv">Все отметки (CSV)</a> · <a href="/export.csv?filtered=1">Только прохождения (CSV)</a>
- · <a href="/raw">Сырые строки</a> · <a href="/api/status">JSON</a></p>
-<small>Фильтр по времени: /export.csv?from=2026-10-06 09:00&amp;to=2026-10-06 14:00&amp;source=FINISH</small>
+<h1>SakhStart — судейско-секретарский АРМ</h1>
+<small>Время сервера: <b>{e(st['server_time'])}</b> ({e(st['timezone'])}) · версия {VERSION} · сборка {BUILD_DATE}</small>
+<p><a href="/">Открыть АРМ секретаря</a> · <a href="/api/status">JSON</a></p>
 </body></html>"""
 
 
@@ -7429,11 +5580,9 @@ async def amain(cfg: dict) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Сервер хронометража: ридеры -> база -> Wiclax")
+    ap = argparse.ArgumentParser(description="SakhStart: судейско-секретарский АРМ стадиона и манежа")
     ap.add_argument("--config", default="/etc/timing-hub/config.json")
     ap.add_argument("--check", action="store_true", help="проверить настройки и выйти")
-    ap.add_argument("--test-parse", nargs=2, metavar=("SOURCE", "LINE"),
-                    help="показать, как источник SOURCE разберёт строку LINE")
     ap.add_argument("--version", action="version", version=VERSION)
     args = ap.parse_args()
 
@@ -7446,32 +5595,10 @@ def main() -> int:
     logging.basicConfig(level=getattr(logging, str(cfg["log_level"]).upper(), logging.INFO),
                         format="%(asctime)s %(levelname)s %(message)s")
 
-    if args.test_parse:
-        sid, line = args.test_parse
-        src = next((s for s in cfg["sources"] if s["id"] == sid), None)
-        if src is None:
-            print(f"Нет источника {sid}", file=sys.stderr)
-            return 2
-        r = LineParser(src).parse(line, now_local())
-        if r is None:
-            print("НЕ РАЗОБРАНО: строка не подходит под настройки источника")
-            return 1
-        dev = SourceState(src, 1).device_for(r.antenna)
-        print(f"чип:     {r.chip}\nвремя:   {fmt_db(r.ts)}{'  (время приёма!)' if r.from_rx else ''}\n"
-              f"антенна: {r.antenna or '—'}\nточка:   {dev}\n"
-              f"в Wiclax уйдёт: {r.chip};{fmt_wiclax(r.ts)};{dev};;;0")
-        return 0
-
     if args.check:
         print(f"Настройки в порядке: {args.config}")
         print(f"  база: {cfg['db_path']}")
-        print(f"  Wiclax: {cfg['wiclax']['listen_host']}:{cfg['wiclax']['listen_port']}")
         print(f"  страница: http://{cfg['web']['listen_host']}:{cfg['web']['listen_port']}/")
-        for s in cfg["sources"]:
-            where = (f"{s['listen_host']}:{s['listen_port']}" if s["mode"] == "listen" else
-                     f"{s['host']}:{s['port']}" if s["mode"] == "connect" else "HTTP")
-            print(f"  [{s['id']}] {'вкл ' if s['enabled'] else 'выкл'} {s['mode']:7} {where:22} "
-                  f"разбор={s['parser']} точка={s['device']}  {s['name']}")
         return 0
 
     try:

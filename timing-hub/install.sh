@@ -9,10 +9,6 @@
 #      --endpoint 1.2.3.4    внешний IP или домен сервера (по умолчанию определяется сам)
 #      --wg-port 51820       UDP-порт VPN
 #      --tz Asia/Sakhalin    часовой пояс соревнований
-#      --public-ingest       открыть порты приёма от ридеров в интернет (если ридер
-#                            шлёт данные через свой 4G без VPN). Без VPN кто угодно
-#                            сможет отправить на этот порт подделку — включайте
-#                            осознанно и только на время старта.
 #
 #  Повторный запуск безопасен: ключи VPN, пароли и настройки не перезаписываются,
 #  обновляется только программа сервера.
@@ -23,7 +19,6 @@ KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENDPOINT=""
 WG_PORT="51820"
 TZ_NAME="Asia/Sakhalin"
-PUBLIC_INGEST=0
 WG_IF="wg0"
 WG_NET="10.66.0"
 WG_DIR="/etc/wireguard"
@@ -42,7 +37,6 @@ while [[ $# -gt 0 ]]; do
     --endpoint)      ENDPOINT="${2:-}"; shift 2 ;;
     --wg-port)       WG_PORT="${2:-}"; shift 2 ;;
     --tz)            TZ_NAME="${2:-}"; shift 2 ;;
-    --public-ingest) PUBLIC_INGEST=1; shift ;;
     -h|--help)       sed -n '2,22p' "$0"; exit 0 ;;
     *) die "неизвестный параметр: $1 (см. sudo bash install.sh --help)" ;;
   esac
@@ -125,7 +119,7 @@ WG_IF=${WG_IF}
 EOF
 umask 022
 cat > /etc/sysctl.d/99-timing-hub.conf <<EOF
-# VPN-клиенты сервера хронометража видят друг друга (ноутбук Wiclax <-> ридеры)
+# VPN-клиенты сервера видят друг друга
 net.ipv4.ip_forward = 1
 EOF
 sysctl -q --system >/dev/null
@@ -149,7 +143,7 @@ if [[ -f "$APP_DIR/hub.py" ]]; then
   ls -1d /var/backups/timing-hub/*/ 2>/dev/null | head -n -5 | xargs -r rm -rf   # храним 5 последних
   echo "  Копия прежней версии: $SNAP  (откат: sudo timing-rollback last)"
 fi
-install -d -m 755 "$APP_DIR" "$APP_DIR/tools" "$APP_DIR/wiclax"
+install -d -m 755 "$APP_DIR" "$APP_DIR/tools"
 install -m 755 "$KIT_DIR/hub/hub.py" "$APP_DIR/hub.py"
 install -m 644 "$KIT_DIR"/hub/*.html "$APP_DIR/"
 # календарь федерации для первичного импорта (Календарь → «Загрузить календарь ФЛАСО»)
@@ -193,7 +187,6 @@ UEOF
   systemctl daemon-reload
   systemctl enable --now timing-update.path >/dev/null 2>&1 || true
 fi
-[[ -f "$KIT_DIR/add-reader.sh" ]] && install -m 755 "$KIT_DIR/add-reader.sh" /usr/local/sbin/timing-add-reader
 # форма регистрации уже опубликована: разрешаем загрузку командных заявок (Excel) до 3 МБ
 if [[ -f /etc/nginx/sites-available/timing-reg-https ]] && grep -q 'client_max_body_size 16k' /etc/nginx/sites-available/timing-reg-https; then
   sed -i 's/client_max_body_size 16k;/client_max_body_size 3m;/' /etc/nginx/sites-available/timing-reg-https
@@ -227,23 +220,18 @@ PY
   fi
 fi
 install -m 755 "$KIT_DIR"/tools/*.py "$APP_DIR/tools/"
-install -m 644 "$KIT_DIR"/wiclax/* "$APP_DIR/wiclax/" 2>/dev/null || true
 install -m 644 "$KIT_DIR/config/config.example.json" "$APP_DIR/config.example.json"
 install -m 755 "$KIT_DIR/timing-peer.sh" /usr/local/sbin/timing-peer
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$DATA_DIR"
 install -d -o root -g "$SVC_USER" -m 750 "$CFG_DIR"
 
 if [[ ! -f "$CFG_DIR/config.json" ]]; then
-  python3 - "$KIT_DIR/config/config.example.json" "$CFG_DIR/config.json" "$PUBLIC_INGEST" <<'PY'
+  python3 - "$KIT_DIR/config/config.example.json" "$CFG_DIR/config.json" <<'PY'
 import json, secrets, sys
-src, dst, public = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+src, dst = sys.argv[1], sys.argv[2]
 cfg = json.load(open(src, encoding="utf-8"))
 cfg["web"]["password"] = secrets.token_urlsafe(12)
 cfg["web"]["api_key"] = secrets.token_urlsafe(24)
-if public:
-    for s in cfg["sources"]:
-        if s.get("mode") == "listen":
-            s["listen_host"] = "0.0.0.0"
 with open(dst, "w", encoding="utf-8") as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
     f.write("\n")
@@ -259,7 +247,7 @@ python3 "$APP_DIR/hub.py" --config "$CFG_DIR/config.json" --check >/dev/null \
 
 cat > /etc/systemd/system/timing-hub.service <<EOF
 [Unit]
-Description=Timing hub - race timing server (readers -> archive -> Wiclax)
+Description=SakhStart - stadium secretary workstation server
 After=network-online.target wg-quick@${WG_IF}.service
 Wants=network-online.target wg-quick@${WG_IF}.service
 StartLimitIntervalSec=0
@@ -329,26 +317,17 @@ for p in $SSH_PORTS; do ufw allow "$p/tcp" comment 'SSH' >/dev/null; done
 ufw allow "$WG_PORT/udp" comment 'WireGuard VPN' >/dev/null
 ufw allow in on "$WG_IF" comment 'VPN -> server' >/dev/null
 ufw route allow in on "$WG_IF" out on "$WG_IF" comment 'VPN <-> VPN' >/dev/null
-if [[ "$PUBLIC_INGEST" == "1" ]]; then
-  for p in $(python3 -c "
-import json; c=json.load(open('$CFG_DIR/config.json', encoding='utf-8'))
-print(' '.join(str(s['listen_port']) for s in c['sources'] if s.get('enabled', True) and s.get('mode')=='listen' and s.get('listen_host')=='0.0.0.0'))"); do
-    ufw allow "$p/tcp" comment 'timing reader ingest (public)' >/dev/null
-    warn "порт $p открыт в интернет для приёма от ридеров"
-  done
-fi
 ufw --force enable >/dev/null
 echo "  Открыто снаружи: SSH ($(echo $SSH_PORTS | tr " " ",")/tcp), VPN ($WG_PORT/udp). Всё остальное — только через VPN."
 
 # --------------------------------------------------------------------------- #
 if ! ls "$WG_DIR/clients/"*.conf >/dev/null 2>&1; then
-  step "Создаю VPN-доступ для ноутбука с Wiclax"
-  /usr/local/sbin/timing-peer add wiclax-laptop --quiet
+  step "Создаю VPN-доступ для ноутбука секретаря"
+  /usr/local/sbin/timing-peer add secretary-laptop --quiet
 fi
 
 PASS="$(python3 -c "import json; print(json.load(open('$CFG_DIR/config.json', encoding='utf-8'))['web']['password'])")"
 WEBP="$(python3 -c "import json; print(json.load(open('$CFG_DIR/config.json', encoding='utf-8'))['web']['listen_port'])")"
-WICP="$(python3 -c "import json; print(json.load(open('$CFG_DIR/config.json', encoding='utf-8'))['wiclax']['listen_port'])")"
 
 echo
 echo "${c_green}=================================================================${c_off}"
@@ -359,21 +338,18 @@ cat <<EOF
   Внешний адрес сервера (для VPN):  ${ENDPOINT}:${WG_PORT}/udp
   Адрес сервера внутри VPN:         ${WG_NET}.1
 
-  Wiclax подключать к:              ${WG_NET}.1  порт ${WICP}
   Страница состояния (через VPN):   http://${WG_NET}.1:${WEBP}/
       логин: admin   пароль: ${PASS}
 
   ЗАПИШИТЕ ПАРОЛЬ. Его также можно посмотреть: sudo cat ${CFG_DIR}/config.json
 
   Что дальше:
-    1. VPN для ноутбука с Wiclax уже создан. Показать файл настроек:
-           sudo timing-peer show wiclax-laptop
+    1. VPN для ноутбука секретаря уже создан. Показать файл настроек:
+           sudo timing-peer show secretary-laptop
        Скопируйте текст в программу WireGuard на ноутбуке
        («Добавить туннель» -> «Добавить пустой туннель» -> вставить).
-    2. VPN для 4G-роутера каждого ридера:
-           sudo timing-peer add finish-router --mikrotik
-    3. Проверка сервера:   python3 ${APP_DIR}/tools/selftest.py --hub ${APP_DIR}/hub.py
-    4. Журнал сервера:     journalctl -u timing-hub -f
-    5. Изменили настройки: sudo systemctl restart timing-hub
+    2. Проверка сервера:   python3 ${APP_DIR}/tools/selftest.py --hub ${APP_DIR}/hub.py
+    3. Журнал сервера:     journalctl -u timing-hub -f
+    4. Изменили настройки: sudo systemctl restart timing-hub
 
 EOF

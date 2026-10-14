@@ -271,9 +271,9 @@ button.lnk:hover{background:none;color:var(--bad)}
 .tev>div{flex:1 1 260px;min-width:0}
 .tev b{display:block;font:600 20px/1.2 var(--head);overflow-wrap:anywhere}
 .tev .muted{font-size:14px}
-.tev .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.tev .chips span{font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
-.tev .chips .run{color:var(--bad);border-color:var(--track)}
+.tev .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tev .tags span{font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
+.tev .tags .run{color:var(--bad);border-color:var(--track)}
 .notice.calm{border-left-color:var(--line)}
 .ctext{max-height:240px;overflow:auto;white-space:pre-line;font-size:14px;line-height:1.5;background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:0 0 14px}
 .ctext:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
@@ -451,7 +451,7 @@ async function tCabinet(me){
     +tsteps(3)
     +`<h2 class="sect">Закрытые протоколы</h2>`
     +(evs.length?evs.map(e=>`<div class="tev"><div><b>${esc(e.name)}</b><div class="muted">${esc([dRange(e.date,e.date_end),e.city||e.place].filter(Boolean).join(" · "))}</div>
-      <div class="chips">${st[e.status]||""}${e.start?"<span>стартовый</span>":""}${e.results?"<span>результаты</span>":""}</div></div>
+      <div class="tags">${st[e.status]||""}${e.start?"<span>стартовый</span>":""}${e.results?"<span>результаты</span>":""}</div></div>
       <a class="btn" href="${esc(e.protocol)}">👁️ Посмотреть закрытый протокол</a></div>`).join("")
       :`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg></span><div><b>Протоколов пока нет</b><div class="muted">Стартовые и итоговые протоколы появятся здесь, как только организатор их выложит.</div></div></div>`)
     +`<div class="foot">Протоколы содержат персональные данные спортсменов — не пересылайте их и не публикуйте в открытом доступе.</div>`;
