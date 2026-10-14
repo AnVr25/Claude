@@ -108,6 +108,13 @@ td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
 tbody tr:last-child td{border-bottom:0}
 .tbl{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:auto}
 .scroll{max-height:520px}
+/* 7.6.1: таблица заявок — естественный список на всю ширину и длину страницы, без своих полос прокрутки */
+.tbl.free{overflow:visible;max-height:none}.regwide{display:block;width:100%}
+.regtbl{width:100%;table-layout:auto}.regtbl th{position:static;padding:7px 8px;white-space:nowrap}.regtbl td{padding:6px 8px;font-size:14px}
+.regtbl td input.cell,.regtbl td select.cell{min-width:0;max-width:100%}.regtbl td[data-w]{white-space:normal}
+.regonl>summary{cursor:pointer}.onl{margin-top:12px}.onl .side{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+@media(max-width:1150px){.regtbl th{font-size:12px;padding:6px}.regtbl td{padding:5px 6px;font-size:13px}.regtbl td:last-child{white-space:normal}.regtbl td:last-child button{display:block;width:100%;margin:2px 0}.regtbl td input.cell[data-f=best]{width:56px!important}}
+@media(max-width:900px){.tbl.free{overflow-x:auto}}
 td b{font-weight:700}
 .bib{font:600 17px var(--head)}
 
@@ -730,13 +737,12 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="pagehead">
     <div><h1>Регистрация</h1><p class="lead">Участники подают заявки по ссылке. Проверьте и подтвердите их — подтверждённые заявки сразу попадают в «Протоколы».</p></div>
   </div>
-  <div class="split">
-    <div>
+  <div class="regwide">
       <div class="tabs"><span id="gTabs" style="display:contents"></span><input class="search" id="gSearch" placeholder="Фамилия, команда, тренер" aria-label="Поиск заявок"></div>
       <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
-      <div class="tbl scroll" style="max-height:620px"><table>
-        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Категория</th><th>Дистанция</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
+      <div class="tbl free"><table class="regtbl">
+        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
         <tbody id="gBody"></tbody>
       </table></div>
       <datalist id="gCats"></datalist>
@@ -758,8 +764,10 @@ a.btn.xls:hover{background:#E9F5EE}
           <input id="mBest" placeholder="лучший, 12.8"><input id="mRep" placeholder="представитель (до 18 лет)">
           <button class="primary" id="mAdd">Добавить</button>
         </div></details>
-    </div>
-    <aside class="side">
+
+    <details class="panel regonl" id="gOnline" style="margin-top:14px"><summary><b>⚙️ Настройки онлайн-формы и параметров регистрации</b> <span class="small muted">приём заявок, срок, ссылка и QR, публикация списка, дистанции, категории, согласие</span></summary>
+      <div class="onl">
+        <div class="side">
       <div class="panel">
         <label class="switch"><input type="checkbox" id="gOpen"><i></i>Приём заявок открыт</label>
         <label for="gDeadline">Принимать до</label><input id="gDeadline" type="datetime-local">
@@ -784,9 +792,10 @@ a.btn.xls:hover{background:#E9F5EE}
           <div class="small muted">Пусто — стандартный текст (виден серым). Согласуйте текст с юристом организации.</div></details>
       </details>
       <div class="row"><button class="primary" id="gSave">Сохранить настройки</button><span class="small muted" id="gSaved"></span></div>
-    </aside>
+        </div>
+      </div>
+    </details>
   </div>
-
 </section>
 
 <!-- 4. ВЫДАЧА НОМЕРОВ -->
@@ -1518,7 +1527,7 @@ function renderRegHead(force){
     $("gOpen").checked = !!ev.reg_open; $("gDeadline").value = (ev.reg_deadline||"").slice(0,16);
     $("gDist").value = ev.reg_distances||""; $("gRules").value = ev.reg_rules||"";
     $("gInfo").value = ev.reg_info||""; $("gConsent").value = ev.reg_consent||"";
-    $("gSettings").open = !(ev.reg_distances||"").trim();
+    $("gSettings").open = !(ev.reg_distances||"").trim(); if (!(ev.reg_distances||"").trim()) $("gOnline").open = true;
   }
   const url = ev.reg_url || (ev.reg_path ? location.origin + ev.reg_path : "");
   $("gUrl").value = url;
@@ -1595,7 +1604,7 @@ function renderRegs(){
       ${x.dup_of?`<div class="dupe">повтор заявки №${x.dup_of}</div>`:""}${x.note?`<div class="small muted">${esc(x.note)}</div>`:""}</td>
     <td>${esc(x.sex)}</td>
     <td><select class="cell" data-f="rank" aria-label="Разряд"${x.rank ? "" : ' style="border-color:var(--warn)"'}>${rankOpts(x.rank, "укажите")}</select></td>
-    <td><input class="cell" data-f="category" list="gCats" value="${esc(x.category||"")}" style="width:110px;${x.category?"":"border-color:var(--warn)"}"></td>
+    <td><input class="cell" data-f="category" list="gCats" value="${esc(x.category||"")}" style="width:100%;min-width:120px;${x.category?"":"border-color:var(--warn)"}"></td>
     <td><select class="cell" data-f="distance">${[...new Set(dists.concat([x.distance]))].map(d => `<option ${d===x.distance?"selected":""}>${esc(d)}</option>`).join("")}</select></td>
     <td><input class="cell mono" data-f="best" value="${esc(x.best||"")}" style="width:72px"></td>
     <td class="small">${esc(x.team||"")}<div class="muted">${esc(x.coach||"")}</div></td>
