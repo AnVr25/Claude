@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.7.6"
+VERSION = "7.7.7"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1155,8 +1155,42 @@ class Hub:
         s, t = divmod(rem, 10)
         return f"{h}:{m:02d}:{s:02d}.{t}"
 
+    @staticmethod
+    def _iso_date(v) -> Optional[str]:
+        """Дата события в ГГГГ-ММ-ДД: переносы базы со старых/чужих версий бывают в виде 17.10.2026 или с временем."""
+        t = str(v or "").strip()
+        if not t:
+            return None
+        m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})", t) or None
+        if m:
+            return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+        m = re.match(r"^(\d{1,2})[./](\d{1,2})[./](\d{4})", t)
+        if m:
+            return f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        return t
+
+    def events_for_list(self) -> list:
+        """Главная страница: ВСЕ соревнования из таблицы events (без фильтра по дате и без пагинации).
+        Одна повреждённая строка не должна ронять весь список — она выводится в упрощённом виде."""
+        out = []
+        for ev in self.store.list_events():
+            try:
+                out.append(self._event_view(ev))
+            except Exception as e:       # перенесённая база: странное значение в одном из полей
+                log.warning("Соревнование #%s показано в упрощённом виде: %s", ev.get("id"), e)
+                out.append({**ev, "date": self._iso_date(ev.get("date")), "status": ev.get("status") or "planned",
+                            "archived": 1 if ev.get("archived") else 0, "waves": [], "reg_open": bool(ev.get("reg_open")),
+                            "kind": ev.get("kind") or "stadium"})
+        return out
+
     def _event_view(self, ev: dict) -> dict:
         out = dict(ev)
+        out["date"] = self._iso_date(ev.get("date"))
+        if ev.get("date_end"):
+            out["date_end"] = self._iso_date(ev.get("date_end"))
+        out["archived"] = 1 if ev.get("archived") else 0
+        out["status"] = ev.get("status") or "planned"
+        out["name"] = str(ev.get("name") or "").strip() or f"Соревнование №{ev.get('id')}"
         st = parse_db(ev["start_time"]) if ev.get("start_time") else None
         out["start_epoch_ms"] = self._epoch_ms(st)
         seq = ev.get("heats_sequential")
@@ -2404,7 +2438,7 @@ class Hub:
             return ok(self.calendar(int(qs["year"]) if str(qs.get("year", "")).isdigit() else None))
         if path == "/api/events":
             if method == "GET":
-                return ok({"events": [self._event_view(e) for e in self.store.list_events()]})
+                return ok({"events": self.events_for_list()})
             if method == "POST":
                 name = str(data.get("name", "")).strip()
                 if not name:
@@ -6096,9 +6130,36 @@ h1{{font-size:20px;margin:0 0 4px}} small{{color:#5b6570}} a{{color:#175cd3}}
 # --------------------------------------------------------------------------- #
 #  Запуск
 # --------------------------------------------------------------------------- #
+def find_local_db(cfg: dict) -> Optional[str]:
+    """Локальный запуск: база лежит рядом, но Windows прячет расширение — файл мог оказаться «reads», а не «reads.db».
+    Если настроенной базы нет, а рядом есть файл SQLite с таким именем — берём его вместо создания пустой."""
+    db = str(cfg.get("db_path") or "")
+    if not db or os.path.exists(db) or os.path.isabs(db):
+        return None
+    for name in (os.path.splitext(db)[0], os.path.splitext(db)[0] + ".sqlite", db + ".db"):
+        if name != db and os.path.isfile(name):
+            try:
+                with open(name, "rb") as f:
+                    if f.read(15) == b"SQLite format 3":
+                        return name
+            except OSError:
+                pass
+    return None
+
+
 async def amain(cfg: dict) -> None:
+    alt = find_local_db(cfg)
+    if alt:
+        log.warning("Базы %s нет, найден файл SQLite %s — использую его", cfg["db_path"], alt)
+        cfg["db_path"] = alt
     hub = Hub(cfg)
     await hub.start()
+    try:
+        evs = hub.store.list_events()
+        log.info("База %s: соревнований %d, из них в архиве %d", os.path.abspath(cfg["db_path"]), len(evs),
+                 sum(1 for e in evs if e.get("archived")))
+    except Exception as e:
+        log.warning("Не удалось посчитать соревнования: %s", e)
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:

@@ -1181,13 +1181,18 @@ function evRow(e, td){
   </div>`;
 }
 function renderEvents(){
+  // 7.7.7: в списке — ВСЕ соревнования, кроме архивных, независимо от даты на этом компьютере (часы ПК и сервера могут расходиться).
+  // «Скоро» — всё, что не идёт сейчас и не завершено, даже если дата уже прошла по часам ПК: ничего не прячется.
   const td = localDate(), active = events.filter(e => !e.archived);
-  const now = active.filter(e => e.status === "running" || (e.date && e.date <= td && (e.date_end || e.date) >= td));
-  const soon = active.filter(e => !now.includes(e) && e.date && e.date > td).sort((a,b) => a.date.localeCompare(b.date));
-  const rest = active.filter(e => !now.includes(e) && !soon.includes(e));
+  const now = active.filter(e => e.status === "running" || (e.status !== "finished" && e.date && e.date <= td && (e.date_end || e.date) >= td));
+  const done = active.filter(e => !now.includes(e) && e.status === "finished");
+  const soon = active.filter(e => !now.includes(e) && !done.includes(e))
+    .sort((a,b) => ((a.date||"9999") < td) - ((b.date||"9999") < td) || (a.date||"9999").localeCompare(b.date||"9999"));
   const grp = (t, l) => l.length ? `<h2 class="group">${t}</h2>` + l.map(e => evRow(e, td)).join("") : "";
-  $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Прошли — ещё не в архиве", rest)
+  const nArch = events.length - active.length;
+  $("evList").innerHTML = grp("Сегодня", now) + grp("Скоро", soon) + grp("Завершены — ещё не в архиве", done)
     || `<div class="panel empty">${events.length ? "Все соревнования в архиве. Создайте новое или верните из архива." : "Соревнований пока нет — создайте первое кнопкой «Новое соревнование»."}</div>`;
+  if (nArch && active.length) $("evList").insertAdjacentHTML("beforeend", `<p class="small muted" style="margin:12px 2px">В архиве: ${nArch} — они ниже, в разделе «Архив». Верните нужное кнопкой «Вернуть».</p>`);
   $("calImport").classList.toggle("hide", events.some(e => e.pub_site));
   const ev = curEvent();
   $("evBtnName").textContent = ev ? ev.name : "Выберите соревнование";

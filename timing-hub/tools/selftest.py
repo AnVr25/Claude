@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.7.6 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.6", r.stdout + r.stderr)
+    check("версия сервера 7.7.7 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.7", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v7.7.6" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v7.7.7" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -231,6 +231,27 @@ def main() -> int:
     rw = subprocess.run([sys.executable, "-c", code_w, os.path.abspath(hub_path), os.path.join(wd, "w.db")], capture_output=True, text=True)
     check("7.7.6: без os.getloadavg (Windows) system_view не падает и отдаёт нулевую нагрузку [0.0, 0.0, 0.0]",
           rw.returncode == 0 and json.loads(rw.stdout.strip() or "[]") == [0.0, 0.0, 0.0], rw.stdout + rw.stderr[-300:])
+    # 7.7.7: перенесённая база — все не архивные соревнования в списке (дата в чужом формате, пустой статус), файл без расширения находится
+    ld = tempfile.mkdtemp()
+    code_l = (
+        "import os,sys,json,sqlite3; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; d=sys.argv[2]; os.chdir(d); "
+        "con=sqlite3.connect('reads'); con.executescript(\"CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, date TEXT, place TEXT, "
+        "finish_device TEXT, start_time TEXT, status TEXT, notes TEXT, created_at TEXT NOT NULL); "
+        "INSERT INTO events(name,date,status,created_at) VALUES ('Открытое первенство СШОР по метаниям','17.10.2026',NULL,'2026-10-01 10:00:00'),"
+        "('Прошлый старт','2025-05-01','finished','2025-04-01 10:00:00'),('',NULL,NULL,'2026-10-02 10:00:00');\"); con.commit(); con.close(); "
+        "cfg=hub._merge(hub.DEFAULTS,{'db_path':'reads.db','public':{'enabled':False}}); alt=hub.find_local_db(cfg); cfg['db_path']=alt or cfg['db_path']; "
+        "evs=hub.Hub(cfg).events_for_list(); print(json.dumps({'alt':alt,'ev':[[e['name'],e['date'],e['status'],e['archived']] for e in evs]}, ensure_ascii=False))")
+    rl = subprocess.run([sys.executable, "-c", code_l, os.path.abspath(hub_path), ld], capture_output=True, text=True)
+    try:
+        lj = json.loads(rl.stdout.strip().splitlines()[-1])
+    except Exception:
+        lj = {"alt": None, "ev": []}
+    met = [e for e in lj["ev"] if e[0].startswith("Открытое первенство СШОР по метаниям")]
+    check("7.7.7: база «reads» без расширения подхватывается; соревнование по метаниям (дата 17.10.2026, пустой статус) в списке с датой 2026-10-17 и статусом planned; ничего не пропало",
+          lj["alt"] == "reads" and len(lj["ev"]) == 3 and met and met[0][1:] == ["2026-10-17", "planned", 0], rl.stdout + rl.stderr[-300:])
+    uh = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(hub_path))), "hub", "ui.html"), encoding="utf-8").read()
+    check("7.7.7: главная — «Скоро» не зависит от даты на ПК: всё, что не идёт и не завершено, остаётся в списке; архивные — отдельно, с подсказкой",
+          'const soon = active.filter(e => !now.includes(e) && !done.includes(e))' in uh and "Прошли — ещё не в архиве" not in uh and "В архиве: ${nArch}" in uh, "")
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -423,7 +444,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.7.6" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.7.7" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -436,7 +457,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.6", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.7", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1319,7 +1340,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.7.6 и дата сборки 14.10.2026", st3["version"] == "7.7.6" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.7.7 и дата сборки 14.10.2026", st3["version"] == "7.7.7" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
