@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `7.7.1` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.7.2` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `06190b1`
-- **Дамп сформирован:** 2026-10-14 13:27 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 339 из 339 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 6116 строк, `hub/ui.html` 2866, `hub/protocol.html` 679
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `baf6679`
+- **Дамп сформирован:** 2026-10-14 13:39 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 341 из 341 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 6116 строк, `hub/ui.html` 2866, `hub/protocol.html` 688
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -1526,13 +1526,13 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 > ВАЖНО для аудитора: в ТЗ функция `table()` названа находящейся в `ui.html`. Фактически она живёт в `hub/protocol.html` (одна страница печати для админки и публичного сайта). `ui.html` печатных таблиц не строит.
 
-#### `isTech` — `hub/protocol.html` строки 382–382
+#### `isTech` — `hub/protocol.html` строки 391–391
 
 ```js
 const isTech=(rtype,slots,att)=>rtype==="distance"||rtype==="height"||(slots||0)>0||att===true;
 ```
 
-#### `partsOf` — `hub/protocol.html` строки 385–396
+#### `partsOf` — `hub/protocol.html` строки 394–405
 
 ```js
 function partsOf(h){
@@ -1549,7 +1549,7 @@ function partsOf(h){
 }
 ```
 
-#### `startSheet` — `hub/protocol.html` строки 398–450
+#### `startSheet` — `hub/protocol.html` строки 407–459
 
 ```js
 function startSheet(o){
@@ -1562,7 +1562,7 @@ function startSheet(o){
   const lparts=list&&looseAll.length?partsOf({name:"",category:"",distance:"",entries:looseAll,rtype:"time",slots:0}):[];
   const shown=parts.concat(lparts).filter(p=>gm(p)&&p.entries.length);
   const tech=shown.some(p=>p.tech);
-  const land=tech||(list&&!!o.landscape);
+  const land=tech||!!o.landscape;
   const all=heatsAll.concat([{entries:looseAll}]);
   const anyCoach=all.some(h=>h.entries.some(e=>e.coach)), anySeed=all.some(h=>h.entries.some(e=>e.seed));
   const anyLane=all.some(h=>h.entries.some(e=>e.lane)), anyRank=all.some(h=>h.entries.some(e=>e.rank));
@@ -1607,7 +1607,7 @@ function startSheet(o){
 }
 ```
 
-#### `renderStart` — `hub/protocol.html` строки 536–542
+#### `renderStart` — `hub/protocol.html` строки 545–551
 
 ```js
 function renderStart(){
@@ -1623,18 +1623,18 @@ function renderStart(){
 
 ### 4.2 Переключение печатных стилей landscape / portrait — `hub/protocol.html`
 
-#### `setPage` — `hub/protocol.html` строки 373–378
+#### `setPage` — `hub/protocol.html` строки 382–387
 
 ```js
 function setPage(land){
   let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
   const pg=`size:A4 ${land?"landscape":"portrait"};margin:${land?"10mm 12mm 12mm":"12mm 12mm 14mm"}`;
   st.textContent=`@page{${pg}}@media print{@page{${pg}${land?";size:landscape":""}}}`;
-  $("sheet").classList.toggle("land",!!land);
+  $("sheet").classList.toggle("land",!!land); $("sheet").classList.toggle("port",!land);
 }
 ```
 
-#### `groupList` — `hub/protocol.html` строки 454–463
+#### `groupList` — `hub/protocol.html` строки 463–472
 
 ```js
 function groupList(start){
@@ -1649,7 +1649,7 @@ function groupList(start){
 }
 ```
 
-#### `tabsFor` — `hub/protocol.html` строки 464–472
+#### `tabsFor` — `hub/protocol.html` строки 473–481
 
 ```js
 function tabsFor(start){
@@ -1663,7 +1663,7 @@ function tabsFor(start){
 }
 ```
 
-#### `currentItem` — `hub/protocol.html` строки 474–477
+#### `currentItem` — `hub/protocol.html` строки 483–486
 
 ```js
 function currentItem(start){
@@ -1672,7 +1672,7 @@ function currentItem(start){
 }
 ```
 
-#### `sheetsFor` — `hub/protocol.html` строки 479–487
+#### `sheetsFor` — `hub/protocol.html` строки 488–496
 
 ```js
 function sheetsFor(it){
@@ -1681,12 +1681,12 @@ function sheetsFor(it){
   if(!keys.length) keys=[null];
   const out=keys.map(k=>start
     ? startSheet({gf:k??"__none__",sf:it.sf,list:it.mode==="list",coach,landscape:it.orient==="landscape"})
-    : (f=>({html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)}))(buildFinal({gf:k??"__none__",sf:it.sf,mode:it.mode==="heats"?"heats":"overall"})));
+    : (f=>({html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)}))(buildFinal({gf:k??"__none__",sf:it.sf,mode:it.mode==="heats"?"heats":"overall",landscape:it.orient==="landscape"})));
   return out.filter(r=>!r.empty).length?out.filter(r=>!r.empty):out.slice(0,1);
 }
 ```
 
-#### `showSheets` — `hub/protocol.html` строки 489–499
+#### `showSheets` — `hub/protocol.html` строки 498–508
 
 ```js
 function showSheets(secs){
@@ -1696,13 +1696,13 @@ function showSheets(secs){
   st.textContent=`@page{size:A4 ${first?"landscape":"portrait"};margin:${first?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`
     +`@page cpl{size:A4 landscape;margin:10mm 12mm 12mm}@page cpp{size:A4 portrait;margin:12mm 12mm 14mm}`
     +`.cp{page-break-after:always;break-after:page}.cp:last-child{page-break-after:auto;break-after:auto}.cp.land{page:cpl}.cp.port{page:cpp}`;
-  $("sheet").classList.toggle("land",secs.some(r=>r.land));
+  { const L=secs.some(r=>r.land); $("sheet").classList.toggle("land",L); $("sheet").classList.toggle("port",!L); }
   $("sheet").innerHTML=secs.map(r=>`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`).join("");
   fitPages();
 }
 ```
 
-#### `drawTabs` — `hub/protocol.html` строки 512–518
+#### `drawTabs` — `hub/protocol.html` строки 521–527
 
 ```js
 function drawTabs(tabs){
@@ -1714,7 +1714,7 @@ function drawTabs(tabs){
 }
 ```
 
-#### `addTabToCart` — `hub/protocol.html` строки 523–535
+#### `addTabToCart` — `hub/protocol.html` строки 532–544
 
 ```js
 async function addTabToCart(){
@@ -1732,7 +1732,7 @@ async function addTabToCart(){
 }
 ```
 
-#### `buildFinal` — `hub/protocol.html` строки 572–675
+#### `buildFinal` — `hub/protocol.html` строки 581–684
 
 ```js
 function buildFinal(o={}){
@@ -1829,7 +1829,7 @@ function buildFinal(o={}){
   if(anyDone&&mode!=="teams") notes.push(`«Вып. разряд» — по нормам ЕВСК${R.rank_source?" ("+R.rank_source.replace(/^Нормы ЕВСК[^—]*—\s*/,"")+")":""}: учтены пол, возраст в год соревнований, хронометраж, высота барьеров и масса снарядов; на соревнованиях этого статуса — не выше «${R.rank_cap||"1 р."}». Сила ветра не учитывается.`);
   if(anyTechShown) notes.push("Лучший результат определён по шести попыткам: X — неудачная попытка, «–» — пропуск.");
   if(sf&&mode!=="teams") notes.push(sf==="М"?"Показаны только мальчики, юноши, мужчины. Места пересчитаны среди показанных.":"Показаны только девочки, девушки, женщины. Места пересчитаны среди показанных.");
-  return {land:anyTechShown, html:`
+  return {land:anyTechShown||!!o.landscape, html:`
     ${headHtml(ev,mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ",tf&&mode!=="teams"?"Команда: "+esc(tf):"")}
     ${stampHtml()}${body}
     <div class="tail">${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}
@@ -1841,7 +1841,7 @@ function buildFinal(o={}){
 }
 ```
 
-#### `render` — `hub/protocol.html` строки 561–570
+#### `render` — `hub/protocol.html` строки 570–579
 
 ```js
 function render(){
@@ -1849,14 +1849,14 @@ function render(){
   syncStartCtl();
   if(!R){ if(PUB&&SL) renderStart(); return; }
   if($("mode").value==="start") return renderStart();
-  if($("mode").value==="teams"){ drawTabs(null); const r=buildFinal(); setPage(r.land); $("sheet").innerHTML=r.html; return; }
+  if($("mode").value==="teams"){ drawTabs(null); const r=buildFinal(); setPage(r.land); $("sheet").innerHTML=`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`; return; }
   const tabs=tabsFor(false); if(!tabs.some(t=>t.id===TAB)) TAB="";
   drawTabs(tabs);
   showSheets(sheetsFor(currentItem(false)));
 }
 ```
 
-#### `renderCart` — `hub/protocol.html` строки 544–555
+#### `renderCart` — `hub/protocol.html` строки 553–564
 
 ```js
 async function renderCart(){
@@ -1873,12 +1873,12 @@ async function renderCart(){
 }
 ```
 
-#### `syncStartCtl` — `hub/protocol.html` строки 556–559
+#### `syncStartCtl` — `hub/protocol.html` строки 565–568
 
 ```js
 function syncStartCtl(){
-  const isStart=isStartView(); const list=$("smode").value==="list";
-  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
+  const isStart=isStartView();
+  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",$("mode").value==="teams");
 }
 ```
 
@@ -2551,7 +2551,7 @@ rank = self.norm_rank(d.get("rank"))
 
 Статические правила страницы:
 
-#### `hub/protocol.html` строки 146–146
+#### `hub/protocol.html` строки 151–151
 
 ```css
 @media print{.cp+.cp{margin-top:0;border-top:0;padding-top:0}}
@@ -2570,7 +2570,8 @@ rank = self.norm_rank(d.get("rank"))
 Правила сетки бланка и корзины:
 
 ```css
-.sheet.land{width:297mm;min-height:210mm}
+.sheet.land{width:297mm;min-height:210mm;box-sizing:border-box;margin-left:auto;margin-right:auto}
+.cp.port,.cp.land{width:100%;max-width:100%;box-sizing:border-box;margin-left:auto;margin-right:auto}
 .hide{display:none!important}
 .cartmode .bar select,.cartmode .bar label,.cartmode #csv{display:none}
 .embed .bar{display:none}.embed .sheet{margin:0 auto;box-shadow:none}
@@ -2601,7 +2602,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 339 из 339 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 341 из 341 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2654,6 +2655,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+baf6679 2026-10-14 test: исправлена проверка офлайн-автономности (синтаксис) v7.7.1
 06190b1 2026-10-14 ui: кнопки импорта/экспорта CSV перенесены наверх страницы для удобства секретаря v7.7.1
 f706502 2026-10-14 major: расширена рабочая зона регистрации, запущен глобальный CSV-корректор и интерактивная правка шапок протоколов v7.7.0
 17778e5 2026-10-14 major: расширена рабочая зона Регистрации, ликвидированы бегунки таблиц и запущен глобальный CSV-корректор v7.6.1
@@ -2667,6 +2669,5 @@ ea25612 2026-10-14 docs: история версий 1.3.0 – 7.3.5 (CHANGELOG.
 70a3176 2026-10-14 ui: кнопка «Участники соревнований» вверху страницы по центру, в списке — фамилия и имя, год рождения, тренер
 5af8369 2026-10-14 ui: публичные участники MyRace перенесены в выделенное окно соревнований v7.3.5
 3b71676 2026-10-14 ui: оптимизирована компактность публичных списков участников и убран хаос кнопок на этапе подготовки v7.3.0
-315339e 2026-10-14 major: внедрена пакетная генерация всех протоколов соревнований и публичный модуль участников по эталону MyRace v7.2.0
 ```
 

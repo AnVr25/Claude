@@ -124,7 +124,12 @@ thead{display:table-header-group}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(231,30,37,.6)}70%{box-shadow:0 0 0 7px rgba(231,30,37,0)}100%{box-shadow:0 0 0 0 rgba(231,30,37,0)}}
 @media (prefers-reduced-motion:reduce){.stamp.live::before{animation:none}}
 
-.sheet.land{width:297mm;min-height:210mm}
+.sheet.port{width:210mm;min-height:297mm;box-sizing:border-box;margin-left:auto;margin-right:auto}
+.sheet.land{width:297mm;min-height:210mm;box-sizing:border-box;margin-left:auto;margin-right:auto}
+.cp.port,.cp.land{width:100%;max-width:100%;box-sizing:border-box;margin-left:auto;margin-right:auto}
+/* таблицы, шапка и подписи занимают всю ширину листа; у таблиц попыток колонки считаются по содержимому и растягиваются на весь лист */
+table,.tail,.sign,.head,.phead{width:100%;max-width:100%}
+.sign{max-width:100%}
 .hide{display:none!important}
 .cartmode .bar select,.cartmode .bar label,.cartmode #csv{display:none}
 .ptabs{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;max-width:297mm;margin:12px auto 0;padding:0 16px;box-sizing:border-box}
@@ -160,10 +165,14 @@ table.att,table.swt{table-layout:auto}
   .sign,.tail{break-inside:avoid;page-break-inside:avoid}
   h2{margin-top:3mm}
   :root{--pr-ink:#000;--pr-muted:#3B4452;--pr-line:#B9C3D0;--pr-line-2:#9AA7B8}
-  html,body{background:#fff;color:#000}
+  html,body{background:#fff;color:#000;margin:0;padding:0}
   .bar{display:none}
   .stamp .so{display:none}.stamp .po{display:inline}.stamp::before{display:none}
-  .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
+  .sheet,.sheet.port,.sheet.land{width:100%!important;max-width:100%!important;min-height:0;margin:0!important;padding:0;box-shadow:none;box-sizing:border-box}
+  .cp.port,.cp.land{width:100%!important;max-width:100%!important;margin:0;box-sizing:border-box}
+  table,.tail,.sign,.head,.phead{width:100%!important;max-width:100%!important}
+  table{table-layout:fixed}
+  table.att,table.swt{table-layout:auto}
   .sheet,.meta b,.ev,td,.sign{color:#000}
   .brandrow,.org,h1,.ev,.meta{break-inside:avoid;page-break-inside:avoid}
   .brandrow+*{break-before:avoid}
@@ -187,7 +196,7 @@ table.att,table.swt{table-layout:auto}
     <option value="heats">По забегам / группам</option>
     <option value="list">Общим списком</option>
   </select>
-  <select id="orient" class="hide" title="Ориентация печатной формы" aria-label="Ориентация листа">
+  <select id="orient" class="hide" title="Ориентация листа: беговые бланки по умолчанию вертикальные (3 секундомера), можно развернуть горизонтально; техника всегда горизонтальная (6 попыток)" aria-label="Ориентация листа">
     <option value="portrait">Вертикальный лист</option>
     <option value="landscape">Горизонтальный лист</option>
   </select>
@@ -374,7 +383,7 @@ function setPage(land){
   let st=$("pgstyle"); if(!st){ st=document.createElement("style"); st.id="pgstyle"; document.head.appendChild(st); }
   const pg=`size:A4 ${land?"landscape":"portrait"};margin:${land?"10mm 12mm 12mm":"12mm 12mm 14mm"}`;
   st.textContent=`@page{${pg}}@media print{@page{${pg}${land?";size:landscape":""}}}`;
-  $("sheet").classList.toggle("land",!!land);
+  $("sheet").classList.toggle("land",!!land); $("sheet").classList.toggle("port",!land);
 }
 const sexOf=e=>{const x=String(e.sex||"").toUpperCase(); if(x==="М"||x==="Ж") return x; const c=String(e.category||"").toLowerCase();
   if(/юнош|мальч|мужч|^муж/.test(c)) return "М"; if(/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return "";};
@@ -405,7 +414,7 @@ function startSheet(o){
   const lparts=list&&looseAll.length?partsOf({name:"",category:"",distance:"",entries:looseAll,rtype:"time",slots:0}):[];
   const shown=parts.concat(lparts).filter(p=>gm(p)&&p.entries.length);
   const tech=shown.some(p=>p.tech);
-  const land=tech||(list&&!!o.landscape);
+  const land=tech||!!o.landscape;
   const all=heatsAll.concat([{entries:looseAll}]);
   const anyCoach=all.some(h=>h.entries.some(e=>e.coach)), anySeed=all.some(h=>h.entries.some(e=>e.seed));
   const anyLane=all.some(h=>h.entries.some(e=>e.lane)), anyRank=all.some(h=>h.entries.some(e=>e.rank));
@@ -482,7 +491,7 @@ function sheetsFor(it){
   if(!keys.length) keys=[null];
   const out=keys.map(k=>start
     ? startSheet({gf:k??"__none__",sf:it.sf,list:it.mode==="list",coach,landscape:it.orient==="landscape"})
-    : (f=>({html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)}))(buildFinal({gf:k??"__none__",sf:it.sf,mode:it.mode==="heats"?"heats":"overall"})));
+    : (f=>({html:f.html,land:f.land,empty:/class="empty"/.test(f.html)&&!/<table/.test(f.html)}))(buildFinal({gf:k??"__none__",sf:it.sf,mode:it.mode==="heats"?"heats":"overall",landscape:it.orient==="landscape"})));
   return out.filter(r=>!r.empty).length?out.filter(r=>!r.empty):out.slice(0,1);
 }
 // листы на экран и в печать: каждый — с новой страницы; альбомные и книжные листы в одном документе
@@ -493,7 +502,7 @@ function showSheets(secs){
   st.textContent=`@page{size:A4 ${first?"landscape":"portrait"};margin:${first?"10mm 12mm 12mm":"12mm 12mm 14mm"}}`
     +`@page cpl{size:A4 landscape;margin:10mm 12mm 12mm}@page cpp{size:A4 portrait;margin:12mm 12mm 14mm}`
     +`.cp{page-break-after:always;break-after:page}.cp:last-child{page-break-after:auto;break-after:auto}.cp.land{page:cpl}.cp.port{page:cpp}`;
-  $("sheet").classList.toggle("land",secs.some(r=>r.land));
+  { const L=secs.some(r=>r.land); $("sheet").classList.toggle("land",L); $("sheet").classList.toggle("port",!L); }
   $("sheet").innerHTML=secs.map(r=>`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`).join("");
   fitPages();
 }
@@ -554,8 +563,8 @@ async function renderCart(){
   showSheets(secs);
 }
 function syncStartCtl(){
-  const isStart=isStartView(); const list=$("smode").value==="list";
-  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",!(isStart&&list));
+  const isStart=isStartView();
+  $("smode").classList.toggle("hide",!isStart); $("orient").classList.toggle("hide",$("mode").value==="teams");
 }
 
 function render(){
@@ -563,7 +572,7 @@ function render(){
   syncStartCtl();
   if(!R){ if(PUB&&SL) renderStart(); return; }
   if($("mode").value==="start") return renderStart();
-  if($("mode").value==="teams"){ drawTabs(null); const r=buildFinal(); setPage(r.land); $("sheet").innerHTML=r.html; return; }
+  if($("mode").value==="teams"){ drawTabs(null); const r=buildFinal(); setPage(r.land); $("sheet").innerHTML=`<section class="cp ${r.land?"land":"port"}">${r.html}</section>`; return; }
   const tabs=tabsFor(false); if(!tabs.some(t=>t.id===TAB)) TAB="";
   drawTabs(tabs);
   showSheets(sheetsFor(currentItem(false)));
@@ -663,7 +672,7 @@ function buildFinal(o={}){
   if(anyDone&&mode!=="teams") notes.push(`«Вып. разряд» — по нормам ЕВСК${R.rank_source?" ("+R.rank_source.replace(/^Нормы ЕВСК[^—]*—\s*/,"")+")":""}: учтены пол, возраст в год соревнований, хронометраж, высота барьеров и масса снарядов; на соревнованиях этого статуса — не выше «${R.rank_cap||"1 р."}». Сила ветра не учитывается.`);
   if(anyTechShown) notes.push("Лучший результат определён по шести попыткам: X — неудачная попытка, «–» — пропуск.");
   if(sf&&mode!=="teams") notes.push(sf==="М"?"Показаны только мальчики, юноши, мужчины. Места пересчитаны среди показанных.":"Показаны только девочки, девушки, женщины. Места пересчитаны среди показанных.");
-  return {land:anyTechShown, html:`
+  return {land:anyTechShown||!!o.landscape, html:`
     ${headHtml(ev,mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ",tf&&mode!=="teams"?"Команда: "+esc(tf):"")}
     ${stampHtml()}${body}
     <div class="tail">${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}

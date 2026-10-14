@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.7.1 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.1", r.stdout + r.stderr)
+    check("версия сервера 7.7.2 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.2", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -393,7 +393,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.7.1" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.7.2" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -406,7 +406,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.1", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.2", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1289,7 +1289,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.7.1 и дата сборки 14.10.2026", st3["version"] == "7.7.1" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.7.2 и дата сборки 14.10.2026", st3["version"] == "7.7.2" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1587,6 +1587,16 @@ def main() -> int:
         ia, ib_ = uih.index('id="gCounts"'), uih.index('id="gBody"')
         check("7.7.1: кнопки CSV / Excel / «Пересчитать категории» / «Загрузить и применить изменения из CSV» стоят над таблицей заявок, под вкладками статусов",
               uih.index('id="gTabs"') < uih.index('id="gApproveAll"') < ia + 600 and all(ia < uih.index(f'id="{i_}"') < ib_ for i_ in ("gApproveAll", "gImport", "gRecat", "gCsv", "gCsvApply", "gClearRej")), "")
+        # 7.7.2: печатные бланки — жёсткий стандарт А4, ручной разворот бегового бланка в альбомный лист
+        ph = open(os.path.join(_hd, "protocol.html"), encoding="utf-8").read()
+        pm = ph[ph.index("@media print{\n  html,body{-webkit"):]
+        check("7.7.2: бланк — жёсткий А4: .port 210×297 мм, .land 297×210 мм, box-sizing и центрирование; таблицы, подписи и шапка — на всю ширину; в печати поля body обнулены",
+              ".sheet.port{width:210mm;min-height:297mm;box-sizing:border-box" in ph and ".sheet.land{width:297mm;min-height:210mm;box-sizing:border-box" in ph
+              and "table,.tail,.sign,.head,.phead{width:100%!important;max-width:100%!important}" in pm and "table{table-layout:fixed}" in pm
+              and "html,body{background:#fff;color:#000;margin:0;padding:0}" in pm, "")
+        check("7.7.2: ориентацию беговых бланков (стартовых и итоговых) выбирает секретарь; техника всегда альбомная; setPage перестраивает лист",
+              "const land=tech||!!o.landscape;" in ph and "land:anyTechShown||!!o.landscape" in ph and 'landscape:it.orient==="landscape"' in ph
+              and '$("sheet").classList.toggle("port",!land)' in ph and 'toggle("hide",$("mode").value==="teams")' in ph, "")
         hubdir = os.path.dirname(os.path.abspath(args.hub))
         src = {n: open(os.path.join(hubdir, n), encoding="utf-8").read() for n in ("ui.html", "sector.html", "hub.py")}
         check("6.0: в браузере нет правила секундомеров (ни в админке, ни на планшете сектора) — только запрос к серверу",
