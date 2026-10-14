@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.7.3 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.3", r.stdout + r.stderr)
+    check("версия сервера 7.7.5 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.5", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -216,6 +216,13 @@ def main() -> int:
     r2 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--config", os.path.join(lc, "нет.json"), "--check"], capture_output=True, text=True, cwd=lc)
     check("7.7.3: повторный запуск использует тот же файл; указанный явно, но отсутствующий --config остаётся ошибкой и ничего не создаёт",
           r1.returncode == 0 and "создан" not in r1.stderr and r2.returncode == 2 and not os.path.exists(os.path.join(lc, "нет.json")), r1.stderr + r2.stderr)
+    # 7.7.5: судейский запускчик для Windows — двойной клик: UTF-8, CRLF, папка проекта, python/py, сервер без --config (config.json создаётся сам), браузер на :8080
+    bp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(hub_path))), "Запустить_СахСтарт.bat")
+    bb = open(bp, "rb").read() if os.path.exists(bp) else b""
+    bt = bb.decode("utf-8", "replace")
+    check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
+          b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v7.7.5" in bt, bt[:200])
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -408,7 +415,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.7.3" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.7.5" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -421,7 +428,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.3", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.5", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1304,7 +1311,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.7.3 и дата сборки 14.10.2026", st3["version"] == "7.7.3" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.7.5 и дата сборки 14.10.2026", st3["version"] == "7.7.5" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
