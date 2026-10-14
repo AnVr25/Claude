@@ -468,6 +468,12 @@ a.btn.xls:hover{background:#E9F5EE}
 .usr{background:var(--night-2);border:1px solid var(--night-line);color:#d5deeb;font:600 14px var(--body);padding:6px 10px}
 .usr:hover{border-color:#4a6491;color:#fff}
 .pubchk{margin:0;font-size:13px}
+.wzp-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+.ftab{font:600 14px/1.2 var(--body);min-height:40px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.ftab i{font-style:normal;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--ice);font-size:12px}
+.ftab.on{background:var(--night);border-color:var(--night);color:#fff}.ftab.on i{background:var(--track);color:#fff}
+.ftab.age{font-weight:500;min-height:34px;padding:5px 12px}.wzp-filter .fsep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.bibctl .redbtn{background:var(--track);border-color:var(--track);color:#fff}.bibctl .redbtn:disabled{opacity:.45}.bibctl .redbtn:hover:not(:disabled){filter:brightness(.92)}
 .addone{border-bottom:1px solid var(--line);margin-bottom:12px}
 @media (max-width:1100px){
   .st{max-width:none}
@@ -755,6 +761,9 @@ a.btn.xls:hover{background:#E9F5EE}
         <input id="gUrl" readonly placeholder="появится после первого открытия приёма" class="url">
         <div class="row" style="margin-top:6px"><button class="sm" id="gCopy">Копировать</button><a class="btn sm" id="gPreview" target="_blank">Открыть форму ↗</a></div>
         <div class="small muted" id="gUrlNote" style="margin-top:6px"></div>
+        <label class="switch" style="margin-top:12px"><input type="checkbox" id="gPubRegs"><i></i>Открытый список «прошли регистрацию»</label>
+        <div class="small muted" id="gPubNote" style="margin-top:4px">На странице формы тренеры увидят «Фамилия И.», возрастную группу и дисциплины одобренных заявок — без номеров и дат рождения. Полные протоколы — только в личном кабинете.</div>
+        <a class="btn sm hide" id="gPubLink" target="_blank" style="margin-top:6px">Посмотреть список ↗</a>
         <div class="qr" id="gQr" style="margin-top:10px"><span class="small muted">QR появится со ссылкой</span></div>
         <a class="btn sm" id="gQrDl" style="width:100%;text-align:center;margin-top:6px" download="qr-registraciya.png">Скачать QR для афиши</a>
       </div>
@@ -1501,6 +1510,7 @@ function renderRegHead(force){
   $("gUrlNote").innerHTML = !ev.reg_path ? "" : ev.reg_url ? (ev.reg_open ? "Форма открыта — ссылку можно рассылать." : "Приём закрыт — по ссылке увидят «Регистрация закрыта».")
     : "⚠️ Публичный адрес не настроен: эта ссылка работает только через VPN. Настройка домена — <span class=\"mono\">reg-setup.sh</span> в README.";
   drawQr(ev.reg_url || "");
+  $("gPubRegs").checked = !!ev.pub_regs; $("gPubLink").href = (ev.reg_path || "#") + "#registered"; $("gPubLink").classList.toggle("hide", !(ev.pub_regs && ev.reg_path));
   $("gCsv").href = `/api/events/${ev.id}/regs.csv`;
   const dists = distNames(ev, true);
   $("mDist").innerHTML = dists.map(d => `<option>${esc(d)}</option>`).join("") || "<option value=\"\">сначала задайте дистанции</option>";
@@ -1523,6 +1533,12 @@ $("gPick").addEventListener("toggle", () => { if (!$("gPick").open || $("gPickBo
   discPicker($("gPickBox"), {get: () => $("gDist").value.split("\n").map(x => x.trim()).filter(Boolean), set: (l) => { $("gDist").value = l.join("\n"); }}); });
 $("gDist").addEventListener("input", () => { const r = $("gPickBox"); if (r._dpDraw) r._dpDraw(); });
 $("gRulesDefault").onclick = (e) => { e.preventDefault(); if ($("gRules").value.trim() && !confirm("Заменить правила образцом?")) return; $("gRules").value = regDefaults; toast("Образец подставлен — поправьте годы рождения по положению"); };
+$("gPubRegs").onchange = async (e) => {
+  const ev = curEvent(); if (!ev) return;
+  try{ await api(`/api/events/${ev.id}/publish`, {regs: e.target.checked}); await loadEvents(); renderRegHead(true);
+    toast(e.target.checked ? "Список «прошли регистрацию» опубликован на странице формы" : "Список снят с сайта"); }
+  catch(err){ e.target.checked = !e.target.checked; toast("Ошибка: " + err.message); }
+};
 $("gCopy").onclick = () => { const i = $("gUrl"); if (!i.value) return; i.select(); try{ document.execCommand("copy"); toast("Ссылка скопирована"); }catch(e){ toast("Скопируйте вручную: Ctrl+C"); } };
 $("gSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
@@ -1654,7 +1670,7 @@ function renderCart(){
   const html = `<h3>🛒 Корзина печати <span class="small muted">${a.length ? "— листов: " + a.length + ", к печати: " + on : ""}</span></h3>
     ${a.map(it => `<div class="ci"><label><input type="checkbox" data-cs="${esc(it.id)}" ${it.on ? "checked" : ""}> <span>${esc(it.label)}</span></label><button data-rm="${esc(it.id)}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("")
       || '<p class="small muted" style="margin:0">Корзина пуста. Над протоколом выберите вкладку (все, мальчики, девочки или категорию) и нажмите «🛒 Добавить текущую вкладку в корзину печати».</p>'}
-    <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🌐 Выгрузить в общую сеть</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
+    <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🔐 Открыть тренерам в кабинете</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
   document.querySelectorAll(".cartmount").forEach(m => { m.innerHTML = html; });
 }
 document.addEventListener("click", async (e) => {
@@ -1671,10 +1687,10 @@ document.addEventListener("click", async (e) => {
     if (!sel.length) return toast("Отметьте галочками листы для выгрузки");
     const start = sel.some(x => x.type === "start"), res = sel.some(x => x.type === "final");
     const what = [start && "стартовый протокол", res && "итоговый протокол"].filter(Boolean).join(" и ");
-    if (!confirm(`Выгрузить в общую сеть: ${what}?\n\nНа публичной странице SakhStart станет виден протокол соревнования целиком. Убрать его оттуда можно в любой момент.`)) return;
+    if (!confirm(`Открыть тренерам в личном кабинете: ${what}?\n\nПротокол увидят только вошедшие тренеры, судьи и организаторы — в открытый доступ он не попадает. Закрыть его можно в любой момент.`)) return;
     try{
       const r = await api(`/api/events/${curId}/publish`, Object.assign({}, start ? {start: true} : {}, res ? {results: true} : {}));
-      toast("Выгружено в общую сеть"); alert("Протоколы доступны зрителям и участникам:\n" + (res ? r.results_url : r.start_url));
+      toast("Открыто тренерам в личном кабинете"); alert("Протокол доступен после входа в личный кабинет тренера:\n" + (res ? r.results_url : r.start_url));
       loadEvents._sig = null; loadEvents();
     }catch(err){ toast("Ошибка: " + err.message); }
   }
@@ -1791,15 +1807,20 @@ const wzp = (() => {
     ({1: step1, 2: step2, 3: step3, 4: step4, 5: step5})[W.step](body, k);
   }
   const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
-  function step1(body, k){
+  // вкладки «Все / Мальчики / Девочки» и возрастные группы — просто быстрый просмотр состава: проходить шаг ими не нужно
+  function filterBar(){
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
+    const tab = (v, t) => `<button type="button" role="tab" class="ftab${W.sex === v ? " on" : ""}" aria-selected="${W.sex === v}" data-sexf="${v}">${t} <i>${cnt(v)}</i></button>`;
+    const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
+    return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
+  }
+  function step1(body, k){
+    const all = W.regs.filter(r => r.distance === W.disc && r.status === "approved").length;
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
-    const ages = (DISC.ages || []);
     body.innerHTML = `${stepHead(1, k)}
-      <p class="small muted" style="margin:0">Дисциплина выбрана вверху. Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
-      <fieldset class="pmode"><legend>Возрастная группа</legend><div class="wzp-opts">${ages.map(a => `<label><input type="checkbox" data-age="${esc(a.id)}" ${W.ages.includes(a.id) ? "checked" : ""}> ${esc(a.name)}</label>`).join("")}</div><span class="small muted">Ничего не отмечено — все возрасты.</span></fieldset>
-      <fieldset class="pmode"><legend>Пол</legend><div class="wzp-opts">${[["", "Все"], ["М", "Мальчики / юноши / мужчины"], ["Ж", "Девочки / девушки / женщины"]].map(([v, t]) => `<label><input type="radio" name="wzpSex" value="${v}" ${W.sex === v ? "checked" : ""}> ${t}</label>`).join("")}</div></fieldset>
-      <p><b>Подходит участников: ${cnt("")}</b> <span class="small muted">· мальчиков ${cnt("М")} · девочек ${cnt("Ж")}${pend ? ` · ещё ${pend} заявок ждут проверки во вкладке «Регистрация»` : ""}</span></p>
+      <p style="margin:0"><b>Подтверждённых участников: ${all}</b> <span class="small muted">— все уже загружены по выбранной дисциплине${pend ? `; ещё ${pend} заявок ждут проверки на этапе «2. Регистрация»` : ""}</span></p>
+      ${filterBar()}
+      <p class="small muted" style="margin:0">Вкладки — только для просмотра состава (можно ничего не нажимать): без выбора в сетку идут все участники дисциплины.</p>
       ${nav(false, "К нагрудным номерам")}`;
   }
   function heatsTable(){
@@ -1820,8 +1841,10 @@ const wzp = (() => {
         Впишите нагрудный номер каждому участнику с клавиатуры (Enter — к следующему) и нажмите «Сохранить нагрудные номера». Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните снова: стартовый список, отметки и результаты переедут на новый номер.</p>
       <p class="small" style="margin:0"><b>Номер спортсмена, заявленного на несколько видов, один на все виды:</b> впишите его один раз — он запишется во все дисциплины.</p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
+      ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary big" type="button" id="bibSave" disabled>💾 Сохранить нагрудные номера</button>
+        <button class="danger big redbtn" type="button" id="bibClear" disabled>❌ Очистить все номера дисциплины</button>
         <span class="wzp-sync" id="bibSync" role="status" aria-live="polite"></span></div>
       ${nav(true, "К стартовому протоколу")}`;
     loadBibs().then(renderBibs).catch(err => { $("bibBox").innerHTML = `<p class="wzp-lock">Не удалось загрузить участников: ${esc(err.message)}</p>`; });
@@ -1856,7 +1879,20 @@ const wzp = (() => {
       if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; if (v !== tr.dataset.orig) changed++; });
     $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${mism ? ` · <span class="warn">разные номера в видах: ${mism}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
     $("bibSave").disabled = !dirty || dup > 0;
+    const bc = $("bibClear"); if (bc) bc.disabled = !(W.bibs && W.bibs.rows.some(r => r.bib));
     W.bibDirty = changed > 0;          // предупреждение при уходе — только если человек что-то изменил руками
+  }
+  // полная очистка номеров дисциплины: на сервере bib = NULL у всех её участников, поля на экране пустеют за один клик
+  async function clearBibsAll(){
+    const d = W.bibs, also = d && d.rows.some(r => r.also && r.also.length);
+    if (!confirm("Вы уверены, что хотите ПОЛНОСТЬЮ стереть и очистить все нагрудные номера в этой дисциплине?"
+        + (also ? "\n\nУ спортсменов, заявленных и на другие виды, номер один на все виды — он сотрётся и там, а их строки в сетках будут убраны." : "")
+        + "\n\nСтартовый список этой дисциплины будет убран; формировать его придётся заново после ввода номеров.")) return;
+    try{
+      const r = await api(`/api/events/${ev().id}/clear-bibs`, {distance: W.disc});
+      W.bibDirty = false; toast(`Номера очищены: заявок ${r.cleared}${r.also.length ? "; также в: " + r.also.join(", ") : ""}`);
+      loadEvents._sig = null; await loadEvents(); await load(); render();
+    }catch(err){ alert("Номера не очищены:\n" + err.message); }
   }
   async function saveBibs(){
     const rows = [...document.querySelectorAll("#bibRows tr.dirty")].map(tr => ({ids: tr.dataset.ids.split(",").map(Number), bib: tr.querySelector("input").value.trim()}));
@@ -1920,9 +1956,10 @@ const wzp = (() => {
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-      <fieldset class="pmode wzp-pub"><legend>Публикация в общей сети SakhStart</legend>
-        <label><input type="checkbox" id="wzpPubS" ${ev().pub_start ? "checked" : ""}> <b>Стартовый протокол на сайте</b><span class="small muted"> — зрители и участники видят составы и забеги</span></label>
-        <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол на сайте</b><span class="small muted"> — места, результаты и разряды</span></label>
+      <fieldset class="pmode wzp-pub"><legend>Публикация</legend>
+        <label><input type="checkbox" id="wzpPubG" ${ev().pub_regs ? "checked" : ""}> <b>Открытый список «прошли регистрацию»</b><span class="small muted"> — на странице соревнования без входа: только «Фамилия И.», возрастная группа и дисциплины одобренных заявок. Номеров, дорожек и данных рождения там нет</span></label>
+        <label><input type="checkbox" id="wzpPubS" ${ev().pub_start ? "checked" : ""}> <b>Стартовый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
+        <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
       <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
@@ -2033,16 +2070,19 @@ const wzp = (() => {
     catch(err){ toast("Ошибка: " + err.message); }
   }
   async function setPub(kind2, on){
-    try{ const r = await api(`/api/events/${ev().id}/publish`, {[kind2]: on});
-      toast(on ? "Выгружено в общую сеть SakhStart" : "Снято с публичного сайта"); loadEvents._sig = null; await loadEvents(); render();
-      if (on) { const u2 = kind2 === "start" ? r.start_url : r.results_url; const a = $("wzpPubLink"); if (a) { a.href = u2; a.textContent = u2; } } }
+    try{ await api(`/api/events/${ev().id}/publish`, {[kind2]: on});
+      toast(kind2 === "regs" ? (on ? "Открытый список «прошли регистрацию» опубликован" : "Открытый список снят с сайта")
+        : (on ? "Протокол открыт тренерам в личном кабинете" : "Протокол закрыт для тренеров")); loadEvents._sig = null; await loadEvents(); render(); }
     catch(err){ toast("Ошибка: " + err.message); render(); }
   }
   const root = $("tab-wizard");
   root.addEventListener("click", (e) => {
     const s = e.target.closest("[data-s]"); if (s) return go(+s.dataset.s);
     const g = e.target.closest("[data-g]"); if (g) return go(W.step + +g.dataset.g);
+    const sf = e.target.closest("[data-sexf]"); if (sf) { W.sex = sf.dataset.sexf; save(); return render(); }
+    const af = e.target.closest("[data-agef]"); if (af) { const a = af.dataset.agef; W.ages = W.ages.includes(a) ? W.ages.filter(x => x !== a) : [...W.ages, a]; save(); return render(); }
     if (e.target.id === "wzpGen") return gen();
+    if (e.target.id === "bibClear") return clearBibsAll();
     if (e.target.id === "bibSave") return saveBibs();
     if (e.target.id === "wzpFinish") return finToggle().then(() => render());
     if (e.target.id === "wzpStartReset") return startReset(e.target.dataset.wave);
@@ -2055,6 +2095,7 @@ const wzp = (() => {
     if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
     if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
+    if (e.target.id === "wzpPubG") return setPub("regs", e.target.checked);
     if (e.target.id === "wzpPubS") return setPub("start", e.target.checked);
     if (e.target.id === "wzpPubR") return setPub("results", e.target.checked);
     const tr = e.target.closest("#wzpRows tr"); if (tr) { tr.classList.add("dirty"); queueAuto(); }
@@ -2074,7 +2115,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
+    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); };      // участники подтягиваются сами — сразу к номерам
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;

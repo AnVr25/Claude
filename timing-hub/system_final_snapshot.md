@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `7.0.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.1.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `3d0a05f`
-- **Дамп сформирован:** 2026-10-14 06:04 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 303 из 303 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 5594 строк, `hub/ui.html` 2701, `hub/protocol.html` 637
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `658ec56`
+- **Дамп сформирован:** 2026-10-14 08:09 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 313 из 313 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 5696 строк, `hub/ui.html` 2742, `hub/protocol.html` 637
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -86,6 +86,7 @@
 | 40 | `links` | TEXT |  |  |  |
 | 41 | `pub_start` | INTEGER | да | 0 |  |
 | 42 | `pub_results` | INTEGER | да | 0 |  |
+| 43 | `pub_regs` | INTEGER | да | 0 |  |
 
 ```sql
 CREATE TABLE events(
@@ -98,7 +99,7 @@ CREATE TABLE events(
                 status TEXT NOT NULL DEFAULT 'planned',
                 notes TEXT,
                 created_at TEXT NOT NULL
-            , archived INTEGER NOT NULL DEFAULT 0, finished_at TEXT, organizer TEXT, chief_judge TEXT, chief_secretary TEXT, start_clock TEXT, heats_sequential INTEGER, team_best INTEGER, cover TEXT, program TEXT, contacts TEXT, series TEXT, reg_open INTEGER NOT NULL DEFAULT 0, reg_slug TEXT, reg_deadline TEXT, reg_distances TEXT, reg_rules TEXT, reg_lanes INTEGER, reg_info TEXT, reg_consent TEXT, kind TEXT, timing TEXT, pub_site INTEGER NOT NULL DEFAULT 0, ours INTEGER NOT NULL DEFAULT 1, level TEXT, adaptive INTEGER NOT NULL DEFAULT 0, date_end TEXT, city TEXT, note TEXT, live_url TEXT, photo_url TEXT, links TEXT, pub_start INTEGER NOT NULL DEFAULT 0, pub_results INTEGER NOT NULL DEFAULT 0)
+            , archived INTEGER NOT NULL DEFAULT 0, finished_at TEXT, organizer TEXT, chief_judge TEXT, chief_secretary TEXT, start_clock TEXT, heats_sequential INTEGER, team_best INTEGER, cover TEXT, program TEXT, contacts TEXT, series TEXT, reg_open INTEGER NOT NULL DEFAULT 0, reg_slug TEXT, reg_deadline TEXT, reg_distances TEXT, reg_rules TEXT, reg_lanes INTEGER, reg_info TEXT, reg_consent TEXT, kind TEXT, timing TEXT, pub_site INTEGER NOT NULL DEFAULT 0, ours INTEGER NOT NULL DEFAULT 1, level TEXT, adaptive INTEGER NOT NULL DEFAULT 0, date_end TEXT, city TEXT, note TEXT, live_url TEXT, photo_url TEXT, links TEXT, pub_start INTEGER NOT NULL DEFAULT 0, pub_results INTEGER NOT NULL DEFAULT 0, pub_regs INTEGER NOT NULL DEFAULT 0)
 ```
 
 ```sql
@@ -269,7 +270,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 - `waves.distance` пуст у смешанного «общего списка» (глобальная сборка) — поэтому дисциплина участника берётся из `registrations.distance` через `entries.reg_id` (`Hub.entry_dists`).
 - Миграции идемпотентны: `Store._migrate` через `add(table, columns)` (`ALTER TABLE … ADD COLUMN`, если столбца нет).
 
-### `Store._migrate` — `hub/hub.py` строки 386–557
+### `Store._migrate` — `hub/hub.py` строки 386–558
 
 ```python
     def _migrate(self) -> None:
@@ -354,6 +355,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                        ("date_end", "TEXT"), ("city", "TEXT"), ("note", "TEXT"), ("live_url", "TEXT"),
                        ("photo_url", "TEXT"), ("links", "TEXT"), ("pub_start", "INTEGER NOT NULL DEFAULT 0"),
                        ("pub_results", "INTEGER NOT NULL DEFAULT 0")))
+        add("events", (("pub_regs", "INTEGER NOT NULL DEFAULT 0"),))      # 7.1: открытый список «прошли регистрацию» для тренеров
         add("files", (("public", "INTEGER NOT NULL DEFAULT 0"),))
         add("entries", (("result", "TEXT"), ("status", "TEXT")))
         # Таблицы users/sessions могли остаться от старых сборок сервера с другим устройством —
@@ -452,7 +454,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.1 Определение типа дисциплины (Бег / Техника)
 
-#### `Hub.discipline` — `hub/hub.py` строки 1685–1687
+#### `Hub.discipline` — `hub/hub.py` строки 1729–1731
 
 ```python
     @classmethod
@@ -460,7 +462,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 ```
 
-#### `Hub.result_type` — `hub/hub.py` строки 1813–1817
+#### `Hub.result_type` — `hub/hub.py` строки 1857–1861
 
 ```python
     @classmethod
@@ -470,7 +472,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return d["result"] if d else "time"
 ```
 
-#### `Hub.discipline_kind` — `hub/hub.py` строки 1796–1804
+#### `Hub.discipline_kind` — `hub/hub.py` строки 1840–1848
 
 ```python
     @classmethod
@@ -484,7 +486,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "run" if d.get("result") == "time" else "other"
 ```
 
-#### `Hub.attempt_slots` — `hub/hub.py` строки 1486–1492
+#### `Hub.attempt_slots` — `hub/hub.py` строки 1530–1536
 
 ```python
     @classmethod
@@ -496,7 +498,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return 12 if d.get("result") == "height" else 6
 ```
 
-#### `Hub.entry_dists` — `hub/hub.py` строки 1806–1811
+#### `Hub.entry_dists` — `hub/hub.py` строки 1850–1855
 
 ```python
     def entry_dists(self, eid: int, erows: Optional[list] = None) -> dict:
@@ -509,7 +511,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 3634–3735
+#### `Hub.generate_scoped` — `hub/hub.py` строки 3728–3829
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -616,7 +618,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 3604–3613
+#### `Hub.lane_order` — `hub/hub.py` строки 3698–3707
 
 ```python
     @staticmethod
@@ -631,7 +633,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 3737–3777
+#### `Hub.reset_heats` — `hub/hub.py` строки 3831–3871
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -677,7 +679,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 3616–3620
+#### `Hub.age_limits` — `hub/hub.py` строки 3710–3714
 
 ```python
     @classmethod
@@ -687,7 +689,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 3622–3632
+#### `Hub.age_ok` — `hub/hub.py` строки 3716–3726
 
 ```python
     @classmethod
@@ -705,7 +707,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.3 Номера и участники
 
-#### `Store.add_entry` — `hub/hub.py` строки 886–897
+#### `Store.add_entry` — `hub/hub.py` строки 887–898
 
 ```python
     def add_entry(self, eid: int, r: dict) -> int:
@@ -722,7 +724,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return int(cur.lastrowid)
 ```
 
-#### `Store.upsert_entries` — `hub/hub.py` строки 813–839
+#### `Store.upsert_entries` — `hub/hub.py` строки 814–840
 
 ```python
     def upsert_entries(self, eid: int, rows: list) -> None:
@@ -754,7 +756,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             raise
 ```
 
-#### `Store.update_entry` — `hub/hub.py` строки 874–884
+#### `Store.update_entry` — `hub/hub.py` строки 875–885
 
 ```python
     def update_entry(self, eid: int, entry_id: int, **kw) -> int:
@@ -770,7 +772,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                                 (*args, eid, entry_id)).rowcount
 ```
 
-#### `Store.rename_bib` — `hub/hub.py` строки 899–903
+#### `Store.rename_bib` — `hub/hub.py` строки 900–904
 
 ```python
     def rename_bib(self, eid: int, old: str, new: str) -> None:
@@ -782,7 +784,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 3817–3836
+#### `Hub.startlist` — `hub/hub.py` строки 3911–3930
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -807,7 +809,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
 ```
 
-#### `Hub.public_startlist` — `hub/hub.py` строки 1386–1390
+#### `Hub.public_startlist` — `hub/hub.py` строки 1430–1434
 
 ```python
     def public_startlist(self, ev: dict) -> dict:
@@ -819,7 +821,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.5 Хранение результата и отметок
 
-#### `Store.set_entry_result` — `hub/hub.py` строки 853–864
+#### `Store.set_entry_result` — `hub/hub.py` строки 854–865
 
 ```python
     def set_entry_result(self, eid: int, entry_id: int, result: Optional[str], status: Optional[str],
@@ -838,7 +840,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.6 Официальное время по 3 секундомерам и лучший результат из 6 попыток
 
-#### `Hub.round_up_tenth` — `hub/hub.py` строки 1469–1471
+#### `Hub.round_up_tenth` — `hub/hub.py` строки 1513–1515
 
 ```python
     @staticmethod
@@ -846,7 +848,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return math.ceil(round(x * 10, 6)) / 10.0
 ```
 
-#### `Hub.stopwatch_main` — `hub/hub.py` строки 1473–1482
+#### `Hub.stopwatch_main` — `hub/hub.py` строки 1517–1526
 
 ```python
     @classmethod
@@ -861,7 +863,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.round_up_tenth(main)
 ```
 
-#### `Hub.parse_result` — `hub/hub.py` строки 1641–1658
+#### `Hub.parse_result` — `hub/hub.py` строки 1685–1702
 
 ```python
     @classmethod
@@ -884,7 +886,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return total, txt
 ```
 
-#### `Hub.fmt_result` — `hub/hub.py` строки 1440–1451
+#### `Hub.fmt_result` — `hub/hub.py` строки 1484–1495
 
 ```python
     @staticmethod
@@ -901,7 +903,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"{s}.{t}"
 ```
 
-#### `Hub.parse_typed` — `hub/hub.py` строки 1819–1838
+#### `Hub.parse_typed` — `hub/hub.py` строки 1863–1882
 
 ```python
     @classmethod
@@ -926,7 +928,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return -v, f"{v:.2f}"
 ```
 
-#### `Hub.parse_attempts` — `hub/hub.py` строки 1613–1636
+#### `Hub.parse_attempts` — `hub/hub.py` строки 1657–1680
 
 ```python
     @classmethod
@@ -955,7 +957,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return clean, best, errs
 ```
 
-#### `Hub.result_hint` — `hub/hub.py` строки 1840–1842
+#### `Hub.result_hint` — `hub/hub.py` строки 1884–1886
 
 ```python
     @classmethod
@@ -965,7 +967,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.7 Выполненный разряд по нормам ЕВСК
 
-#### `Hub.norm_key` — `hub/hub.py` строки 1698–1730
+#### `Hub.norm_key` — `hub/hub.py` строки 1742–1774
 
 ```python
     @classmethod
@@ -1003,7 +1005,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"run:{dist}"
 ```
 
-#### `Hub.rank_norms` — `hub/hub.py` строки 1732–1745
+#### `Hub.rank_norms` — `hub/hub.py` строки 1776–1789
 
 ```python
     @classmethod
@@ -1022,7 +1024,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._NORMS
 ```
 
-#### `Hub.age_group` — `hub/hub.py` строки 1747–1752
+#### `Hub.age_group` — `hub/hub.py` строки 1791–1796
 
 ```python
     @staticmethod
@@ -1033,7 +1035,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "sen"
 ```
 
-#### `Hub.rank_for` — `hub/hub.py` строки 1754–1794
+#### `Hub.rank_for` — `hub/hub.py` строки 1798–1838
 
 ```python
     def rank_for(self, ev: dict, dist, sex, birth_year, value: float, hand: bool) -> str:
@@ -1079,7 +1081,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return ""
 ```
 
-#### `Hub.norm_rank` — `hub/hub.py` строки 1461–1466
+#### `Hub.norm_rank` — `hub/hub.py` строки 1505–1510
 
 ```python
     @classmethod
@@ -1090,19 +1092,19 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._RANK_ALIAS.get(key) or cls._RANK_ALIAS.get(key.rstrip("."), "") or t
 ```
 
-#### `Hub.RANK_ORDER` — `hub/hub.py` строки 1691–1691
+#### `Hub.RANK_ORDER` — `hub/hub.py` строки 1735–1735
 
 ```python
     RANK_ORDER = ("МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн.")
 ```
 
-#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 1692–1692
+#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 1736–1736
 
 ```python
     RANK_MIN_AGE = {"МСМК": 16, "МС": 15, "КМС": 14}          # остальные разряды — с 10 лет
 ```
 
-#### `Hub.RANK_CAP` — `hub/hub.py` строки 1694–1694
+#### `Hub.RANK_CAP` — `hub/hub.py` строки 1738–1738
 
 ```python
     RANK_CAP = {"russia": "МС", "dfo": "МС", "interregion": "КМС", "region": "1 р.", "mass": "2 р."}
@@ -1110,7 +1112,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.8 Ветки HTTP-API Мастера (внутри `Hub._api_event`)
 
-#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2677–2693
+#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2729–2745
 
 ```python
         if action == "heats":
@@ -1132,7 +1134,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2663–2670
+#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2710–2717
 
 ```python
         if action == "resetheats":
@@ -1145,12 +1147,14 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2642–2662
+#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2686–2709
 
 ```python
         if action == "publish":
-            # «Выгрузить в общую сеть»: стартовый и/или итоговый протокол становится виден на публичной странице события
+            # публикация: открытый список «прошли регистрацию» (pub_regs, минимум данных) и протоколы для тренеров в кабинете (pub_start / pub_results — закрыты, нужен вход)
             upd = {}
+            if "regs" in data:                      # 7.1: открытый список «прошли регистрацию» (минимум данных, без входа)
+                upd["pub_regs"] = bool(data["regs"])
             if "start" in data:
                 upd["pub_start"] = bool(data["start"])
             if "results" in data:
@@ -1163,15 +1167,16 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 return err("публичный сайт не настроен на этом сервере (Система → Настройки сайта)")
             slug = self.ensure_slug(eid)
             self.store.update_event(eid, {**upd, "ours": True})
-            self.store.audit(who, eid, "Протоколы выгружены в общую сеть" if any(upd.values()) else "Протоколы убраны из общей сети",
+            self.store.audit(who, eid, "Публикация включена (тренерам / открытый список)" if any(upd.values()) else "Публикация снята",
                              ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
             v = self._event_view(self.store.get_event(eid))
-            return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "url": v["page_url"],
+            return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "pub_regs": v["pub_regs"], "url": v["page_url"],
+                       "registered_url": f"{self.public_base()}/r/{slug}#registered",
                        "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
 ```
 
-#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2694–2771
+#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2746–2823
 
 ```python
         if action == "entry":
@@ -1254,7 +1259,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok({"ok": True})
 ```
 
-#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2408–2455
+#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2452–2499
 
 ```python
         if action == "results" and isinstance(data.get("rows"), list):
@@ -1307,7 +1312,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok({"saved": n, "errors": bad})
 ```
 
-### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 1890–2081
+### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 1934–2125
 
 Дословно: включает дисциплину участника (`entry_dists`), места по дисциплине в смешанном забеге и расчёт `done_rank`.
 
@@ -1870,7 +1875,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1629–1686
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1645–1702
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1901,7 +1906,7 @@ function renderCart(){
   const html = `<h3>🛒 Корзина печати <span class="small muted">${a.length ? "— листов: " + a.length + ", к печати: " + on : ""}</span></h3>
     ${a.map(it => `<div class="ci"><label><input type="checkbox" data-cs="${esc(it.id)}" ${it.on ? "checked" : ""}> <span>${esc(it.label)}</span></label><button data-rm="${esc(it.id)}" aria-label="Убрать из корзины: ${esc(it.label)}">✕ Убрать</button></div>`).join("")
       || '<p class="small muted" style="margin:0">Корзина пуста. Над протоколом выберите вкладку (все, мальчики, девочки или категорию) и нажмите «🛒 Добавить текущую вкладку в корзину печати».</p>'}
-    <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🌐 Выгрузить в общую сеть</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
+    <div class="row"><button class="bigprint" data-cart="print" ${on ? "" : "disabled"}>🖨️ Печать пакета</button><button data-cart="publish" ${on ? "" : "disabled"}>🔐 Открыть тренерам в кабинете</button><button data-cart="clear" ${a.length ? "" : "disabled"}>Очистить корзину</button></div>`;
   document.querySelectorAll(".cartmount").forEach(m => { m.innerHTML = html; });
 }
 document.addEventListener("click", async (e) => {
@@ -1918,10 +1923,10 @@ document.addEventListener("click", async (e) => {
     if (!sel.length) return toast("Отметьте галочками листы для выгрузки");
     const start = sel.some(x => x.type === "start"), res = sel.some(x => x.type === "final");
     const what = [start && "стартовый протокол", res && "итоговый протокол"].filter(Boolean).join(" и ");
-    if (!confirm(`Выгрузить в общую сеть: ${what}?\n\nНа публичной странице SakhStart станет виден протокол соревнования целиком. Убрать его оттуда можно в любой момент.`)) return;
+    if (!confirm(`Открыть тренерам в личном кабинете: ${what}?\n\nПротокол увидят только вошедшие тренеры, судьи и организаторы — в открытый доступ он не попадает. Закрыть его можно в любой момент.`)) return;
     try{
       const r = await api(`/api/events/${curId}/publish`, Object.assign({}, start ? {start: true} : {}, res ? {results: true} : {}));
-      toast("Выгружено в общую сеть"); alert("Протоколы доступны зрителям и участникам:\n" + (res ? r.results_url : r.start_url));
+      toast("Открыто тренерам в личном кабинете"); alert("Протокол доступен после входа в личный кабинет тренера:\n" + (res ? r.results_url : r.start_url));
       loadEvents._sig = null; loadEvents();
     }catch(err){ toast("Ошибка: " + err.message); }
   }
@@ -1934,7 +1939,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1688–2084
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1704–2125
 
 ```js
 const wzp = (() => {
@@ -2043,15 +2048,20 @@ const wzp = (() => {
     ({1: step1, 2: step2, 3: step3, 4: step4, 5: step5})[W.step](body, k);
   }
   const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
-  function step1(body, k){
+  // вкладки «Все / Мальчики / Девочки» и возрастные группы — просто быстрый просмотр состава: проходить шаг ими не нужно
+  function filterBar(){
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
+    const tab = (v, t) => `<button type="button" role="tab" class="ftab${W.sex === v ? " on" : ""}" aria-selected="${W.sex === v}" data-sexf="${v}">${t} <i>${cnt(v)}</i></button>`;
+    const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
+    return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
+  }
+  function step1(body, k){
+    const all = W.regs.filter(r => r.distance === W.disc && r.status === "approved").length;
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
-    const ages = (DISC.ages || []);
     body.innerHTML = `${stepHead(1, k)}
-      <p class="small muted" style="margin:0">Дисциплина выбрана вверху. Выберите возрастные группы и пол. Остальные участники этой дисциплины не пропадают: можно по очереди сформировать мальчиков и девочек.</p>
-      <fieldset class="pmode"><legend>Возрастная группа</legend><div class="wzp-opts">${ages.map(a => `<label><input type="checkbox" data-age="${esc(a.id)}" ${W.ages.includes(a.id) ? "checked" : ""}> ${esc(a.name)}</label>`).join("")}</div><span class="small muted">Ничего не отмечено — все возрасты.</span></fieldset>
-      <fieldset class="pmode"><legend>Пол</legend><div class="wzp-opts">${[["", "Все"], ["М", "Мальчики / юноши / мужчины"], ["Ж", "Девочки / девушки / женщины"]].map(([v, t]) => `<label><input type="radio" name="wzpSex" value="${v}" ${W.sex === v ? "checked" : ""}> ${t}</label>`).join("")}</div></fieldset>
-      <p><b>Подходит участников: ${cnt("")}</b> <span class="small muted">· мальчиков ${cnt("М")} · девочек ${cnt("Ж")}${pend ? ` · ещё ${pend} заявок ждут проверки во вкладке «Регистрация»` : ""}</span></p>
+      <p style="margin:0"><b>Подтверждённых участников: ${all}</b> <span class="small muted">— все уже загружены по выбранной дисциплине${pend ? `; ещё ${pend} заявок ждут проверки на этапе «2. Регистрация»` : ""}</span></p>
+      ${filterBar()}
+      <p class="small muted" style="margin:0">Вкладки — только для просмотра состава (можно ничего не нажимать): без выбора в сетку идут все участники дисциплины.</p>
       ${nav(false, "К нагрудным номерам")}`;
   }
   function heatsTable(){
@@ -2072,8 +2082,10 @@ const wzp = (() => {
         Впишите нагрудный номер каждому участнику с клавиатуры (Enter — к следующему) и нажмите «Сохранить нагрудные номера». Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните снова: стартовый список, отметки и результаты переедут на новый номер.</p>
       <p class="small" style="margin:0"><b>Номер спортсмена, заявленного на несколько видов, один на все виды:</b> впишите его один раз — он запишется во все дисциплины.</p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
+      ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary big" type="button" id="bibSave" disabled>💾 Сохранить нагрудные номера</button>
+        <button class="danger big redbtn" type="button" id="bibClear" disabled>❌ Очистить все номера дисциплины</button>
         <span class="wzp-sync" id="bibSync" role="status" aria-live="polite"></span></div>
       ${nav(true, "К стартовому протоколу")}`;
     loadBibs().then(renderBibs).catch(err => { $("bibBox").innerHTML = `<p class="wzp-lock">Не удалось загрузить участников: ${esc(err.message)}</p>`; });
@@ -2108,7 +2120,20 @@ const wzp = (() => {
       if (!v) empty++; if (isDup) dup++; if (isDirty) dirty++; if (v !== tr.dataset.orig) changed++; });
     $("bibStat").innerHTML = `Участников: <b>${trs.length}</b> · с номером: <b>${trs.length - empty}</b>${empty ? ` · <span class="bad">без номера: ${empty}</span>` : ""}${dup ? ` · <span class="bad">повторяются: ${dup}</span>` : ""}${mism ? ` · <span class="warn">разные номера в видах: ${mism}</span>` : ""}${dirty ? ` · <span class="warn">не сохранено: ${dirty}</span>` : ""}`;
     $("bibSave").disabled = !dirty || dup > 0;
+    const bc = $("bibClear"); if (bc) bc.disabled = !(W.bibs && W.bibs.rows.some(r => r.bib));
     W.bibDirty = changed > 0;          // предупреждение при уходе — только если человек что-то изменил руками
+  }
+  // полная очистка номеров дисциплины: на сервере bib = NULL у всех её участников, поля на экране пустеют за один клик
+  async function clearBibsAll(){
+    const d = W.bibs, also = d && d.rows.some(r => r.also && r.also.length);
+    if (!confirm("Вы уверены, что хотите ПОЛНОСТЬЮ стереть и очистить все нагрудные номера в этой дисциплине?"
+        + (also ? "\n\nУ спортсменов, заявленных и на другие виды, номер один на все виды — он сотрётся и там, а их строки в сетках будут убраны." : "")
+        + "\n\nСтартовый список этой дисциплины будет убран; формировать его придётся заново после ввода номеров.")) return;
+    try{
+      const r = await api(`/api/events/${ev().id}/clear-bibs`, {distance: W.disc});
+      W.bibDirty = false; toast(`Номера очищены: заявок ${r.cleared}${r.also.length ? "; также в: " + r.also.join(", ") : ""}`);
+      loadEvents._sig = null; await loadEvents(); await load(); render();
+    }catch(err){ alert("Номера не очищены:\n" + err.message); }
   }
   async function saveBibs(){
     const rows = [...document.querySelectorAll("#bibRows tr.dirty")].map(tr => ({ids: tr.dataset.ids.split(",").map(Number), bib: tr.querySelector("input").value.trim()}));
@@ -2172,9 +2197,10 @@ const wzp = (() => {
       <p class="small muted" style="margin:0">${tech ? "Горизонтальный лист: на каждое место видны все шесть попыток спортсмена и лучший результат." : "Вертикальный лист: места, результаты и выполненные разряды."}</p>
       <label class="small">Статус соревнований — от него зависит, какой разряд можно выполнить
         <select id="wzpLevel" style="max-width:420px">${[["mass","Муниципальные, массовые — до II разряда"],["region","Субъекта РФ (областные) — до I разряда"],["interregion","Межрегиональные — до КМС"],["dfo","Федерального округа — до МС"],["russia","Всероссийские — до МС"]].map(([v, t]) => `<option value="${v}" ${(ev().level || "region") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-      <fieldset class="pmode wzp-pub"><legend>Публикация в общей сети SakhStart</legend>
-        <label><input type="checkbox" id="wzpPubS" ${ev().pub_start ? "checked" : ""}> <b>Стартовый протокол на сайте</b><span class="small muted"> — зрители и участники видят составы и забеги</span></label>
-        <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол на сайте</b><span class="small muted"> — места, результаты и разряды</span></label>
+      <fieldset class="pmode wzp-pub"><legend>Публикация</legend>
+        <label><input type="checkbox" id="wzpPubG" ${ev().pub_regs ? "checked" : ""}> <b>Открытый список «прошли регистрацию»</b><span class="small muted"> — на странице соревнования без входа: только «Фамилия И.», возрастная группа и дисциплины одобренных заявок. Номеров, дорожек и данных рождения там нет</span></label>
+        <label><input type="checkbox" id="wzpPubS" ${ev().pub_start ? "checked" : ""}> <b>Стартовый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
+        <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
       <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
@@ -2285,16 +2311,19 @@ const wzp = (() => {
     catch(err){ toast("Ошибка: " + err.message); }
   }
   async function setPub(kind2, on){
-    try{ const r = await api(`/api/events/${ev().id}/publish`, {[kind2]: on});
-      toast(on ? "Выгружено в общую сеть SakhStart" : "Снято с публичного сайта"); loadEvents._sig = null; await loadEvents(); render();
-      if (on) { const u2 = kind2 === "start" ? r.start_url : r.results_url; const a = $("wzpPubLink"); if (a) { a.href = u2; a.textContent = u2; } } }
+    try{ await api(`/api/events/${ev().id}/publish`, {[kind2]: on});
+      toast(kind2 === "regs" ? (on ? "Открытый список «прошли регистрацию» опубликован" : "Открытый список снят с сайта")
+        : (on ? "Протокол открыт тренерам в личном кабинете" : "Протокол закрыт для тренеров")); loadEvents._sig = null; await loadEvents(); render(); }
     catch(err){ toast("Ошибка: " + err.message); render(); }
   }
   const root = $("tab-wizard");
   root.addEventListener("click", (e) => {
     const s = e.target.closest("[data-s]"); if (s) return go(+s.dataset.s);
     const g = e.target.closest("[data-g]"); if (g) return go(W.step + +g.dataset.g);
+    const sf = e.target.closest("[data-sexf]"); if (sf) { W.sex = sf.dataset.sexf; save(); return render(); }
+    const af = e.target.closest("[data-agef]"); if (af) { const a = af.dataset.agef; W.ages = W.ages.includes(a) ? W.ages.filter(x => x !== a) : [...W.ages, a]; save(); return render(); }
     if (e.target.id === "wzpGen") return gen();
+    if (e.target.id === "bibClear") return clearBibsAll();
     if (e.target.id === "bibSave") return saveBibs();
     if (e.target.id === "wzpFinish") return finToggle().then(() => render());
     if (e.target.id === "wzpStartReset") return startReset(e.target.dataset.wave);
@@ -2307,6 +2336,7 @@ const wzp = (() => {
     if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
     if (e.target.id === "wzpLevel") { api(`/api/events/${ev().id}`, {level: e.target.value}).then(async () => { toast("Статус соревнований сохранён — разряды пересчитаны"); loadEvents._sig = null; await loadEvents(); render(); }).catch(err => toast("Ошибка: " + err.message)); return; }
+    if (e.target.id === "wzpPubG") return setPub("regs", e.target.checked);
     if (e.target.id === "wzpPubS") return setPub("start", e.target.checked);
     if (e.target.id === "wzpPubR") return setPub("results", e.target.checked);
     const tr = e.target.closest("#wzpRows tr"); if (tr) { tr.classList.add("dirty"); queueAuto(); }
@@ -2326,7 +2356,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.disc = e.target.value; W.step = 1; W.ages = []; W.sex = ""; save(); render(); };
+    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); };      // участники подтягиваются сами — сразу к номерам
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;
@@ -2338,7 +2368,7 @@ const wzp = (() => {
 
 ### 4.5 Расчёт официального результата — только на сервере (`hub/hub.py`)
 
-#### `Hub.official_from_raw` — `hub/hub.py` строки 1561–1600
+#### `Hub.official_from_raw` — `hub/hub.py` строки 1605–1644
 
 ```python
     def official_from_raw(self, dn, rt: str, rw: dict) -> tuple:
@@ -2383,7 +2413,7 @@ const wzp = (() => {
         return detail, set_detail, auto_txt, errs
 ```
 
-#### `Hub.calc_official` — `hub/hub.py` строки 1602–1611
+#### `Hub.calc_official` — `hub/hub.py` строки 1646–1655
 
 ```python
     def calc_official(self, distance: str, rows: list) -> dict:
@@ -2402,7 +2432,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1486–1486
+#### `rankOpts` — `hub/ui.html` строки 1495–1495
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2522,7 +2552,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 303 из 303 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 313 из 313 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2575,6 +2605,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+658ec56 2026-10-14 chore: убраны остатки разбора ридеров (регулярные выражения, комментарии, имена VPN-доступов)
 3d0a05f 2026-10-14 major: запущен чистый стадионно-манежный монолит SakhStart v7.0.0, вырезан код чипового хронометража
 6233695 2026-10-14 release: глобальная реконструкция платформы, запущен монолитный SakhStart v6.0.0
 39c6600 2026-10-14 audit: сформирован глобальный архитектурный дамп системы для ревизии
@@ -2588,6 +2619,5 @@ a579ae1 2026-10-13 major: запущен Личный кабинет трене�
 a331a84 2026-10-13 major: упорядочена система ролей (Админ/Судья) и ликвидировано забавление кнопок обновлений v4.5.0
 43ccb4d 2026-10-13 major: зафиксирован единый монолитный интерфейс навигации и внедрен пульт управления табло v4.4.0
 c3e08b9 2026-10-13 major: запущен выделенный мобильный роут /sector для планшетов судей со сквозной трансляцией результатов на Табло v4.3.0
-b452b31 2026-10-13 fix: проведен тотальный аудит системы, ликвидирован откат Мастера соревнований и хаос в шестерёнке v4.2.0
 ```
 

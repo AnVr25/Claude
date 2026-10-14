@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.0.0"
+VERSION = "7.1.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -377,7 +377,7 @@ class Store:
                     "heats_sequential", "reg_open", "reg_deadline", "reg_distances", "reg_rules", "reg_lanes",
                     "reg_info", "reg_consent",
                     "kind", "timing", "pub_site", "ours", "level", "adaptive", "date_end", "city", "note",
-                    "live_url", "photo_url", "links", "pub_start", "pub_results", "team_best",
+                    "live_url", "photo_url", "links", "pub_start", "pub_results", "pub_regs", "team_best",
                     "cover", "program", "contacts", "series")
     KINDS = ("stadium",)
     TIMINGS = ("judge", "manual", "lynx")
@@ -465,6 +465,7 @@ class Store:
                        ("date_end", "TEXT"), ("city", "TEXT"), ("note", "TEXT"), ("live_url", "TEXT"),
                        ("photo_url", "TEXT"), ("links", "TEXT"), ("pub_start", "INTEGER NOT NULL DEFAULT 0"),
                        ("pub_results", "INTEGER NOT NULL DEFAULT 0")))
+        add("events", (("pub_regs", "INTEGER NOT NULL DEFAULT 0"),))      # 7.1: открытый список «прошли регистрацию» для тренеров
         add("files", (("public", "INTEGER NOT NULL DEFAULT 0"),))
         add("entries", (("result", "TEXT"), ("status", "TEXT")))
         # Таблицы users/sessions могли остаться от старых сборок сервера с другим устройством —
@@ -765,7 +766,7 @@ class Store:
                 v = d[k]
                 if k == "heats_sequential":
                     v = None if v is None or v == "" else (1 if v else 0)
-                if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results"):
+                if k in ("reg_open", "pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs"):
                     v = 1 if v else 0
                 if k == "kind":
                     v = v if v in self.KINDS else "stadium"
@@ -1105,7 +1106,7 @@ class Hub:
         out["reg_lanes"] = ev.get("reg_lanes") or 8
         out["kind"] = ev.get("kind") or "stadium"
         out["timing"] = ev.get("timing") if ev.get("timing") in Store.TIMINGS else "judge"
-        for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results"):
+        for k in ("pub_site", "ours", "adaptive", "pub_start", "pub_results", "pub_regs"):
             out[k] = bool(ev.get(k)) if ev.get(k) is not None else (k == "ours")
         out["page_url"] = f"{base}/r/{ev['reg_slug']}" if ev.get("reg_slug") and base else out["reg_path"]
         return out
@@ -1268,7 +1269,7 @@ class Hub:
         data.update(name=re.sub(r"\b(20\d\d)\b", lambda m: str(int(m.group(1)) + 1), ev["name"]),
                     date=next_year(ev.get("date")), date_end=next_year(ev.get("date_end")),
                     reg_deadline=next_year(ev.get("reg_deadline")), reg_open=0, pub_site=0, pub_start=0,
-                    pub_results=0, live_url=None, photo_url=None, kind=view["kind"], timing=view["timing"],
+                    pub_results=0, pub_regs=0, live_url=None, photo_url=None, kind=view["kind"], timing=view["timing"],
                     cover=None if str(ev.get("cover") or "").startswith("file:") else ev.get("cover"))
         eid = self.store.add_event(data)
         self.store.update_event(eid, data)
@@ -1355,6 +1356,49 @@ class Hub:
         rows = [dict(p, distance=", ".join(p["distances"])) for p in people.values()]
         picked = sum(1 for r in rows if r["picked_at"])
         return {"rows": rows, "total": len(rows), "picked": picked, "left": len(rows) - picked}
+
+    def registered_list(self, ev: dict) -> dict:
+        """7.1: открытый «Список прохождения регистрации» для тренеров — БЕЗ авторизации, поэтому строго минимальный набор:
+        «Фамилия И.», возрастная группа из справочника AGES и дисциплины, на которые заявка одобрена секретарём.
+        Ни номеров, ни дорожек, ни дат рождения, ни команд, ни контактов; у эстафет — только название команды."""
+        regs = [r for r in self.store.registrations(ev["id"]) if r["status"] == "approved"]
+        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+        ages = [a for a in (self.disciplines()["data"].get("ages") or []) if a.get("id")]
+        ordered = sorted([a for a in ages if a["id"] != "sen"], key=lambda a: int(a.get("max", 200))) + [a for a in ages if a["id"] == "sen"]
+
+        def group_of(birth) -> str:
+            try:
+                age = year - int(str(birth)[:4])
+            except ValueError:
+                return "Без возрастной группы"
+            for a in ordered:
+                if int(a.get("min", 0)) <= age <= int(a.get("max", 200)):
+                    return a["name"]
+            return "Без возрастной группы"
+        order = {d: i for i, d in enumerate(self.reg_distances(ev))}
+        key_of = self._people(regs)
+        people: dict = {}
+        relays: dict = {}
+        for r in sorted(regs, key=lambda r: r["id"]):
+            if r.get("relay"):
+                relays.setdefault((r["relay"], r["distance"]), None)
+                continue
+            first = str(r.get("first_name") or "").strip()
+            p = people.setdefault(key_of[r["id"]], {
+                "name": f"{str(r['last_name']).strip().capitalize()} {first[:1].upper()}." if first else str(r["last_name"]).strip().capitalize(),
+                "group": group_of(r.get("birth_date")), "disciplines": []})
+            if r["distance"] not in p["disciplines"]:
+                p["disciplines"].append(r["distance"])
+        groups: dict = {}
+        for p in people.values():
+            p["disciplines"].sort(key=lambda d: order.get(d, 99))
+            groups.setdefault(p["group"], []).append({"name": p["name"], "disciplines": p["disciplines"]})
+        rank = {a["name"]: i for i, a in enumerate(ordered)}
+        out = [{"group": g, "athletes": sorted(lst, key=lambda x: x["name"].lower())}
+               for g, lst in sorted(groups.items(), key=lambda kv: (rank.get(kv[0], 99), kv[0]))]
+        return {"event": {"name": ev["name"], "date": ev.get("date"), "place": ev.get("place") or ""},
+                "updated": fmt_db(now_local())[:16], "total": len(people), "groups": out,
+                "relays": [{"team": t, "discipline": d} for (t, d) in sorted(relays)]}
 
     def calendar(self, year: Optional[int]) -> dict:
         evs = [e for e in self.store.list_events() if e.get("pub_site")]
@@ -2255,7 +2299,7 @@ class Hub:
                 return ok(self._event_view(self.store.get_event(eid)), 201)
             return err("метод не поддерживается", 405)
 
-        m = re.fullmatch(r"/api/events/(\d+)(?:/([a-z.]+))?(?:/(\d+))?", path)
+        m = re.fullmatch(r"/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?", path)
         if not m:
             return err("нет такого адреса", 404)
         ev = self.store.get_event(int(m.group(1)))
@@ -2640,8 +2684,10 @@ class Hub:
             self.store.audit(who, eid, "Очищены результаты", f"{data.get('label') or ''} участников: {n}".strip())
             return ok({"cleared": n})
         if action == "publish":
-            # «Выгрузить в общую сеть»: стартовый и/или итоговый протокол становится виден на публичной странице события
+            # публикация: открытый список «прошли регистрацию» (pub_regs, минимум данных) и протоколы для тренеров в кабинете (pub_start / pub_results — закрыты, нужен вход)
             upd = {}
+            if "regs" in data:                      # 7.1: открытый список «прошли регистрацию» (минимум данных, без входа)
+                upd["pub_regs"] = bool(data["regs"])
             if "start" in data:
                 upd["pub_start"] = bool(data["start"])
             if "results" in data:
@@ -2654,10 +2700,11 @@ class Hub:
                 return err("публичный сайт не настроен на этом сервере (Система → Настройки сайта)")
             slug = self.ensure_slug(eid)
             self.store.update_event(eid, {**upd, "ours": True})
-            self.store.audit(who, eid, "Протоколы выгружены в общую сеть" if any(upd.values()) else "Протоколы убраны из общей сети",
+            self.store.audit(who, eid, "Публикация включена (тренерам / открытый список)" if any(upd.values()) else "Публикация снята",
                              ", ".join(f"{k}={'да' if v else 'нет'}" for k, v in upd.items()))
             v = self._event_view(self.store.get_event(eid))
-            return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "url": v["page_url"],
+            return ok({"pub_start": v["pub_start"], "pub_results": v["pub_results"], "pub_regs": v["pub_regs"], "url": v["page_url"],
+                       "registered_url": f"{self.public_base()}/r/{slug}#registered",
                        "start_url": f"{self.public_base()}/r/{slug}/protocol?kind=start",
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
         if action == "resetheats":
@@ -2671,6 +2718,11 @@ class Hub:
         if action == "ui":
             code, out = self.ui_write(ev, data, who)
             return code, J, json.dumps(out, ensure_ascii=False), None
+        if action == "clear-bibs":
+            try:
+                return ok(self.clear_bibs(ev, data.get("distance"), who))
+            except ValueError as e:
+                return err(str(e))
         if action == "bibs":
             code, out = self.save_bibs(ev, data.get("rows") if isinstance(data.get("rows"), list) else [], who)
             return code, J, json.dumps(out, ensure_ascii=False), None
@@ -3043,6 +3095,48 @@ class Hub:
                          "has_result": bool(e and (e.get("result") or e.get("detail") or e.get("status")))})
         return {"distance": dist, "rows": rows, "total": len(rows), "with_bib": sum(1 for x in rows if x["bib"])}
 
+    def clear_bibs(self, ev: dict, distance, who: str) -> dict:
+        """«❌ Очистить все номера дисциплины» (шаг 2): у всех участников дисциплины номер стирается (bib = NULL).
+        Номер принадлежит человеку, поэтому стирается и в других его дисциплинах — иначе он вернулся бы как «подставленный».
+        Строки сетки этих людей удаляются, забеги пустеют (старт и часы сбрасываются). Если у кого-то уже введён
+        результат — очистка отклоняется целиком: сначала «Очистить протокол» на шаге 4."""
+        eid, dist = ev["id"], str(distance or "").strip()
+        if not dist:
+            raise ValueError("выберите дисциплину")
+        st = self._bib_state(eid)
+        scope = [r for r in st["regs"].values() if r["status"] != "rejected" and r["distance"] == dist]
+        if not scope:
+            return {"cleared": 0, "people": 0, "entries": 0, "also": []}
+        keys = {st["key_of"][r["id"]] for r in scope}
+        ids = sorted({i for k in keys for i in st["members"][k]})
+        ents = [st["ent_by_reg"][i] for i in ids if i in st["ent_by_reg"]]
+        locked = [e for e in ents if e.get("result") or e.get("status") or e.get("detail")]
+        if locked:
+            raise ValueError(f"у {len(locked)} участников уже введены результаты (№ {', '.join(sorted({e['bib'] for e in locked})[:8])}) — "
+                             "сначала очистите протокол на шаге 4, затем номера")
+        also = sorted({st["regs"][i]["distance"] for i in ids if st["regs"][i]["distance"] != dist})
+        con = self.store.con
+        con.execute("BEGIN")
+        try:
+            for e in ents:
+                con.execute("DELETE FROM entries WHERE id = ?", (e["id"],))
+            for i in ids:
+                con.execute("UPDATE registrations SET bib = NULL WHERE id = ? AND event_id = ?", (i, eid))
+            for w in self.store.waves(eid):          # опустевшие забеги и списки убираем вместе с метками старта
+                if not con.execute("SELECT 1 FROM entries WHERE event_id = ? AND wave = ?", (eid, w["name"])).fetchone() \
+                        and (w.get("distance") in (dist, *also) or not w.get("distance")):
+                    con.execute("DELETE FROM waves WHERE event_id = ? AND name = ?", (eid, w["name"]))
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        if not any(w.get("start_time") for w in self.store.waves(eid)):
+            self.store.set_event_field(eid, start_time=None, status="finished" if ev.get("status") == "finished" else "planned")
+        self.store.audit(who, eid, "Номера дисциплины очищены",
+                         f"{dist}: людей {len(keys)}, заявок {len(ids)}, строк сетки удалено {len(ents)}"
+                         + (f"; также у этих людей в: {', '.join(also)}" if also else ""))
+        return {"cleared": len(ids), "people": len(keys), "entries": len(ents), "also": also}
+
     def save_bibs(self, ev: dict, items: list, who: str) -> tuple:
         """Сохранить номера, вписанные вручную. Номер человека записывается во ВСЕ его заявки и строки сетки
         (все дисциплины). Ничего не пишется, пока весь набор не прошёл проверку."""
@@ -3194,7 +3288,7 @@ class Hub:
         open_, why = self.reg_state(ev)
         return {"name": ev["name"], "date": ev.get("date"), "place": ev.get("place"),
                 "organizer": ev.get("organizer"), "start_clock": ev.get("start_clock"),
-                "deadline": ev.get("reg_deadline"), "open": open_, "reason": why,
+                "deadline": ev.get("reg_deadline"), "open": open_, "reason": why, "regs_public": bool(ev.get("pub_regs")),
                 "distances": self.solo_distances(ev), "info": ev.get("reg_info") or "",
                 "dist_info": [{k: d[k] for k in ("name", "limit", "left", "legs")} for d in self.dist_info(ev)],
                 "consent": self.consent_text(ev)}
@@ -5351,7 +5445,7 @@ class Hub:
                                 "deadline": e.get("reg_deadline"), "slug": e["reg_slug"]})
             return js({"events": out})
         m = re.fullmatch(r"/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json"
-                         r"|/protocol|/files/\d+)?/?", path)
+                         r"|/protocol|/registered\.json|/files/\d+)?/?", path)
         if not m:
             return 404, "text/plain; charset=utf-8", "нет такой страницы", None
         ev = self.store.event_by_slug(m.group(1))
@@ -5365,6 +5459,14 @@ class Hub:
             info = self._public_info(ev)
             info["card"] = self.event_card(ev)
             return js(info)
+        if method == "GET" and sub == "/registered.json":
+            # открыто без входа, но только если секретарь включил публикацию; данные минимальны (см. registered_list)
+            if not self._rate_ok("rl:" + client, 120, 600):
+                return js({"error": "Слишком много запросов, попробуйте через минуту"}, 429)
+            if not self._event_view(ev)["pub_regs"]:
+                return js({"error": "Список прошедших регистрацию пока не опубликован"}, 404)
+            code, ctype, data_, _ = js(self.registered_list(ev))
+            return code, ctype, data_, {"Cache-Control": "public, max-age=30"}
         if method == "GET" and sub in ("/results.json", "/startlist.json", "/protocol"):
             # 5.0: протоколы закрыты — только администратор, судья и тренер с подтверждённой почтой
             if not self.protocol_viewer(headers):

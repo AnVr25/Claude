@@ -199,7 +199,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.0.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.0.0", r.stdout + r.stderr)
+    check("версия сервера 7.1.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.1.0", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -390,7 +390,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.0.0" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.1.0" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -403,7 +403,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.0.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.1.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1278,7 +1278,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.0: версия 7.0.0 и дата сборки 14.10.2026", st3["version"] == "7.0.0" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.1: версия 7.1.0 и дата сборки 14.10.2026", st3["version"] == "7.1.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -2009,6 +2009,74 @@ def main() -> int:
               c_ == 200 and stt3 == "planned" and not stm3 and not any(wst3.values()), f"{stt3} {wst3}")
         c_, rr4 = api("POST", f"/api/events/{e13}/resetheats", {"distance": "Прыжок в высоту"})
         check("7.0: сброс несуществующей в сетке дисциплины безвреден: {waves:0, entries:0}", c_ == 200 and rr4["waves"] == 0 and rr4["entries"] == 0, str(rr4))
+
+        # ===================== 7.1: открытый список «прошли регистрацию» и очистка номеров дисциплины =====================
+        c_, e14v = api("POST", "/api/events", {"name": "Первенство для списков", "date": "2026-10-20", "kind": "stadium", "timing": "manual"})
+        e14 = e14v["id"]
+        c_, evr14 = api("POST", f"/api/events/{e14}", {"reg_open": True, "reg_rules": "Девочки до 14 лет;Ж;2012;2013", "reg_distances": f"{DM}\n60 м"})
+        s14 = evr14["reg_path"].rsplit("/", 1)[-1]
+
+        def reg14(last, first, year, dists):
+            body = {"last_name": last, "first_name": first, "birth_date": f"{year}-04-04", "sex": "Ж", "team": "Секретная команда",
+                    "coach": "Тренер Т.Т.", "contact": "+79140000000", "consent": True, "policy": True, "representative": "Родитель Р.Р.",
+                    "rank": "3 юн.", "distances": [{"distance": d_, "best": "20" if d_ == DM else "9.5"} for d_ in dists]}
+            return pub("POST", f"/r/{s14}", json.dumps(body).encode())[0]
+        codes14 = [reg14("Петрова", "Мария", "2013", (DM, D60)), reg14("Сидорова", "Ольга", "2013", (D60,)), reg14("Ждущая", "Ирина", "2013", (D60,)),
+                   reg14("Старшая", "Анна", "2002", (D60,))]
+        regs14 = json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]
+        for r_ in regs14:        # «Ждущая» остаётся на проверке: в списке её быть не должно
+            if r_["last_name"] != "Ждущая":
+                api("POST", f"/api/events/{e14}/regs/{r_['id']}", {"status": "approved"})
+        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
+        check("7.1: открытый список не опубликован, пока секретарь не включил его (404)", codes14 == [201] * 4 and c_ == 404, f"{codes14} {c_} {t_[:80]}")
+        c_, pb14 = api("POST", f"/api/events/{e14}/publish", {"regs": True})
+        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
+        rl14 = json.loads(t_) if c_ == 200 else {}
+        flat14 = {a["name"]: (g["group"], a["disciplines"]) for g in rl14.get("groups", []) for a in g["athletes"]}
+        check("7.1: открытый список без входа: «Фамилия И.», возрастная группа из AGES и дисциплины одобренных заявок; неодобренные не видны",
+              c_ == 200 and pb14.get("pub_regs") is True and rl14["total"] == 3
+              and flat14.get("Петрова М.") == ("до 14 лет", [DM, D60]) and flat14.get("Сидорова О.") == ("до 14 лет", [D60])
+              and flat14.get("Старшая А.", ("",))[0] == "взрослые" and "Ждущая И." not in flat14, t_[:300])
+        leak = [w for w in ("Мария", "Ольга", "2013", "bib", "birth", "lane", "Секретная", "Тренер", "79140000000", "Родитель", "contact", "coach", "team", "rank")
+                if w in t_]
+        check("7.1: в открытом списке нет полных имён, дат рождения, номеров, дорожек, команд, тренеров и контактов", not leak, str(leak))
+        c_, t_, _ = pub("GET", f"/r/{s14}/startlist.json")
+        c2_, t2_, _ = pub("GET", f"/r/{s14}/results.json")
+        c3_, t3_, _ = pub("GET", f"/r/{s14}/protocol")
+        check("7.1: полные протоколы по-прежнему закрыты без входа: нужен личный кабинет", c_ == 401 and c2_ == 401 and c3_ in (302, 401), f"{c_} {c2_} {c3_}")
+        c_, t_, _ = pub("GET", f"/r/{s14}/info")
+        check("7.1: страница события знает, что список опубликован (regs_public)", c_ == 200 and json.loads(t_).get("regs_public") is True, t_[:120])
+        api("POST", f"/api/events/{e14}/publish", {"regs": False})
+        c_, t_, _ = pub("GET", f"/r/{s14}/registered.json")
+        check("7.1: публикацию списка можно снять — снова 404", c_ == 404, str(c_))
+
+        # очистка номеров дисциплины
+        bv = json.loads(http("GET", f"/api/events/{e14}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        api("POST", f"/api/events/{e14}/bibs", {"rows": [{"ids": r["ids"], "bib": str(70 + i)} for i, r in enumerate(bv["rows"])]})
+        api("POST", f"/api/events/{e14}/heats", {"distance": D60, "lanes": 8})
+        api("POST", f"/api/events/{e14}/heats", {"distance": DM, "lanes": 8})
+        c_, ce1 = api("POST", f"/api/events/{e14}/clear-bibs", {})
+        check("7.1: очистка номеров без указания дисциплины отклоняется", c_ == 400, str(ce1))
+        first_bib = bv["rows"][0]["bib"] or "70"
+        c_, rs14 = api("POST", f"/api/events/{e14}/results", {"rows": [{"bib": "70", "distance": D60, "t": ["9.5"], "auto": True}]})
+        c_, ce2 = api("POST", f"/api/events/{e14}/clear-bibs", {"distance": D60})
+        bvk = json.loads(http("GET", f"/api/events/{e14}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        check("7.1: если у кого-то уже введён результат — очистка номеров отклоняется целиком, ничего не стёрто",
+              c_ == 400 and "результат" in ce2.get("error", "") and bvk["with_bib"] == bvk["total"] > 0, str(ce2))
+        api("POST", f"/api/events/{e14}/clearresults", {"bibs": ["70"], "distance": D60})
+        c_, ce3 = api("POST", f"/api/events/{e14}/clear-bibs", {"distance": D60})
+        bv60k = json.loads(http("GET", f"/api/events/{e14}/bibs?distance=" + urllib.parse.quote(D60))[1])
+        bvmk = json.loads(http("GET", f"/api/events/{e14}/bibs?distance=" + urllib.parse.quote(DM))[1])
+        sl14 = json.loads(http("GET", f"/api/events/{e14}/startlist")[1])
+        dbq = _sql.connect(cfg["db_path"])
+        nbib = dbq.execute("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND bib IS NOT NULL AND bib != ''", (e14,)).fetchone()[0]
+        nent = dbq.execute("SELECT COUNT(*) FROM entries WHERE event_id = ?", (e14,)).fetchone()[0]
+        dbq.close()
+        check("7.1: «Очистить все номера дисциплины»: bib = NULL у всех участников дисциплины и у них же в метании, сетки убраны, поля пусты",
+              c_ == 200 and ce3["people"] == 4 and ce3["entries"] == 4 and DM in ce3["also"] and bv60k["with_bib"] == 0 and bvmk["with_bib"] == 0
+              and nbib == 0 and nent == 0 and not sl14["heats"], f"{ce3} {nbib} {nent}")
+        c_, sv = api("POST", f"/api/events/{e14}/bibs", {"rows": [{"ids": r["ids"], "bib": str(90 + i)} for i, r in enumerate(bv60k["rows"])]})
+        check("7.1: после очистки номера вписываются и сохраняются заново (кнопка сохранения не затронута)", c_ == 200 and sv.get("saved") == 3, str(sv))
 
 
     except Exception as e:  # noqa

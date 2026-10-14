@@ -554,13 +554,36 @@ function layout(){
   else if(c.status==="planned"&&c.ours!==false) reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>Приём заявок пока не открыт</b><div class="muted">Регистрация появится на этой странице — следите за новостями федерации.</div></div></div>`;
   else if(c.reg&&c.status!=="finished") reg=`<div class="card state calm"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div><b>${esc(d.reason||"Регистрация закрыта")}</b><div class="muted">Вопросы — к организатору соревнований.</div></div></div>`;
   const about=aboutBlock();
-  const empty=!ev&&!reg&&!about?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
+  const empty=!ev&&!reg&&!about&&!d.regs_public?'<div class="card muted">Стартовый протокол, результаты и документы появятся на этой странице.</div>':"";
   const cov=href(c.cover);
   $("root").innerHTML=headerCard()+(cov?`<div class="cover"><img src="${esc(cov)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>`:"")
-    +(regFirst?reg+ev:ev+reg)+about+empty;
+    +(regFirst?reg+ev:ev+reg)+(d.regs_public?'<section class="card" id="registered" aria-labelledby="regH"><h2 id="regH">Списки прохождения регистрации</h2><div class="muted" id="regListBody">Загружаю список…</div></section>':"")+about+empty;
   lockHint();
+  if(d.regs_public) loadRegList();
   if(d.open) render();
 }
+// 7.1: открытый список «прошли регистрацию»: только «Фамилия И.», возрастная группа и дисциплины одобренных заявок
+let REGLIST=null;
+async function loadRegList(){
+  const box=$("regListBody"); if(!box) return;
+  try{ const r=await fetch(`/r/${slug}/registered.json`); if(!r.ok) throw new Error("нет"); REGLIST=await r.json(); drawRegList(""); }
+  catch(e){ const s=$("registered"); if(s) s.remove(); }
+}
+function drawRegList(q){
+  const box=$("regListBody"), d=REGLIST; if(!box||!d) return;
+  const t=String(q||"").trim().toLowerCase();
+  const groups=d.groups.map(g=>({group:g.group,athletes:g.athletes.filter(a=>!t||a.name.toLowerCase().includes(t))})).filter(g=>g.athletes.length);
+  const relays=(d.relays||[]).filter(x=>!t||x.team.toLowerCase().includes(t));
+  if(!$("regQ")) box.innerHTML=`<p class="muted" style="margin:0 0 10px">Проверьте, что спортсмен внесён в базу соревнования: показаны только фамилия, первая буква имени, возрастная группа и дисциплины, на которые заявка одобрена. Номера, стартовые протоколы и результаты — в личном кабинете тренера.</p>
+    <label class="f" for="regQ">Найти по фамилии</label><input id="regQ" class="sel" type="search" autocomplete="off" placeholder="например, Иванов" style="max-width:360px">
+    <div class="muted" style="margin:8px 0" id="regCnt"></div><div id="regOut"></div>`;
+  $("regCnt").textContent=`Прошли регистрацию: ${d.total} · обновлено ${d.updated}`;
+  $("regOut").innerHTML=(groups.map(g=>`<h3 style="margin:14px 0 6px;font-size:16px">${esc(g.group)} <span class="muted">· ${g.athletes.length}</span></h3>
+    <ul style="list-style:none;margin:0;padding:0">${g.athletes.map(a=>`<li style="display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 0;border-top:1px solid var(--line)"><b style="min-width:150px">${esc(a.name)}</b><span class="muted">${a.disciplines.map(esc).join(" · ")}</span></li>`).join("")}</ul>`).join("")
+    +(relays.length?`<h3 style="margin:14px 0 6px;font-size:16px">Эстафетные команды</h3><ul style="list-style:none;margin:0;padding:0">${relays.map(x=>`<li style="padding:8px 0;border-top:1px solid var(--line)"><b>${esc(x.team)}</b> <span class="muted">· ${esc(x.discipline)}</span></li>`).join("")}</ul>`:""))
+    ||'<div class="muted">Никого не найдено. Если спортсмена нет в списке, заявка ещё не одобрена секретарём или не подана.</div>';
+}
+document.addEventListener("input",e=>{ if(e.target&&e.target.id==="regQ") drawRegList(e.target.value); });
 // программа дня и контакты организатора
 function aboutBlock(){
   const c=CARD, prog=Array.isArray(c.program)?c.program.filter(p=>p&&p.title):[], cont=Array.isArray(c.contacts)?c.contacts.filter(x=>x&&x.text):[];
