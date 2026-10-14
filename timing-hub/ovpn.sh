@@ -12,7 +12,7 @@
 #
 #  Клиенты OpenVPN получают адреса 10.67.0.X и маршрут к 10.66.0.0/24,
 #  поэтому сервер хронометража доступен по прежнему адресу 10.66.0.1
-#  (Wiclax: 10.66.0.1:9854, страница: http://10.66.0.1:8080).
+#  (страница: http://10.66.0.1:8080).
 # =============================================================================
 set -euo pipefail
 
@@ -96,7 +96,7 @@ EOF
   sleep 3
   systemctl is-active --quiet openvpn-server@timing || die "OpenVPN не запустился: journalctl -u openvpn-server@timing -n 30"
   ok "OpenVPN работает на $(endpoint):${PORT}/tcp"
-  echo "Дальше: bash $0 add wiclax-laptop"
+  echo "Дальше: bash $0 add secretary-laptop"
 }
 
 cmd_add() {

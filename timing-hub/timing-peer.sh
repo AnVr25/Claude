@@ -7,7 +7,7 @@
 #    sudo timing-peer list                   список доступов и когда были на связи
 #    sudo timing-peer remove ИМЯ             удалить доступ
 #
-#  ИМЯ — латиницей, без пробелов: wiclax-laptop, finish-router, km5-router.
+#  ИМЯ — латиницей, без пробелов: secretary-laptop, finish-router, km5-router.
 #  --mikrotik — дополнительно напечатать команды для роутера MikroTik (RouterOS 7).
 # =============================================================================
 set -euo pipefail
