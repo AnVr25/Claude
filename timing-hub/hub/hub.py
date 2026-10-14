@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.5.0"
+VERSION = "7.5.1"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -2266,6 +2266,14 @@ class Hub:
             code, out = self.submit_team(ev, info, rows, status="approved", actor=actor)
             return code, J, json.dumps(out, ensure_ascii=False), None
 
+        mb = re.fullmatch(r"/api/events/(\d+)/bibs-csv", path)
+        if mb and method == "POST":            # 7.5.1: нагрудные номера списком — тот же CSV, что выгружен из «Регистрации»
+            ev = self.store.get_event(int(mb.group(1)))
+            if ev is None:
+                return err("соревнование не найдено", 404)
+            code, out = self.bibs_from_csv(ev, body, actor)
+            return code, J, json.dumps(out, ensure_ascii=False), None
+
         if path == "/api/system/update" and method == "POST":
             code, out = self.receive_update(body, actor)
             return code, J, json.dumps(out, ensure_ascii=False), None
@@ -2797,6 +2805,8 @@ class Hub:
         if action == "ui":
             code, out = self.ui_write(ev, data, who)
             return code, J, json.dumps(out, ensure_ascii=False), None
+        if action == "clear-rejected":
+            return ok(self.clear_rejected(ev, who))
         if action == "clear-bibs":
             try:
                 return ok(self.clear_bibs(ev, data.get("distance"), who))
@@ -3309,6 +3319,100 @@ class Hub:
             self.store.audit(who, eid, "Нагрудные номера сохранены",
                              f"{len(plan)}: " + "; ".join(ch) + (f"; продублировано на другие дисциплины: {spread}" if spread else ""))
         return 200, {"ok": True, "saved": len(plan), "spread": spread}
+
+    def clear_rejected(self, ev: dict, who: str) -> dict:
+        """7.5.1: безвозвратно удаляет из базы все отклонённые заявки соревнования (и их строки в сетке, если остались).
+        Заявки других статусов и других соревнований не затрагиваются."""
+        eid = ev["id"]
+        ids = [r["id"] for r in self.store.registrations(eid) if r["status"] == "rejected"]
+        if not ids:
+            return {"deleted": 0}
+        con = self.store.con
+        con.execute("BEGIN")
+        try:
+            marks = ",".join("?" * len(ids))
+            con.execute(f"DELETE FROM entries WHERE event_id = ? AND reg_id IN ({marks})", (eid, *ids))
+            con.execute("DELETE FROM registrations WHERE event_id = ? AND status = 'rejected'", (eid,))
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        self.store.audit(who, eid, "Очищены отклонённые заявки", f"удалено заявок: {len(ids)}")
+        return {"deleted": len(ids)}
+
+    BIB_ID_HEADS = ("№ заявки", "id", "reg_id", "id заявки", "заявка")
+    BIB_HEADS = ("нагрудный номер", "нагр. №", "нагр №", "bib", "номер")
+
+    def bibs_from_csv(self, ev: dict, blob: bytes, who: str) -> tuple:
+        """7.5.1: загрузка нагрудных номеров из CSV/Excel — файла «Заявки …csv» (колонки «№ заявки» и «Нагрудный номер»), где
+        номера проставлены списком. Строки сопоставляются по номеру заявки; пустые ячейки номера пропускаются (никого не стирают);
+        запись идёт тем же методом, что кнопка шага 2 (`save_bibs`): все или ничего, один человек — один номер на все его дисциплины,
+        повторы у разных людей отклоняются. Шаг 2 Мастера читает номера из базы, поэтому показывает их сразу."""
+        try:
+            if blob[:2] == b"PK":
+                table = xlsx_read(blob)
+            else:
+                try:
+                    text = blob.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    text = blob.decode("cp1251", errors="replace")
+                sep = ";" if text.count(";") >= text.count(",") else ","
+                table = list(csv.reader(io.StringIO(text), delimiter=sep))
+        except Exception:
+            return 400, {"error": "Не удалось прочитать файл. Загрузите CSV или Excel, выгруженный кнопкой «Выгрузить CSV»."}
+        hi = None
+        for i, row in enumerate(table[:10]):
+            low = [str(c or "").strip().lower() for c in row]
+            ci = next((j for j, c in enumerate(low) if c in self.BIB_ID_HEADS), None)
+            cb = next((j for j, c in enumerate(low) if c in self.BIB_HEADS), None)
+            if ci is not None and cb is not None:
+                hi, col_id, col_bib = i, ci, cb
+                break
+        if hi is None:
+            return 400, {"error": "В файле нет колонок «№ заявки» и «Нагрудный номер». Возьмите файл, выгруженный кнопкой «Выгрузить CSV» в «Регистрации», и впишите номера в последнюю колонку."}
+        st = self._bib_state(ev["id"])
+        regs, key_of = st["regs"], st["key_of"]
+        errors, per_person, empty, ignored = [], {}, 0, 0
+        for n, row in enumerate(table[hi + 1:], hi + 2):
+            if not any(str(c or "").strip() for c in row):
+                continue
+            rid_s = str(row[col_id] if col_id < len(row) else "").strip()
+            rid_s = rid_s[:-2] if rid_s.endswith(".0") else rid_s
+            bib = str(row[col_bib] if col_bib < len(row) else "").strip()
+            bib = bib[:-2] if re.fullmatch(r"\d+\.0", bib) else bib
+            if not rid_s.isdigit() or int(rid_s) not in regs:
+                errors.append(f"строка {n}: заявки «{rid_s or '—'}» нет в этом соревновании")
+                continue
+            rid = int(rid_s)
+            if rid not in key_of:                  # отклонённая заявка: номера ей не нужны
+                ignored += 1
+                continue
+            if not bib:
+                empty += 1
+                continue
+            if not self.BIB_RE.fullmatch(bib):
+                errors.append(f"строка {n}: номер «{bib[:12]}» — до 10 цифр или букв, без пробелов")
+                continue
+            k = key_of[rid]
+            slot = per_person.setdefault(k, {"ids": [], "bibs": set(), "row": n})
+            slot["ids"].append(rid)
+            slot["bibs"].add(bib)
+        items = []
+        for k, slot in per_person.items():
+            if len(slot["bibs"]) > 1:
+                r0 = regs[slot["ids"][0]]
+                errors.append(f"строка {slot['row']}: у {r0['last_name']} {r0['first_name']} разные номера в разных дисциплинах ({', '.join(sorted(slot['bibs']))}) — номер один на все виды")
+                continue
+            items.append({"ids": slot["ids"], "bib": next(iter(slot["bibs"]))})
+        if errors:
+            return 400, {"error": "Номера не загружены — исправьте файл и загрузите снова", "errors": errors[:30]}
+        if not items:
+            return 400, {"error": "В файле нет ни одного проставленного номера (колонка «Нагрудный номер» пуста)"}
+        code, out = self.save_bibs(ev, items, who)
+        if code == 200:
+            self.store.audit(who, ev["id"], "Номера загружены из CSV", f"людей: {len(items)}, пустых строк пропущено: {empty}")
+            out.update({"people": len(items), "empty": empty, "ignored": ignored})
+        return code, out
 
     # фраза, по которой видно: этот текст согласия охватывает размещение данных в открытом списке участников
     PUBLIC_LIST_MARK = "фамилии, имени, года рождения, спортивного разряда, команды и тренера в открытом списке заявленных участников"
@@ -4584,13 +4688,15 @@ class Hub:
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
         w.writerow(["№ заявки", "Статус", "Фамилия", "Имя", "Отчество", "Дата рождения", "Пол", "Категория",
-                    "Дистанция", "Лучший результат", "Разряд", "Команда", "Тренер", "Представитель", "Контакт", "Нагр. №",
+                    "Дистанция", "Лучший результат", "Разряд", "Команда", "Тренер", "Представитель", "Контакт", "Нагрудный номер",
                     "Подана"])
         st = {"pending": "на рассмотрении", "approved": "подтверждена", "rejected": "отклонена"}
+        bst = self._bib_state(ev["id"])         # 7.5.1: «Нагрудный номер» — актуальный (вписанный в заявку или стоящий в сетке); пусто — впишите и загрузите обратно
         for r in self.store.registrations(ev["id"]):
             w.writerow([r["id"], st.get(r["status"], r["status"]), r["last_name"], r["first_name"], r["middle_name"] or "",
                         r["birth_date"], r["sex"], r["category"] or "", r["distance"], r["best"] or "", r.get("rank") or "", r["team"] or "",
-                        r["coach"] or "", r["representative"] or "", r["contact"] or "", r["bib"] or "", r["created_at"]])
+                        r["coach"] or "", r["representative"] or "", r["contact"] or "",
+                        (self._reg_bib(r, bst) if r["id"] in bst["key_of"] else (r["bib"] or "")), r["created_at"]])
         from urllib.parse import quote
         return 200, "text/csv; charset=utf-8", "\ufeff" + buf.getvalue(), {
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote('Заявки ' + ev['name'] + '.csv')}"}

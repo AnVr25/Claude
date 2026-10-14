@@ -469,6 +469,7 @@ a.btn.xls:hover{background:#E9F5EE}
 .usr:hover{border-color:#4a6491;color:#fff}
 .pubchk{margin:0;font-size:13px}
 .wzp-allout{margin:8px 0;padding:12px 14px;border:1px solid var(--ok);border-radius:var(--r);background:#17905A12}.wzp-allout ul{margin:6px 0 0 18px;padding:0}
+.wzp-dash{padding:14px 16px;margin:0 0 12px}.wzp-dash-main{margin:0 0 6px;font-size:16px}.ftab.stat{cursor:default;pointer-events:none}
 .wzp-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
 .ftab{font:600 14px/1.2 var(--body);min-height:40px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .ftab i{font-style:normal;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--ice);font-size:12px}
@@ -744,7 +745,9 @@ a.btn.xls:hover{background:#E9F5EE}
         <button id="gImport" title="Загрузить заявки из Excel или CSV — они сразу подтверждены">Загрузить из Excel</button>
         <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
         <span class="spacer"></span>
+        <button class="danger hide" id="gClearRej" title="Безвозвратно удалить из базы все отклонённые заявки этого соревнования">❌ Очистить отклонённые заявки</button>
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
+        <button class="sm" id="gBibCsv" title="Загрузить файл, выгруженный кнопкой «Выгрузить CSV», с номерами в колонке «Нагрудный номер»">📥 Загрузить номера из CSV</button>
       </div>
       <details class="panel" style="margin-top:12px"><summary><b>Внести заявку вручную</b> <span class="small muted">— без формы, сразу подтверждена</span></summary>
         <div class="regform">
@@ -1576,6 +1579,8 @@ function renderRegs(){
   const fcur = $("gFilter").value;
   $("gTabs").innerHTML = [["", "Все", c.pending + c.approved + c.rejected], ["pending", "Ждут проверки", c.pending], ["approved", "Подтверждены", c.approved], ["rejected", "Отклонены", c.rejected]]
     .map(([v, t, n]) => `<button data-f="${v}" class="${v===fcur?"on":""}">${t}<i>${n}</i></button>`).join("");
+  $("gClearRej").classList.toggle("hide", !(fcur === "rejected" && c.rejected > 0));
+  $("gClearRej").textContent = `❌ Очистить отклонённые заявки (${c.rejected})`;
   $("gCounts").innerHTML = (r.no_category ? `<span>без категории: ${r.no_category}</span>` : "")
     + (r.dist_info||[]).filter(d => d.limit || d.legs).map(d => `<span${d.left === 0 ? ' style="color:var(--track)"' : ""}>${esc(d.name)}: ${d.taken}${d.limit ? " из " + d.limit : ""}${d.legs ? " команд" : ""}${d.left === 0 ? " — мест нет" : ""}</span>`).join("");
   const dists = distNames(ev);
@@ -1611,6 +1616,29 @@ $("gBody").addEventListener("change", async (e) => {
   const id = e.target.closest("tr").dataset.id;
   try{ await api(`/api/events/${curId}/regs/${id}`, {[f]: e.target.value}); toast("Сохранено"); e.target.blur(); await loadRegs(); }catch(err){ toast("Ошибка: "+err.message); }
 });
+$("gClearRej").onclick = async () => {
+  const n = regData ? regData.counts.rejected : 0; if (!n) return toast("Отклонённых заявок нет");
+  if (!confirm(`Безвозвратно удалить ${n} отклонённых заявок из базы?\n\nЗаявки в других статусах не затрагиваются. Восстановить удалённое будет нельзя.`)) return;
+  try{ const r = await api(`/api/events/${curId}/clear-rejected`, {}); toast(`Удалено отклонённых заявок: ${r.deleted}`); $("gFilter").value = ""; regLoaded = null; await loadRegs(); loadEvents(); }
+  catch(err){ toast("Ошибка: " + err.message); }
+};
+// 7.5.1: нагрудные номера списком — тот же CSV, номера в последней колонке; шаг 2 Мастера читает их из базы сразу
+$("gBibCsv").onclick = () => {
+  const ev = curEvent(); if (!ev) return;
+  const i = document.createElement("input"); i.type = "file"; i.accept = ".csv,.xlsx,text/csv";
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    if (!confirm(`Загрузить нагрудные номера из «${f.name}»?\n\nСтроки сопоставляются по «№ заявки». Пустые ячейки номера пропускаются, повторы у разных людей отклоняются — тогда не сохранится ничего.`)) return;
+    try{
+      const r = await fetch(`/api/events/${ev.id}/bibs-csv`, {method: "POST", headers: {"X-Requested-With": "timing-hub", "Content-Type": "application/octet-stream"}, body: await f.arrayBuffer()});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert((d.error || "Ошибка " + r.status) + (d.errors && d.errors.length ? "\n\n" + d.errors.slice(0, 15).map(x => typeof x === "string" ? x : x.error).join("\n") : "")); return; }
+      toast(`Номера загружены: ${d.people} чел.` + (d.spread ? `, продублировано на другие дисциплины: ${d.spread}` : "") + " — они уже на шаге 2 Мастера");
+      regLoaded = null; await loadRegs(); loadEvents();
+    }catch(err){ toast("Ошибка: " + err.message); }
+  };
+  i.click();
+};
 $("gApproveAll").onclick = async () => {
   const n = regData ? regData.counts.pending : 0; if (!n) return toast("Нет заявок на рассмотрении");
   const d = regData.regs.filter(x => x.status==="pending" && x.dup_of).length;
@@ -1830,13 +1858,26 @@ const wzp = (() => {
     const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
     return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
   }
+  // 7.5.1: шаг 1 — сводка по дисциплине (только чтение из базы, без кнопок-фильтров): состав, пол, возрастные группы, номера
+  function ageGroupOf(r){
+    const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(), age = y - (+String(r.birth_date || r.birth_year || "").slice(0, 4) || 0);
+    const gs = (DISC.ages || []).filter(a => a.id !== "sen").sort((a, b) => a.max - b.max).concat((DISC.ages || []).filter(a => a.id === "sen"));
+    return (gs.find(a => age >= a.min && age <= a.max) || {}).id || ""; }
   function step1(body, k){
-    const all = W.regs.filter(r => r.distance === W.disc && r.status === "approved").length;
-    const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
+    const mine = W.regs.filter(r => r.distance === W.disc), ok = mine.filter(r => r.status === "approved");
+    const pend = mine.filter(r => r.status === "pending").length;
+    const boys = ok.filter(r => String(r.sex || "").toUpperCase() === "М").length, girls = ok.filter(r => String(r.sex || "").toUpperCase() === "Ж").length;
+    const bands = (DISC.ages || []).map(a => [a, ok.filter(r => ageGroupOf(r) === a.id).length]).filter(x => x[1]);
+    const withBib = ok.filter(r => String(r.bib || "").trim()).length;
+    const chip = (t, n) => `<span class="ftab stat"><span>${esc(t)}</span> <i>${n}</i></span>`;
     body.innerHTML = `${stepHead(1, k)}
-      <p style="margin:0"><b>Подтверждённых участников: ${all}</b> <span class="small muted">— все уже загружены по выбранной дисциплине${pend ? `; ещё ${pend} заявок ждут проверки на этапе «2. Регистрация»` : ""}</span></p>
-      ${filterBar()}
-      <p class="small muted" style="margin:0">Вкладки — только для просмотра состава (можно ничего не нажимать): без выбора в сетку идут все участники дисциплины.</p>
+      <div class="card wzp-dash" role="group" aria-label="Сводка по дисциплине">
+        <p class="wzp-dash-main"><b>${esc(W.disc)}</b></p>
+        <p class="wzp-dash-main">Всего подтверждено: <b>${ok.length} участн.</b> (Мальчиков: ${boys}, Девочек: ${girls})${bands.map(([a, n]) => ` · ${esc(a.name)}: ${n}`).join("")}</p>
+        <div class="wzp-filter" aria-label="Структура состава">${chip("Все", ok.length)}${chip("Мальчики", boys)}${chip("Девочки", girls)}<span class="fsep" aria-hidden="true"></span>${bands.map(([a, n]) => chip(a.name, n)).join("")}</div>
+        <p class="small muted" style="margin:6px 0 0">Каждый участник учтён один раз — в самой узкой возрастной группе. Это только сводка: выбирать здесь ничего не нужно, в сетку идут все подтверждённые участники дисциплины.</p>
+        <p class="small" style="margin:6px 0 0">Нагрудные номера: вписано <b>${withBib}</b> из ${ok.length}${pend ? ` · ещё <b>${pend}</b> заявок ждут проверки во вкладке «Регистрация»` : ""}.</p>
+      </div>
       ${nav(false, "К нагрудным номерам")}`;
   }
   function heatsTable(){
@@ -2165,7 +2206,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;
