@@ -685,8 +685,8 @@ a.btn.xls:hover{background:#E9F5EE}
       <label for="sLinks">Дополнительные ссылки — по одной в строке: <span class="mono">Название | https://…</span></label>
       <textarea id="sLinks" style="min-height:70px" placeholder="Итоги в новостях | https://fla65.ru/news/…&#10;Положение на сайте ВФЛА | https://rusathletics.info/…"></textarea>
       <div class="switches" style="margin-top:12px">
-        <label class="switch"><input type="checkbox" id="sPubStart"><i></i>Стартовый протокол на сайте</label>
-        <label class="switch"><input type="checkbox" id="sPubRes"><i></i>Результаты на сайте <span class="muted" style="font-weight:400">(во время старта — онлайн)</span></label>
+        <label class="switch"><input type="checkbox" id="sPubRegs"><i></i>👥 Опубликовать список заявившихся участников на сайте</label>
+        <div class="small muted" style="margin-top:4px">Блок «Заявленные участники» появится на странице соревнования. Стартовые и итоговые протоколы включаются позже — на этапах 3 и 5.</div>
       </div>
       <div class="row" style="margin-top:12px"><button class="primary" id="sSave">Сохранить</button><span class="small muted">Положение, фото и другие файлы — на этапе «Документы», галочка «на сайте».</span></div>
       <div class="pagelink hide" id="sPage"></div>
@@ -2595,7 +2595,7 @@ function renderSite(){
   $("sSite").checked = !!ev.pub_site; $("sOurs").checked = ev.ours !== false;
   $("sLevel").value = ev.level || "region"; $("sNote").value = ev.note || "";
   $("sLive").value = ev.live_url || ""; $("sPhoto").value = ev.photo_url || ""; $("sAdaptive").checked = !!ev.adaptive;
-  $("sLinks").value = ev.links || ""; $("sPubStart").checked = !!ev.pub_start; $("sPubRes").checked = !!ev.pub_results;
+  $("sLinks").value = ev.links || ""; $("sPubRegs").checked = !!ev.pub_regs;
   $("sReg").checked = !!ev.reg_open; $("sRegTill").value = (ev.reg_deadline || "").slice(0, 16); $("sDist").value = ev.reg_distances || "";
   $("sPage").innerHTML = pageLinkHtml(ev); $("sPage").classList.toggle("hide", !ev.page_url);
   $("sProgram").value = ev.program || ""; $("sContacts").value = ev.contacts || ""; $("sSeries").value = ev.series || "";
@@ -2620,7 +2620,7 @@ $("sSave").onclick = async () => {
   const ev = curEvent(); if (!ev) return;
   const body = {pub_site:$("sSite").checked, ours:$("sOurs").checked, level:$("sLevel").value, note:$("sNote").value.trim(),
     live_url:$("sLive").value.trim(), photo_url:$("sPhoto").value.trim(), adaptive:$("sAdaptive").checked,
-    links:$("sLinks").value.trim(), pub_start:$("sPubStart").checked, pub_results:$("sPubRes").checked,
+    links:$("sLinks").value.trim(), pub_regs:$("sPubRegs").checked,
     reg_open:$("sReg").checked, reg_deadline:$("sRegTill").value || null, reg_distances:$("sDist").value.trim(),
     program:$("sProgram").value.trim(), contacts:$("sContacts").value.trim(), series:$("sSeries").value.trim(),
     cover:$("sCoverFile").value || $("sCoverUrl").value.trim()};

@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.2.0"
+VERSION = "7.3.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1389,7 +1389,7 @@ class Hub:
             rows.append({"d": r["distance"], "s": str(r.get("sex") or "").upper(), "g": group_of(r.get("birth_date")),
                          "n": f"{last} {first}".strip() if full else (f"{last} {first[:1]}." if first else last),
                          "y": str(r.get("birth_date") or "")[:4] if full else "", "r": (r.get("rank") or "") if full else "",
-                         "t": (r.get("team") or "") if full else "", "c": (r.get("coach") or "") if full else "", "m": 0 if full else 1})
+                         "t": (r.get("team") or ""), "c": (r.get("coach") or "") if full else "", "m": 0 if full else 1})
         rows.sort(key=lambda x: (order.get(x["d"], 99), x["d"], x["n"].lower()))
         seen_d = [d for d in dists if any(x["d"] == d for x in rows)] + sorted({x["d"] for x in rows} - set(dists))
         used_g = {x["g"] for x in rows}
