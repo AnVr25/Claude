@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `7.4.5` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `7.5.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `a623134`
-- **Дамп сформирован:** 2026-10-14 11:11 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 324 из 324 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 5790 строк, `hub/ui.html` 2770, `hub/protocol.html` 637
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `575738d`
+- **Дамп сформирован:** 2026-10-14 11:42 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 329 из 329 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 5845 строк, `hub/ui.html` 2812, `hub/protocol.html` 637
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -271,7 +271,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 - `waves.distance` пуст у смешанного «общего списка» (глобальная сборка) — поэтому дисциплина участника берётся из `registrations.distance` через `entries.reg_id` (`Hub.entry_dists`).
 - Миграции идемпотентны: `Store._migrate` через `add(table, columns)` (`ALTER TABLE … ADD COLUMN`, если столбца нет).
 
-### `Store._migrate` — `hub/hub.py` строки 391–565
+### `Store._migrate` — `hub/hub.py` строки 392–566
 
 ```python
     def _migrate(self) -> None:
@@ -457,7 +457,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.1 Определение типа дисциплины (Бег / Техника)
 
-#### `Hub.discipline` — `hub/hub.py` строки 1785–1787
+#### `Hub.discipline` — `hub/hub.py` строки 1800–1802
 
 ```python
     @classmethod
@@ -465,7 +465,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.disciplines()["index"].get(cls._dkey(name)) if name else None
 ```
 
-#### `Hub.result_type` — `hub/hub.py` строки 1913–1917
+#### `Hub.result_type` — `hub/hub.py` строки 1928–1932
 
 ```python
     @classmethod
@@ -475,7 +475,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return d["result"] if d else "time"
 ```
 
-#### `Hub.discipline_kind` — `hub/hub.py` строки 1896–1904
+#### `Hub.discipline_kind` — `hub/hub.py` строки 1911–1919
 
 ```python
     @classmethod
@@ -489,7 +489,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "run" if d.get("result") == "time" else "other"
 ```
 
-#### `Hub.attempt_slots` — `hub/hub.py` строки 1586–1592
+#### `Hub.attempt_slots` — `hub/hub.py` строки 1587–1593
 
 ```python
     @classmethod
@@ -501,7 +501,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return 12 if d.get("result") == "height" else 6
 ```
 
-#### `Hub.entry_dists` — `hub/hub.py` строки 1906–1911
+#### `Hub.entry_dists` — `hub/hub.py` строки 1921–1926
 
 ```python
     def entry_dists(self, eid: int, erows: Optional[list] = None) -> dict:
@@ -514,7 +514,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 3803–3904
+#### `Hub.generate_scoped` — `hub/hub.py` строки 3826–3927
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -621,7 +621,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 3773–3782
+#### `Hub.lane_order` — `hub/hub.py` строки 3796–3805
 
 ```python
     @staticmethod
@@ -636,7 +636,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 3925–3965
+#### `Hub.reset_heats` — `hub/hub.py` строки 3948–3988
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -682,7 +682,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 3785–3789
+#### `Hub.age_limits` — `hub/hub.py` строки 3808–3812
 
 ```python
     @classmethod
@@ -692,7 +692,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 3791–3801
+#### `Hub.age_ok` — `hub/hub.py` строки 3814–3824
 
 ```python
     @classmethod
@@ -710,7 +710,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.3 Номера и участники
 
-#### `Store.add_entry` — `hub/hub.py` строки 927–938
+#### `Store.add_entry` — `hub/hub.py` строки 928–939
 
 ```python
     def add_entry(self, eid: int, r: dict) -> int:
@@ -727,7 +727,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return int(cur.lastrowid)
 ```
 
-#### `Store.upsert_entries` — `hub/hub.py` строки 854–880
+#### `Store.upsert_entries` — `hub/hub.py` строки 855–881
 
 ```python
     def upsert_entries(self, eid: int, rows: list) -> None:
@@ -759,7 +759,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             raise
 ```
 
-#### `Store.update_entry` — `hub/hub.py` строки 915–925
+#### `Store.update_entry` — `hub/hub.py` строки 916–926
 
 ```python
     def update_entry(self, eid: int, entry_id: int, **kw) -> int:
@@ -775,7 +775,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                                 (*args, eid, entry_id)).rowcount
 ```
 
-#### `Store.rename_bib` — `hub/hub.py` строки 940–944
+#### `Store.rename_bib` — `hub/hub.py` строки 941–945
 
 ```python
     def rename_bib(self, eid: int, old: str, new: str) -> None:
@@ -787,7 +787,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4005–4024
+#### `Hub.startlist` — `hub/hub.py` строки 4028–4047
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -812,7 +812,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
 ```
 
-#### `Hub.public_startlist` — `hub/hub.py` строки 1486–1490
+#### `Hub.public_startlist` — `hub/hub.py` строки 1487–1491
 
 ```python
     def public_startlist(self, ev: dict) -> dict:
@@ -824,7 +824,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.5 Хранение результата и отметок
 
-#### `Store.set_entry_result` — `hub/hub.py` строки 894–905
+#### `Store.set_entry_result` — `hub/hub.py` строки 895–906
 
 ```python
     def set_entry_result(self, eid: int, entry_id: int, result: Optional[str], status: Optional[str],
@@ -843,7 +843,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.6 Официальное время по 3 секундомерам и лучший результат из 6 попыток
 
-#### `Hub.round_up_tenth` — `hub/hub.py` строки 1569–1571
+#### `Hub.round_up_tenth` — `hub/hub.py` строки 1570–1572
 
 ```python
     @staticmethod
@@ -851,7 +851,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return math.ceil(round(x * 10, 6)) / 10.0
 ```
 
-#### `Hub.stopwatch_main` — `hub/hub.py` строки 1573–1582
+#### `Hub.stopwatch_main` — `hub/hub.py` строки 1574–1583
 
 ```python
     @classmethod
@@ -866,13 +866,18 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls.round_up_tenth(main)
 ```
 
-#### `Hub.parse_result` — `hub/hub.py` строки 1741–1758
+#### `Hub.parse_result` — `hub/hub.py` строки 1751–1773
 
 ```python
     @classmethod
-    def parse_result(cls, text) -> Optional[tuple]:
-        """Результат, введённый секретарём: 12.84 · 12,8 · 1:05.32 · 2:05:31 → (секунды, текст для протокола)."""
+    def parse_result(cls, text, sprint: Optional[int] = None) -> Optional[tuple]:
+        """Результат, введённый секретарём: 12.84 · 12,8 · 1:05.32 · 2:05:31 → (секунды, текст для протокола).
+        7.5: «автоматическая точка» — для бега до 400 м (sprint = длина в метрах) целое из двух-трёх цифр без разделителей
+        читается как десятые: 95 → 9.5, 123 → 12.3. Только для набранного с клавиатуры, не для уже сохранённого текста
+        (там «13» — это 13 секунд). Если десятые давали бы нереальное время (быстрее sprint/12 с), остаётся прежнее чтение."""
         t = re.sub(r"\s+", "", str(text or ""))
+        if sprint and re.fullmatch(r"\d{2,3}", t) and int(t) / 10 >= sprint / 12:
+            t = f"{t[:-1]}.{t[-1]}"
         m = cls.RESULT_RE.fullmatch(t)
         if not m or not t:
             return None
@@ -889,7 +894,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return total, txt
 ```
 
-#### `Hub.fmt_result` — `hub/hub.py` строки 1540–1551
+#### `Hub.fmt_result` — `hub/hub.py` строки 1541–1552
 
 ```python
     @staticmethod
@@ -906,15 +911,15 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"{s}.{t}"
 ```
 
-#### `Hub.parse_typed` — `hub/hub.py` строки 1919–1938
+#### `Hub.parse_typed` — `hub/hub.py` строки 1934–1953
 
 ```python
     @classmethod
-    def parse_typed(cls, rtype: str, text, name=None) -> Optional[tuple]:
+    def parse_typed(cls, rtype: str, text, name=None, typed: bool = False) -> Optional[tuple]:
         """Результат по типу дисциплины → (ключ места: меньше — лучше, текст для протокола) или None.
         Время — как раньше; расстояние и высота — метры (7.85 · 7,85); очки — целое число."""
         if rtype == "time":
-            return cls.parse_result(text)
+            return cls.parse_result(text, cls.sprint_meters(name) if typed else None)
         t = re.sub(r"\s+", "", str(text or ""))
         mx = (cls.discipline(name) or {}).get("max")
         if rtype == "points":
@@ -931,7 +936,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return -v, f"{v:.2f}"
 ```
 
-#### `Hub.parse_attempts` — `hub/hub.py` строки 1713–1736
+#### `Hub.parse_attempts` — `hub/hub.py` строки 1714–1737
 
 ```python
     @classmethod
@@ -960,7 +965,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return clean, best, errs
 ```
 
-#### `Hub.result_hint` — `hub/hub.py` строки 1940–1942
+#### `Hub.result_hint` — `hub/hub.py` строки 1955–1957
 
 ```python
     @classmethod
@@ -970,7 +975,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.7 Выполненный разряд по нормам ЕВСК
 
-#### `Hub.norm_key` — `hub/hub.py` строки 1798–1830
+#### `Hub.norm_key` — `hub/hub.py` строки 1813–1845
 
 ```python
     @classmethod
@@ -1008,7 +1013,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return f"run:{dist}"
 ```
 
-#### `Hub.rank_norms` — `hub/hub.py` строки 1832–1845
+#### `Hub.rank_norms` — `hub/hub.py` строки 1847–1860
 
 ```python
     @classmethod
@@ -1027,7 +1032,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._NORMS
 ```
 
-#### `Hub.age_group` — `hub/hub.py` строки 1847–1852
+#### `Hub.age_group` — `hub/hub.py` строки 1862–1867
 
 ```python
     @staticmethod
@@ -1038,7 +1043,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return "sen"
 ```
 
-#### `Hub.rank_for` — `hub/hub.py` строки 1854–1894
+#### `Hub.rank_for` — `hub/hub.py` строки 1869–1909
 
 ```python
     def rank_for(self, ev: dict, dist, sex, birth_year, value: float, hand: bool) -> str:
@@ -1084,7 +1089,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return ""
 ```
 
-#### `Hub.norm_rank` — `hub/hub.py` строки 1561–1566
+#### `Hub.norm_rank` — `hub/hub.py` строки 1562–1567
 
 ```python
     @classmethod
@@ -1095,19 +1100,19 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return cls._RANK_ALIAS.get(key) or cls._RANK_ALIAS.get(key.rstrip("."), "") or t
 ```
 
-#### `Hub.RANK_ORDER` — `hub/hub.py` строки 1791–1791
+#### `Hub.RANK_ORDER` — `hub/hub.py` строки 1806–1806
 
 ```python
     RANK_ORDER = ("МСМК", "МС", "КМС", "1 р.", "2 р.", "3 р.", "1 юн.", "2 юн.", "3 юн.")
 ```
 
-#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 1792–1792
+#### `Hub.RANK_MIN_AGE` — `hub/hub.py` строки 1807–1807
 
 ```python
     RANK_MIN_AGE = {"МСМК": 16, "МС": 15, "КМС": 14}          # остальные разряды — с 10 лет
 ```
 
-#### `Hub.RANK_CAP` — `hub/hub.py` строки 1794–1794
+#### `Hub.RANK_CAP` — `hub/hub.py` строки 1809–1809
 
 ```python
     RANK_CAP = {"russia": "МС", "dfo": "МС", "interregion": "КМС", "region": "1 р.", "mass": "2 р."}
@@ -1115,7 +1120,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.8 Ветки HTTP-API Мастера (внутри `Hub._api_event`)
 
-#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2785–2801
+#### `heats — формирование сетки (полное и выборочное)` — `hub/hub.py` строки 2808–2824
 
 ```python
         if action == "heats":
@@ -1137,7 +1142,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2766–2773
+#### `resetheats — сброс сетки (всей или одной дисциплины)` — `hub/hub.py` строки 2789–2796
 
 ```python
         if action == "resetheats":
@@ -1150,7 +1155,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok(out)
 ```
 
-#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2742–2765
+#### `publish — выгрузка в общую сеть` — `hub/hub.py` строки 2765–2788
 
 ```python
         if action == "publish":
@@ -1179,7 +1184,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                        "results_url": f"{self.public_base()}/r/{slug}/protocol?kind=results"})
 ```
 
-#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2817–2894
+#### `entry — перенос участника, смена номера, добавление заявки в забег (прикладной «add_entry»)` — `hub/hub.py` строки 2840–2917
 
 ```python
         if action == "entry":
@@ -1262,7 +1267,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok({"ok": True})
 ```
 
-#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2508–2555
+#### `results — ручной ввод: секундомеры, попытки, статус, выполненный разряд` — `hub/hub.py` строки 2530–2578
 
 ```python
         if action == "results" and isinstance(data.get("rows"), list):
@@ -1292,11 +1297,12 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                     bad.extend(f"{bib}: {m_}" for m_ in errs)
                     continue
                 # auto — главный результат считает система; иначе значение секретаря остаётся как есть
+                typed_by_hand = not (set_detail and (rw.get("auto") or not txt))        # 7.5: «автоточка» только для набранного
                 if set_detail and (rw.get("auto") or not txt):
                     txt = auto_txt or ""
                 pr = None
                 if txt and not st:
-                    pr = self.parse_typed(rt, txt, dn)
+                    pr = self.parse_typed(rt, txt, dn, typed=typed_by_hand)
                     if not pr:
                         bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
@@ -1315,7 +1321,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
             return ok({"saved": n, "errors": bad})
 ```
 
-### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 1990–2181
+### 3.9 `Hub.compute` (итоговые результаты) — `hub/hub.py` строки 2005–2196
 
 Дословно: включает дисциплину участника (`entry_dists`), места по дисциплине в смешанном забеге и расчёт `done_rank`.
 
@@ -1878,7 +1884,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1651–1708
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1659–1716
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1942,7 +1948,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1710–2153
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1718–2175
 
 ```js
 const wzp = (() => {
@@ -2259,7 +2265,7 @@ const wzp = (() => {
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
-        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю.</span>
+        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю. Отметки можно набрать буквами: днс, днф, дк, нр.</span>
         ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>
       ${startedBox()}${nav(true, "К итоговому протоколу")}`;
   }
@@ -2356,7 +2362,19 @@ const wzp = (() => {
     if (e.target.id === "wzpSave") { clearTimeout(autoT); return saveRows(false); }
     if (e.target.id === "wzpClear") return clearAll();
   });
+  // 7.5: буквенные отметки, набранные в ячейке результата (днс, dns, нс, н/с → DNS; днф, dnf → DNF; dq, дк → DQ; нр, nm → NM),
+  // не уходят на сервер как «результат»: поле очищается, в списке «Отметка» ставится статус, строка сразу сохраняется
+  const TYPED_STATUS = {"днс":"DNS","dns":"DNS","нс":"DNS","н/с":"DNS","днф":"DNF","dnf":"DNF","dq":"DQ","дк":"DQ","нр":"NM","nm":"NM"};
+  function interceptStatus(inp){
+    if (!inp || !inp.matches("input.sw, input.att, input.one")) return false;
+    const code = TYPED_STATUS[inp.value.replace(/\s+/g, "").toLowerCase()]; if (!code) return false;
+    const tr = inp.closest("#wzpRows tr"), sel = tr && tr.querySelector("select.stsel"); if (!sel) return false;
+    inp.value = ""; inp.classList.remove("err"); sel.value = code;
+    tr.classList.add("dirty"); calcRow(tr); queueAuto(150);
+    sync(`Отметка ${code} поставлена для № ${tr.dataset.bib} — сохраняю`, "busy");
+    return true; }
   root.addEventListener("change", (e) => {
+    if (interceptStatus(e.target)) return;
     if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); save(); return render(); }
     if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
@@ -2368,7 +2386,9 @@ const wzp = (() => {
   });
   root.addEventListener("input", (e) => {
     if (e.target.classList.contains("bibin2")) { e.target.classList.remove("err"); return bibCheck(); }
-    const tr = e.target.closest("#wzpRows tr"); if (!tr) return; tr.classList.add("dirty"); e.target.classList.remove("err");
+    const tr = e.target.closest("#wzpRows tr"); if (!tr) return;
+    if (interceptStatus(e.target)) return;
+    tr.classList.add("dirty"); e.target.classList.remove("err");
     calcRow(tr);
   });
   root.addEventListener("keydown", (e) => {
@@ -2393,7 +2413,7 @@ const wzp = (() => {
 
 ### 4.5 Расчёт официального результата — только на сервере (`hub/hub.py`)
 
-#### `Hub.official_from_raw` — `hub/hub.py` строки 1661–1700
+#### `Hub.official_from_raw` — `hub/hub.py` строки 1662–1701
 
 ```python
     def official_from_raw(self, dn, rt: str, rw: dict) -> tuple:
@@ -2411,7 +2431,7 @@ const wzp = (() => {
                 if not t:
                     tclean.append("")
                     continue
-                pr = self.parse_result(t) if rt == "time" else None
+                pr = self.parse_result(t, self.sprint_meters(dn)) if rt == "time" else None
                 if not pr:
                     errs.append(f"секундомер {i}: не понял «{t[:12]}» — пример: 12.84 или 1:05.3")
                     tclean.append("")
@@ -2438,7 +2458,7 @@ const wzp = (() => {
         return detail, set_detail, auto_txt, errs
 ```
 
-#### `Hub.calc_official` — `hub/hub.py` строки 1702–1711
+#### `Hub.calc_official` — `hub/hub.py` строки 1703–1712
 
 ```python
     def calc_official(self, distance: str, rows: list) -> dict:
@@ -2457,7 +2477,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1500–1500
+#### `rankOpts` — `hub/ui.html` строки 1508–1508
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2577,7 +2597,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 324 из 324 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 329 из 329 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2630,6 +2650,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+575738d 2026-10-14 release: глобальный дамп архитектуры стадионного монолита v7.4.5
 a623134 2026-10-14 major: исправлен баг пустых полей тренеров в базе данных и геолокация манежа на Сахалине v7.4.5
 2fc4372 2026-10-14 major: исправлена верстка кнопки участников, колонка номеров на сайте и автоподтягивание тренеров в базу v7.4.0
 ea25612 2026-10-14 docs: история версий 1.3.0 – 7.3.5 (CHANGELOG.md)
@@ -2643,6 +2664,5 @@ a7f6476 2026-10-14 ui: оптимизирован Шаг 1 Мастера, до�
 6233695 2026-10-14 release: глобальная реконструкция платформы, запущен монолитный SakhStart v6.0.0
 39c6600 2026-10-14 audit: сформирован глобальный архитектурный дамп системы для ревизии
 d0ab416 2026-10-13 major: сквозной аудит АРМ секретаря, ручной ввод нагрудных номеров и экспорт протоколов в Excel v5.2.0
-c888b7b 2026-10-13 major: согласие отдельно от Политики, архив редакций согласий, обезличивание заявок и зашифрованные внешние копии v5.1.0
 ```
 

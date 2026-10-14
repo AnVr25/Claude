@@ -32,6 +32,7 @@ import re
 import signal
 import socket
 import sqlite3
+import tempfile
 import sys
 import random
 import time
@@ -39,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.4.5"
+VERSION = "7.5.0"
 BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1673,7 +1674,7 @@ class Hub:
                 if not t:
                     tclean.append("")
                     continue
-                pr = self.parse_result(t) if rt == "time" else None
+                pr = self.parse_result(t, self.sprint_meters(dn)) if rt == "time" else None
                 if not pr:
                     errs.append(f"секундомер {i}: не понял «{t[:12]}» — пример: 12.84 или 1:05.3")
                     tclean.append("")
@@ -1738,10 +1739,24 @@ class Hub:
     RESULT_RE = re.compile(r"(?:(\d{1,2}):)?(?:(\d{1,2}):)?(\d{1,5})(?:[.,](\d{1,3}))?")
     STATUSES = ("DNS", "DNF", "DQ", "NM")
 
+    SPRINT_RE = re.compile(r"^\s*(\d{2,3})\s*м(?![а-яa-z])", re.I)
+
     @classmethod
-    def parse_result(cls, text) -> Optional[tuple]:
-        """Результат, введённый секретарём: 12.84 · 12,8 · 1:05.32 · 2:05:31 → (секунды, текст для протокола)."""
+    def sprint_meters(cls, name) -> Optional[int]:
+        """Длина спринтерской дистанции в метрах (до 400 м включительно) по названию дисциплины; эстафеты и прочее — None."""
+        m = cls.SPRINT_RE.match(str(name or ""))
+        n = int(m.group(1)) if m and "×" not in str(name) and "эстаф" not in str(name).lower() else 0
+        return n if 0 < n <= 400 else None
+
+    @classmethod
+    def parse_result(cls, text, sprint: Optional[int] = None) -> Optional[tuple]:
+        """Результат, введённый секретарём: 12.84 · 12,8 · 1:05.32 · 2:05:31 → (секунды, текст для протокола).
+        7.5: «автоматическая точка» — для бега до 400 м (sprint = длина в метрах) целое из двух-трёх цифр без разделителей
+        читается как десятые: 95 → 9.5, 123 → 12.3. Только для набранного с клавиатуры, не для уже сохранённого текста
+        (там «13» — это 13 секунд). Если десятые давали бы нереальное время (быстрее sprint/12 с), остаётся прежнее чтение."""
         t = re.sub(r"\s+", "", str(text or ""))
+        if sprint and re.fullmatch(r"\d{2,3}", t) and int(t) / 10 >= sprint / 12:
+            t = f"{t[:-1]}.{t[-1]}"
         m = cls.RESULT_RE.fullmatch(t)
         if not m or not t:
             return None
@@ -1917,11 +1932,11 @@ class Hub:
         return d["result"] if d else "time"
 
     @classmethod
-    def parse_typed(cls, rtype: str, text, name=None) -> Optional[tuple]:
+    def parse_typed(cls, rtype: str, text, name=None, typed: bool = False) -> Optional[tuple]:
         """Результат по типу дисциплины → (ключ места: меньше — лучше, текст для протокола) или None.
         Время — как раньше; расстояние и высота — метры (7.85 · 7,85); очки — целое число."""
         if rtype == "time":
-            return cls.parse_result(text)
+            return cls.parse_result(text, cls.sprint_meters(name) if typed else None)
         t = re.sub(r"\s+", "", str(text or ""))
         mx = (cls.discipline(name) or {}).get("max")
         if rtype == "points":
@@ -2289,6 +2304,13 @@ class Hub:
             return code, J, json.dumps(out, ensure_ascii=False), None
         if path == "/api/log":
             return ok({"log": self.store.audit_list(None)})
+        if path == "/api/system/audit" and method == "GET":        # 7.5: лента аудита для администратора (последние записи всех соревнований)
+            try:
+                lim = max(1, min(200, int(qs.get("limit") or 50)))
+            except ValueError:
+                lim = 50
+            return ok({"log": [{k: x.get(k) for k in ("id", "ts", "actor", "event_id", "action", "details")}
+                               for x in self.store.audit_list(None, lim)]})
         if path == "/api/system/scoreboard/control":
             return 302, "text/plain; charset=utf-8", "", {"Location": "/scoreboard" + (f"?event={int(qs['event'])}" if str(qs.get("event", "")).isdigit() else "")}
         if path == "/api/scoreboard/state":
@@ -2532,11 +2554,12 @@ class Hub:
                     bad.extend(f"{bib}: {m_}" for m_ in errs)
                     continue
                 # auto — главный результат считает система; иначе значение секретаря остаётся как есть
+                typed_by_hand = not (set_detail and (rw.get("auto") or not txt))        # 7.5: «автоточка» только для набранного
                 if set_detail and (rw.get("auto") or not txt):
                     txt = auto_txt or ""
                 pr = None
                 if txt and not st:
-                    pr = self.parse_typed(rt, txt, dn)
+                    pr = self.parse_typed(rt, txt, dn, typed=typed_by_hand)
                     if not pr:
                         bad.append(f"{bib}: не понял результат «{txt[:12]}» — пример: {self.result_hint(rt)}")
                         continue
@@ -4213,6 +4236,27 @@ class Hub:
         st["installed"] = os.path.isdir(self.offsite_dir)
         return st
 
+    def db_snapshot(self) -> tuple:
+        """7.5: согласованный «горячий» слепок рабочей базы SQLite (backup API — безопасно при записи, WAL учитывается).
+        → (имя файла, содержимое). Во временный файл, затем читается и удаляется; рабочая база не блокируется надолго."""
+        fd, tmp = tempfile.mkstemp(suffix=".db", prefix="sakhstart-snap-")
+        os.close(fd)
+        try:
+            dst = sqlite3.connect(tmp)
+            try:
+                self.store.con.backup(dst)
+            finally:
+                dst.close()
+            with open(tmp, "rb") as f:
+                blob = f.read()
+        finally:
+            for x in ("", "-wal", "-shm", "-journal"):
+                try:
+                    os.remove(tmp + x)
+                except OSError:
+                    pass
+        return f"sakhstart-{now_local():%Y-%m-%d-%H%M}.db", blob
+
     def offsite_latest(self) -> Optional[tuple]:
         st = self.offsite_state()
         if not st["latest"]:
@@ -5360,6 +5404,17 @@ class Hub:
                         self.store.audit(actor, None, "Скачана зашифрованная копия базы", got[0])
                         await self._send(writer, 200, "application/octet-stream", got[1],
                                          extra={"Content-Disposition": f'attachment; filename="{got[0]}"'})
+                    return
+                if path == "/api/system/backup/db" and method == "GET":        # 7.5: горячий слепок базы одним нажатием (ADMIN_ONLY)
+                    try:
+                        name, blob = self.db_snapshot()
+                    except Exception as e:                                         # диск, права и т. п. — не ронять сервер
+                        log.exception("слепок базы")
+                        await self._send(writer, 500, J, json.dumps({"error": f"не удалось создать копию: {e}"}, ensure_ascii=False))
+                        return
+                    self.store.audit(actor, None, "Скачана резервная копия базы (.db)", f"{name}, {len(blob) // 1024} КБ")
+                    await self._send(writer, 200, "application/octet-stream", blob,
+                                     extra={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
                     return
                 if path == "/api/system/retention" and method == "POST":       # применить сроки хранения сейчас
                     res = self.apply_retention()

@@ -199,7 +199,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.4.5 (--version)", r.returncode == 0 and r.stdout.strip() == "7.4.5", r.stdout + r.stderr)
+    check("версия сервера 7.5.0 (--version)", r.returncode == 0 and r.stdout.strip() == "7.5.0", r.stdout + r.stderr)
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -360,6 +360,8 @@ def main() -> int:
         check("судья после входа попадает в админку", code == 200 and d.get("next") == "/", str(d))
         check("судья: соревнования и ручные отметки доступны, система — нет",
               cget("/api/events", jck) == 200 and cget("/api/system", jck) == 403 and cget("/api/users", jck) == 403)
+        check("7.5: судья не получает ни копию базы, ни ленту аудита (403)",
+              cget("/api/system/backup/db", jck) == 403 and cget("/api/system/audit", jck) == 403)
         code, _, _ = jpost(f"/api/events/1/delete", {}, jck, True)
         check("судья не может удалить соревнование", code == 403, str(code))
         jpost("/api/logout", {}, jck, True)
@@ -390,7 +392,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.4.5" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "7.5.0" and st["build_date"] == "2026-10-14", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -403,7 +405,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.4.5", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.5.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -827,7 +829,7 @@ def main() -> int:
         code, txt, _ = pub("GET", "/r/api/calendar")
         zmap = {c["name"]: (c.get("venue") or {}).get("map", "") for c in json.loads(txt)["events"]}.get("Зимний старт", "")
         from urllib.parse import unquote
-        check("7.4.5: ссылка на манеж — Яндекс.Карты с центром в Южно-Сахалинске (142.76, 46.93), меткой и текстом «Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж»",
+        check("7.5.0: ссылка на манеж — Яндекс.Карты с центром в Южно-Сахалинске (142.76, 46.93), меткой и текстом «Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж»",
               "ll=142.760570%2C46.928092" in zmap and "pt=142.760570,46.928092" in zmap
               and "Южно-Сахалинск, улица Горького, 39, Легкоатлетический манеж" in unquote(zmap), zmap)
         code, txt, hd = pub("GET", "/r/assets/calendar.js")
@@ -1286,7 +1288,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.4.5 и дата сборки 14.10.2026", st3["version"] == "7.4.5" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 7.5.0 и дата сборки 14.10.2026", st3["version"] == "7.5.0" and st3["build_date"] == "2026-10-14", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1532,6 +1534,36 @@ def main() -> int:
               c1 == 200 and [x["result"] for x in r1] == ["8.3", "8.5", "8.3", "", ""] and r1[3]["errors"] and not r1[0]["errors"], str(r1))
         c2, r2 = calc("Прыжок в длину", [{"key": "a", "a": ["5.10", "X", "5.40", "-", "5.25"]}, {"key": "b", "a": ["Ы"]}])
         check("6.0: /api/calc — попытки: лучшая; неверная ячейка — сообщение", c2 == 200 and r2[0]["result"] in ("5.40", "5.4") and r2[1]["errors"], str(r2))
+        # 7.5: «автоматическая точка» для спринта (до 400 м) — только для набранного, с проверкой правдоподобия
+        c7, r7 = calc("60 м", [{"key": "a", "t": ["95"]}, {"key": "b", "t": ["123"]}, {"key": "c", "t": ["9.5"]}, {"key": "d", "t": ["10"]}])
+        c8, r8 = calc("200 м", [{"key": "a", "t": ["223"]}, {"key": "b", "t": ["25"]}, {"key": "c", "t": ["22.3"]}])
+        c9, r9 = calc("800 м", [{"key": "a", "t": ["95"]}, {"key": "b", "t": ["2:05.3"]}])
+        check("7.5: 60 м: «95» → 9.5, «123» → 12.3, «9.5» без изменений, «10» (1.0 с нереально) остаётся 10 с; 200 м: «223» → 22.3, «25» — 25 с; 800 м — без автоточки",
+              c7 == 200 and [x["result"] for x in r7] == ["9.5", "12.3", "9.5", "10.0"] and c8 == 200 and [x["result"] for x in r8] == ["22.3", "25.0", "22.3"]
+              and c9 == 200 and [x["result"] for x in r9] == ["1:35.0", "2:05.3"], f"{r7} {r8} {r9}")
+        from importlib import import_module as _im
+        sys.path.insert(0, os.path.dirname(os.path.abspath(args.hub)))
+        HM = _im("hub")
+        check("7.5: sprint_meters: 60 м, 100 м с/б, 400 м — да; 800 м, 4×100 м, эстафета, метание — нет",
+              [HM.Hub.sprint_meters(x) for x in ("60 м", "100 м с/б", "400 м", "800 м", "4×100 м", "Эстафета 4×100", "Метание мяча")] == [60, 100, 400, None, None, None, None], "")
+        # 7.5: резервная копия базы одним нажатием и лента аудита (только администратор)
+        req_ = urllib.request.Request(f"http://127.0.0.1:{p_web}/api/system/backup/db", headers={
+            "Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(), "X-Requested-With": "timing-hub"})
+        with urllib.request.urlopen(req_, timeout=20) as resp_:
+            blob_, cd_ = resp_.read(), resp_.headers.get("Content-Disposition", "")
+        chk_ = os.path.join(tempfile.mkdtemp(), "copy.db")
+        open(chk_, "wb").write(blob_)
+        import sqlite3 as _sq
+        con_ = _sq.connect(chk_)
+        n_ev = con_.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        ok_ = con_.execute("PRAGMA integrity_check").fetchone()[0]
+        con_.close()
+        check("7.5: «Создать и скачать резервную копию (.db)»: слепок открывается как SQLite, целостен, события на месте, имя файла в заголовке",
+              blob_[:15] == b"SQLite format 3" and ok_ == "ok" and n_ev >= 1 and cd_.startswith("attachment") and ".db" in cd_, f"{blob_[:15]} {ok_} {n_ev} {cd_}")
+        c_, au_ = api("GET", "/api/system/audit?limit=50")
+        check("7.5: лента аудита: последние записи (время, исполнитель, действие, детали), не более 50; скачивание копии попало в журнал",
+              c_ == 200 and 0 < len(au_["log"]) <= 50 and all(k in au_["log"][0] for k in ("ts", "actor", "action", "details"))
+              and any("резервная копия" in (x["action"] or "") for x in au_["log"]), str(au_)[:200])
         hubdir = os.path.dirname(os.path.abspath(args.hub))
         src = {n: open(os.path.join(hubdir, n), encoding="utf-8").read() for n in ("ui.html", "sector.html", "hub.py")}
         check("6.0: в браузере нет правила секундомеров (ни в админке, ни на планшете сектора) — только запрос к серверу",
@@ -2073,7 +2105,7 @@ def main() -> int:
         check("7.2: страница события содержит модуль «Заявленные участники» с выбором дисциплины, полом и возрастами, поиском и «Показать ещё»",
               "Заявленные участники" in pg14 and "pDisc" in pg14 and "data-ps" in pg14 and "data-pg" in pg14 and "plMore" in pg14 and 'name="robots"' in pg14, "")
         c_, pgp, _ = pub("GET", f"/r/{s14}/participants")
-        check("7.4.5: отдельное окно /r/<slug>/participants открывается, в нём модуль участников и ссылка «Участники соревнований» на главной странице; главная не рисует таблицу",
+        check("7.5.0: отдельное окно /r/<slug>/participants открывается, в нём модуль участников и ссылка «Участники соревнований» на главной странице; главная не рисует таблицу",
               c_ == 200 and "participantsPage" in pgp and "Участники соревнований" in pg14 and "participantsLink" in pg14 and "loadParticipants();\n  if(d.open)" not in pg14, str(c_))
         # согласие без пункта о публикации → «Фамилия И.» без года, разряда, команды и тренера
         c_, e15v = api("POST", "/api/events", {"name": "Закрытая форма", "date": "2026-10-21", "kind": "stadium", "timing": "manual"})

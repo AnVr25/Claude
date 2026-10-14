@@ -941,7 +941,15 @@ a.btn.xls:hover{background:#E9F5EE}
     </div>
     <div id="upBox" class="upbox" role="status" aria-live="polite"></div>
     <details style="margin-top:6px"><summary class="small muted">Журнал последнего обновления</summary><pre id="upLog" class="small mono" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre></details>
+    <div class="row" style="margin-top:12px"><button type="button" id="dbDump">📥 Создать и скачать резервную копию базы данных (.db)</button>
+      <span class="small muted">Мгновенный слепок рабочей базы SQLite (даже во время работы). Файл содержит персональные данные участников — храните его как документы, в закрытом месте.</span></div>
     <p class="small muted" style="margin-bottom:0">Перед установкой сервер сохраняет прежнюю версию. Если новая не запустится — вернётся прежняя. Отметки и соревнования не затрагиваются. Не обновляйте во время старта: сервер перезапускается около минуты.</p>
+  </div>
+
+  <h2 style="margin-top:20px">Журнал действий пользователей (Аудит) <span class="small muted" id="auMeta"></span></h2>
+  <div class="panel" id="auBox">
+    <div class="row between"><span class="small muted">Последние 50 записей: кто и что менял — номера, очистка протоколов, настройки соревнований, вход и копии базы.</span><button class="sm" id="auRefresh" type="button">Обновить</button></div>
+    <div class="tbl" style="margin-top:8px"><table><thead><tr><th>Время</th><th>Исполнитель</th><th>Действие</th><th>Детали</th></tr></thead><tbody id="auBody"><tr><td colspan="4" class="empty">Загрузка…</td></tr></tbody></table></div>
   </div>
 
   <h2 style="margin-top:20px">Кто открывал сервер за последний час</h2>
@@ -2021,7 +2029,7 @@ const wzp = (() => {
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
-        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю.</span>
+        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю. Отметки можно набрать буквами: днс, днф, дк, нр.</span>
         ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>
       ${startedBox()}${nav(true, "К итоговому протоколу")}`;
   }
@@ -2118,7 +2126,19 @@ const wzp = (() => {
     if (e.target.id === "wzpSave") { clearTimeout(autoT); return saveRows(false); }
     if (e.target.id === "wzpClear") return clearAll();
   });
+  // 7.5: буквенные отметки, набранные в ячейке результата (днс, dns, нс, н/с → DNS; днф, dnf → DNF; dq, дк → DQ; нр, nm → NM),
+  // не уходят на сервер как «результат»: поле очищается, в списке «Отметка» ставится статус, строка сразу сохраняется
+  const TYPED_STATUS = {"днс":"DNS","dns":"DNS","нс":"DNS","н/с":"DNS","днф":"DNF","dnf":"DNF","dq":"DQ","дк":"DQ","нр":"NM","nm":"NM"};
+  function interceptStatus(inp){
+    if (!inp || !inp.matches("input.sw, input.att, input.one")) return false;
+    const code = TYPED_STATUS[inp.value.replace(/\s+/g, "").toLowerCase()]; if (!code) return false;
+    const tr = inp.closest("#wzpRows tr"), sel = tr && tr.querySelector("select.stsel"); if (!sel) return false;
+    inp.value = ""; inp.classList.remove("err"); sel.value = code;
+    tr.classList.add("dirty"); calcRow(tr); queueAuto(150);
+    sync(`Отметка ${code} поставлена для № ${tr.dataset.bib} — сохраняю`, "busy");
+    return true; }
   root.addEventListener("change", (e) => {
+    if (interceptStatus(e.target)) return;
     if (e.target.dataset.age) { const a = e.target.dataset.age; W.ages = e.target.checked ? [...new Set([...W.ages, a])] : W.ages.filter(x => x !== a); save(); return render(); }
     if (e.target.name === "wzpSex") { W.sex = e.target.value; save(); return render(); }
     if (e.target.id === "wzpLanes") W.lanes = +e.target.value || 8;
@@ -2130,7 +2150,9 @@ const wzp = (() => {
   });
   root.addEventListener("input", (e) => {
     if (e.target.classList.contains("bibin2")) { e.target.classList.remove("err"); return bibCheck(); }
-    const tr = e.target.closest("#wzpRows tr"); if (!tr) return; tr.classList.add("dirty"); e.target.classList.remove("err");
+    const tr = e.target.closest("#wzpRows tr"); if (!tr) return;
+    if (interceptStatus(e.target)) return;
+    tr.classList.add("dirty"); e.target.classList.remove("err");
     calcRow(tr);
   });
   root.addEventListener("keydown", (e) => {
@@ -2439,6 +2461,25 @@ function renderOffsite(o){
   </div>
   <div class="row" style="margin-top:10px"><a class="btn sm" href="/api/system/backup/latest" download>⬇ Скачать последнюю копию (зашифрована)</a></div>`;
 }
+async function loadAudit(){
+  if (!$("auBody") || (ME && ME.role !== "admin")) return;
+  try{ const r = await api("/api/system/audit?limit=50");
+    $("auMeta").textContent = `· показано ${r.log.length}`;
+    $("auBody").innerHTML = r.log.map(x => `<tr><td class="mono small" style="white-space:nowrap">${esc(String(x.ts || "").slice(0, 19))}</td><td class="small">${esc(x.actor || "")}</td><td><b>${esc(x.action || "")}</b></td><td class="small">${esc(x.details || "")}</td></tr>`).join("")
+      || '<tr><td colspan="4" class="empty">Записей пока нет</td></tr>'; }
+  catch(e){ $("auBody").innerHTML = `<tr><td colspan="4" class="empty">Не удалось загрузить: ${esc(e.message)}</td></tr>`; }
+}
+$("auRefresh").onclick = loadAudit;
+$("dbDump").onclick = async (e) => {
+  const b = e.currentTarget; b.disabled = true; const old = b.textContent; b.textContent = "Создаю копию…";
+  try{ const r = await fetch("/api/system/backup/db", {headers: {"X-Requested-With": "timing-hub"}});
+    if (!r.ok) { let m = "ошибка " + r.status; try{ m = (await r.json()).error || m; }catch(_){} throw new Error(m); }
+    const name = (/filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "") || [])[1] || "sakhstart.db";
+    const url = URL.createObjectURL(await r.blob()), a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000); toast("Копия базы скачана: " + name); loadAudit(); }
+  catch(err){ toast("Копия не создана: " + err.message); }
+  finally{ b.disabled = false; b.textContent = old; }
+};
 async function loadHw(){
   try{ hwData = await api("/api/system"); }catch(e){ return; }
   const d = hwData, sv = d.server;
@@ -2446,6 +2487,7 @@ async function loadHw(){
   $("hwDot").className = "dot bad" + (svcBad ? "" : " hide");
   $("gear").title = svcBad ? `Служб с ошибкой: ${svcBad} — откройте «Система»` : "Система: обновление, журнал";
   if (!tabName().startsWith("hw")) return;
+  loadAudit();
   $("hwUpd").textContent = sv.collector_age_sec == null ? "Сведения о службах не собираются — обновите сервер (install.sh)." :
     sv.collector_age_sec > 120 ? `Сведения о службах устарели (${fmtAgo(sv.collector_age_sec)})` : "Состояние и обновление сервера. Сведения обновляются каждые 10 секунд.";
   const cert = (d.certs || [])[0];
