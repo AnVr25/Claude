@@ -189,6 +189,9 @@ tr.rej td{opacity:.55}
 .tabs i{font:700 12px var(--body);font-style:normal;background:var(--line);border-radius:99px;padding:1px 7px;margin-left:5px;color:var(--ink)}
 .tabs button.on i{background:var(--track);color:#fff}
 .tabs .search{margin-left:auto;max-width:280px}
+.imperr{position:fixed;inset:0;background:rgba(11,29,55,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.imperr .box{background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:85vh;overflow:auto;padding:20px 22px;border-top:6px solid var(--start);box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.imperr h3{margin:0 0 8px;font-size:20px}.imperr ul{margin:8px 0 14px;padding-left:20px}.imperr li{margin:6px 0;font-size:15px;line-height:1.35}
 .wzp-finder{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}
 .wzp-finder input{flex:1 1 320px;max-width:760px;font-size:17px;padding:10px 12px;border:2px solid var(--start)}
 .wzp-grid tr[hidden]{display:none}
@@ -751,7 +754,7 @@ a.btn.xls:hover{background:#E9F5EE}
         <span class="spacer"></span>
         <button class="danger hide" id="gClearRej" title="Безвозвратно удалить из базы все отклонённые заявки этого соревнования">❌ Очистить отклонённые заявки</button>
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
-        <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: ФИО, разряды, команды, тренеры и номера обновятся по ID заявки">📥 Загрузить и применить изменения из CSV</button>
+        <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: данные обновятся по ID заявки, а строки с пустым ID добавятся как новые участники (Фамилия, Имя, Год рождения, Дисциплина обязательны)">📥 Загрузить и применить изменения из CSV</button>
       </div>
       <div class="tbl free"><table class="regtbl">
         <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
@@ -1638,6 +1641,20 @@ $("gClearRej").onclick = async () => {
 };
 // 7.6: глобальный CSV-корректор. «Выгрузить CSV» → правка в Excel/Блокноте (ФИО, разряды, команды, тренеры, номера) → сюда.
 // Строки сопоставляются по «ID заявки»; сначала сводка изменений и подтверждение, затем запись в заявки и в стартовый список.
+// 8.1: понятное окно-ошибка импорта: что именно не так и в какой строке файла; импорт при этом не выполнен вовсе
+function importErrorBox(fileName, err){
+  const old = document.getElementById("impErr"); if (old) old.remove();
+  const list = (err.list || []).slice(0, 15).map(x => typeof x === "string" ? x : x.error);
+  const wrap = document.createElement("div"); wrap.id = "impErr"; wrap.className = "imperr"; wrap.setAttribute("role", "alertdialog"); wrap.setAttribute("aria-modal", "true"); wrap.setAttribute("aria-labelledby", "impErrT");
+  wrap.innerHTML = `<div class="box"><h3 id="impErrT">⛔ Импорт остановлен — ничего не загружено</h3>
+    <p class="small muted" style="margin:0 0 8px">Файл «${esc(fileName)}». Исправьте данные в Excel и загрузите файл снова.</p>
+    <ul>${(list.length ? list : [err.message]).map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${err.more ? `<p class="small muted">…и ещё ошибок: ${err.more}</p>` : ""}
+    <div class="row"><button class="primary" type="button" id="impErrOk">Понятно, исправлю</button></div></div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove(); wrap.querySelector("#impErrOk").onclick = close;
+  wrap.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); }); wrap.querySelector("#impErrOk").focus();
+}
 $("gCsvApply").onclick = () => {
   const ev = curEvent(); if (!ev) return;
   const i = document.createElement("input"); i.type = "file"; i.accept = ".csv,.xlsx,text/csv";
@@ -1648,14 +1665,14 @@ $("gCsvApply").onclick = () => {
       const d = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(d.error || "Ошибка " + r.status); e.list = d.errors || []; e.more = d.more || 0; throw e; } return d; };
     try{
       const c = await post("?check=1");
-      if (!c.changed && !c.bibs) return alert(`В файле «${f.name}» нет изменений: ${c.rows} строк совпадают с базой${c.empty_bib ? "; колонка номеров пуста" : ""}.`);
+      if (!c.changed && !c.bibs && !c.added) return alert(`В файле «${f.name}» нет изменений: ${c.rows} строк совпадают с базой${c.empty_bib ? "; колонка номеров пуста" : ""}.`);
       const lines = (c.examples || []).map(x => "• " + x).join("\n");
-      if (!confirm(`Применить «${f.name}»?\n\nСтрок в файле: ${c.rows}\nЗаявок будет изменено: ${c.changed}${c.cleared ? ` (очищено значений: ${c.cleared})` : ""}\nЛюдей с нагрудными номерами: ${c.bibs}\n${c.anonymized ? "Обезличенных заявок пропущено: " + c.anonymized + "\n" : ""}\n` + (lines ? "Например:\n" + lines + (c.changed > 12 ? "\n…" : "") + "\n\n" : "") + "Файл считается первоисточником: данные в базе и в стартовых списках будут перезаписаны."))
+      if (!confirm(`Применить «${f.name}»?\n\nСтрок в файле: ${c.rows}\n${c.added ? `Новых участников: ${c.added_people} (заявок ${c.added}) — строки без ID заявки, сразу «подтверждена» + нагрудный номер\n` : ""}Заявок будет изменено: ${c.changed}${c.cleared ? ` (очищено значений: ${c.cleared})` : ""}\nЛюдей с нагрудными номерами: ${c.bibs}\n${c.anonymized ? "Обезличенных заявок пропущено: " + c.anonymized + "\n" : ""}\n` + (lines || (c.new_examples || []).length ? "Например:\n" + [lines, ...(c.new_examples || []).map(x => "+ " + x)].filter(Boolean).join("\n") + "\n\n" : "") + "Файл считается первоисточником: данные в базе и в стартовых списках будут перезаписаны."))
         return;
       const d = await post("");
-      toast(`Применено: заявок изменено ${d.changed}, номера: ${d.bibs} чел. — данные уже в стартовых списках и на шаге 2 Мастера`);
+      toast(`Применено: заявок изменено ${d.changed}${d.added ? `, добавлено участников: ${d.added_people}` : ""}, номера: ${d.bibs} чел. — данные уже в стартовых списках и на шаге 2 Мастера`);
       regLoaded = null; await loadRegs(); loadEvents();
-    }catch(err){ alert(err.message + (err.list && err.list.length ? "\n\n" + err.list.slice(0, 15).map(x => typeof x === "string" ? x : x.error).join("\n") + (err.more ? `\n…и ещё ${err.more}` : "") : "")); }
+    }catch(err){ importErrorBox(f.name, err); }
   };
   i.click();
 };

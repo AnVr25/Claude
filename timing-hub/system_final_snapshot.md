@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.0.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.1.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `1e1f803`
-- **Дамп сформирован:** 2026-10-15 06:38 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 353 из 353 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 6705 строк, `hub/ui.html` 2912, `hub/protocol.html` 688
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `c9abdac`
+- **Дамп сформирован:** 2026-10-15 07:01 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 357 из 357 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 6803 строк, `hub/ui.html` 2929, `hub/protocol.html` 688
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -514,7 +514,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 4377–4478
+#### `Hub.generate_scoped` — `hub/hub.py` строки 4475–4576
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -621,7 +621,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 4347–4356
+#### `Hub.lane_order` — `hub/hub.py` строки 4445–4454
 
 ```python
     @staticmethod
@@ -636,7 +636,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4499–4539
+#### `Hub.reset_heats` — `hub/hub.py` строки 4597–4637
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -682,7 +682,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 4359–4363
+#### `Hub.age_limits` — `hub/hub.py` строки 4457–4461
 
 ```python
     @classmethod
@@ -692,7 +692,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 4365–4375
+#### `Hub.age_ok` — `hub/hub.py` строки 4463–4473
 
 ```python
     @classmethod
@@ -787,7 +787,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4579–4598
+#### `Hub.startlist` — `hub/hub.py` строки 4677–4696
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -1884,7 +1884,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1707–1764
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1724–1781
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1948,7 +1948,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1766–2273
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1783–2290
 
 ```js
 const wzp = (() => {
@@ -2527,7 +2527,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1528–1528
+#### `rankOpts` — `hub/ui.html` строки 1531–1531
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2637,7 +2637,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 353 из 353 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 357 из 357 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2690,6 +2690,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+c9abdac 2026-10-15 major: запущен олимпийский монолит SakhStart v8.0.0, шаблоны ВФЛА Excel, живой поиск результатов, инфо-плашка модерации и очистка онлайн-заявок от дублирования
 1e1f803 2026-10-14 fix: проведен аудит вывода событий на локальном ПК, принудительно отображены Метания v7.7.7
 0602e4b 2026-10-14 fix: устранено падение os.getloadavg на Windows, восстановлено чтение базы v7.7.6
 cd87480 2026-10-14 release: собран финальный стадионный монолит v7.7.5 с Windows-автозапускчиком .bat в 2 клика
@@ -2703,6 +2704,5 @@ f097747 2026-10-14 major: запущен глобальный CSV-коррект
 200fb44 2026-10-14 major: добавлен массовый импорт номеров из CSV, очистка отклонённых заявок и оптимизация Шага 1 Мастера v7.5.1
 66e7da8 2026-10-14 major: внедрен АРМ аудита администратора, автобэкап базы и автоисправление судейского ввода результатов v7.5.0
 575738d 2026-10-14 release: глобальный дамп архитектуры стадионного монолита v7.4.5
-a623134 2026-10-14 major: исправлен баг пустых полей тренеров в базе данных и геолокация манежа на Сахалине v7.4.5
 ```
 

@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 8.0.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.0.0", r.stdout + r.stderr)
+    check("версия сервера 8.1.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.1.0", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.0.0" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.1.0" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -303,6 +303,9 @@ print(json.dumps(out,ensure_ascii=False))
     check("8.0: масса снаряда: ядро М 20+ — 7,26 кг, 18–19 — 6, 14–17 — 5, до 13 — 4; Ж 18+ — 4 кг, младше — 3; мяч — 150 г; вес из названия сохраняется",
           xj.get("w") == ["7,26 кг", "6 кг", "4 кг", "3 кг", "4 кг", "150 г", "5 кг"], str(xj.get("w")))
     uih8 = open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "ui.html"), encoding="utf-8").read()
+    check("8.1: ui.html — окно-ошибка импорта CSV (importErrorBox) с понятным списком строк; подсказка кнопки: строки без ID — новые участники",
+          "function importErrorBox" in uih8 and "Импорт остановлен — ничего не загружено" in uih8 and "importErrorBox(f.name, err)" in uih8
+          and "строки с пустым ID добавятся как новые участники" in uih8, "")
     check("8.0: шаг 4 Мастера — живой поиск «judge-finder» над таблицей: по номеру или фамилии строки скрываются на лету",
           'id="judge-finder"' in uih8 and "Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)" in uih8 and "function applyFinder" in uih8
           and uih8.index('id="judge-finder"') < uih8.index('<table class="wzp-grid">'), "")
@@ -498,7 +501,7 @@ print(json.dumps(out,ensure_ascii=False))
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "8.0.0" and st["build_date"] == "2026-10-15", txt[:300])
+              and st["version"] == "8.1.0" and st["build_date"] == "2026-10-15", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -511,7 +514,7 @@ print(json.dumps(out,ensure_ascii=False))
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.0.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.1.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1398,7 +1401,7 @@ print(json.dumps(out,ensure_ascii=False))
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 8.0.0 и дата сборки 15.10.2026", st3["version"] == "8.0.0" and st3["build_date"] == "2026-10-15", txt[:200])
+        check("7.2: версия 8.1.0 и дата сборки 15.10.2026", st3["version"] == "8.1.0" and st3["build_date"] == "2026-10-15", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -2302,6 +2305,49 @@ print(json.dumps(out,ensure_ascii=False))
         check("7.6: неизвестный разряд, чужой ID заявки и пустая фамилия — файл отклоняется целиком с понятным текстом, в базе ничего не меняется",
               [c_ for c_, _ in res_] == [400, 400, 400] and "разряд" in res_[0][1] and "нет в этом соревновании" in res_[1][1] and "пустой" in res_[2][1]
               and any(r_["last_name"] == "Петрова" for r_ in regs_after), str(res_)[:300])
+        # 8.1: строка CSV без ID заявки — НОВЫЙ участник: проверка обязательных полей, затем status='approved', новый id и нагрудный номер
+        di_ = hdrs.index("Дисциплина") if "Дисциплина" in hdrs else hdrs.index("Дистанция")
+        dist14 = rows14[1][di_]
+        def newrow(**kw):
+            r2 = [""] * len(hdrs)
+            for k_, v_ in kw.items():
+                r2[hdrs.index(k_)] = v_
+            return r2
+        def withnew(*nrs):
+            body = [";".join(hdrs)] + [";".join(r_) for r_ in rows14[1:]] + [";".join(r_) for r_ in nrs]
+            return ("\ufeff" + "\r\n".join(body)).encode("utf-8")
+        line_no = len(rows14) + 1
+        n_regs0 = len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"])
+        miss = {k_: http("POST", f"/api/events/{e14}/regs-csv", withnew(newrow(**{**{"Фамилия": "Новикова", "Имя": "Алиса", "Год рождения": "2011", "Пол": "Ж", "Дисциплина": dist14}, k_: ""})), OCT)
+                for k_ in ("Фамилия", "Имя", "Год рождения", "Дисциплина")}
+        exp = lambda f_: f"Строка {line_no}: Ошибка импорта! Не заполнено обязательное поле «{f_}». Пожалуйста, скорректируйте данные в Excel и повторите загрузку."  # noqa: E731
+        check("8.1: новая строка без Фамилии / Имени / Года рождения / Дисциплины — импорт останавливается с текстом «Строка N: Ошибка импорта! Не заполнено обязательное поле […]. Пожалуйста, скорректируйте данные в Excel и повторите загрузку.»; в базе ничего не добавлено",
+              all(c_ == 400 and json.loads(t_)["error"] == exp(f_ if f_ != "Дисциплина" else "Дистанция / Дисциплина") for (f_, (c_, t_)) in miss.items())
+              and len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]) == n_regs0, str({k_: v_[1][:160] for k_, v_ in miss.items()}))
+        good = newrow(**{"Фамилия": "Новикова", "Имя": "Алиса", "Год рождения": "2011", "Пол": "Ж", "Дисциплина": dist14, "Команда / Клуб": "СШОР Новая"})
+        cc, dd = http("POST", f"/api/events/{e14}/regs-csv?check=1", withnew(good), OCT)
+        dd = json.loads(dd)
+        n_after_chk = len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"])
+        cc2, dd2 = http("POST", f"/api/events/{e14}/regs-csv", withnew(good), OCT)
+        dd2 = json.loads(dd2)
+        regs_n = json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]
+        nv = next((r_ for r_ in regs_n if r_["last_name"] == "Новикова"), None)
+        bibs_n = {r_["name"]: r_["bib"] for r_ in json.loads(http("GET", f"/api/events/{e14}/bibs")[1])["rows"]}
+        check("8.1: новая строка без ID с заполненными полями: проверка ничего не пишет; применение создаёт заявку (новый id, status=approved, команда из файла) и присваивает нагрудный номер — человек сразу виден на шаге 2",
+              cc == 200 and dd.get("added_people") == 1 and n_after_chk == n_regs0 and cc2 == 200 and dd2.get("added") == 1
+              and nv and nv["status"] == "approved" and nv["id"] and nv["team"] == "СШОР Новая" and nv["bib"]
+              and bibs_n.get("Новикова Алиса") == nv["bib"], f"{dd} {dd2} {nv} {bibs_n}")
+        cc3, dd3 = http("POST", f"/api/events/{e14}/regs-csv", withnew(good), OCT)
+        n_final = len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"])
+        short = ("\ufeff" + "Фамилия;Имя;Год рождения;Дисциплина\r\nЗаяц;Ольга;2012;" + dist14 + "\r\n").encode("utf-8")
+        cc4, dd4 = http("POST", f"/api/events/{e14}/regs-csv", short, OCT)
+        zayac = next((r_ for r_ in json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"] if r_["last_name"] == "Заяц"), None)
+        check("8.1: повторная загрузка того же файла не дублирует заявку; файл вообще без колонки ID читается как список новых участников (пол из категории не нужен, если указан «Пол»)",
+              cc3 == 200 and n_final == n_regs0 + 1 and (cc4 == 400 and "Пол" in dd4 or (cc4 == 200 and zayac and zayac["status"] == "approved")), f"{cc3} {dd3[:150]} {cc4} {dd4[:200]}")
+        for r_ in json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"]:         # тестовые новички убираем — дальше идут проверки на прежнем составе
+            if r_["last_name"] in ("Новикова", "Заяц"):
+                api("POST", f"/api/events/{e14}/regs/{r_['id']}", {"status": "rejected"})
+        api("POST", f"/api/events/{e14}/clear-rejected", {})
         n_before = len(json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"])
         wait_id = next(r_["id"] for r_ in json.loads(http("GET", f"/api/events/{e14}/regs")[1])["regs"] if r_["last_name"] == "Ждущая")
         api("POST", f"/api/events/{e14}/regs/{wait_id}", {"status": "rejected"})

@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "8.0.0"
+VERSION = "8.1.0"
 BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -3643,7 +3643,90 @@ class Hub:
     CSV_ID_HEADS = ("id заявки", "№ заявки", "id", "reg_id")
     CSV_FIELD_HEADS = {"last_name": ("фамилия",), "first_name": ("имя",), "middle_name": ("отчество",), "rank": ("разряд",),
                        "team": ("команда / клуб", "команда/клуб", "команда", "клуб"), "coach": ("тренер",),
-                       "bib": ("нагрудный номер", "нагр. №", "нагр №", "bib")}
+                       "bib": ("нагрудный номер", "нагр. №", "нагр №", "bib"),
+                       # 8.1: поля новых участников (строка без ID заявки); у существующих заявок не применяются
+                       "birth": ("год рождения", "дата рождения", "год", "birth_date"), "sex": ("пол",),
+                       "distance": ("дисциплина", "дистанция", "дистанция / дисциплина", "вид программы", "distance"),
+                       "category": ("категория",)}
+    CSV_NEW_REQUIRED = (("last_name", "Фамилия"), ("first_name", "Имя"), ("birth", "Год рождения"), ("distance", "Дистанция / Дисциплина"))
+
+    @staticmethod
+    def csv_import_error(n: int, field: str) -> str:
+        return (f"Строка {n}: Ошибка импорта! Не заполнено обязательное поле «{field}». "
+                f"Пожалуйста, скорректируйте данные в Excel и повторите загрузку.")
+
+    def _csv_new_people(self, ev: dict, st: dict, cell, new_rows: list, errors: list) -> list:
+        """8.1: строки CSV без ID заявки — НОВЫЕ участники. Обязательны Фамилия, Имя, Год рождения, Дистанция; остальное проверяет
+        check_person (дистанция должна быть в программе, пол — М/Ж, разряд по умолчанию «Б/р», команда — «—»).
+        Любая ошибка попадает в errors, импорт целиком останавливается. → [{clean, picks, bib}] — по человеку (ФИО + дата рождения)."""
+        out: dict = {}
+        used = {str(r.get("bib") or "").strip() for r in st["regs"].values()} | {str(e.get("bib") or "").strip() for e in st["entries"]}
+        used.discard("")
+        tail = "Пожалуйста, скорректируйте данные в Excel и повторите загрузку."
+        ev2 = {**ev, "_no_limit": True}
+        live = [r for r in st["regs"].values() if r.get("status") != "rejected"]
+        existing = {(_name_key(r["last_name"]), _name_key(r["first_name"]), str(r["birth_date"]), r["distance"]) for r in live}
+        existing_bib = {(_name_key(r["last_name"]), _name_key(r["first_name"]), str(r["birth_date"])): self._own_bib(r, st["ent_by_reg"].get(r["id"]))
+                        for r in live if self._own_bib(r, st["ent_by_reg"].get(r["id"]))}
+        label = {"last_name": "Фамилия", "first_name": "Имя", "birth_date": "Год рождения", "sex": "Пол", "rank": "Разряд",
+                 "distances": "Дистанция / Дисциплина", "middle_name": "Отчество", "team": "Команда"}
+        for n, row in new_rows:
+            g = lambda k: (cell(row, k) or "").strip()  # noqa: E731
+            missing = [title for k, title in self.CSV_NEW_REQUIRED if not g(k)]
+            if missing:
+                errors.extend(self.csv_import_error(n, t) for t in missing)
+                continue
+            raw_b = g("birth")
+            ym = re.fullmatch(r"(\d{4})(\.0+)?", raw_b)
+            birth = f"01.01.{ym.group(1)}" if ym else raw_b
+            sex = g("sex")
+            if not self.parse_sex(sex):
+                low = g("category").lower()
+                sex = "М" if re.match(r"(мальчик|юнош|мужч|юниор(?!к))", low) else "Ж" if re.match(r"(девоч|девуш|женщ|юниорк)", low) else ""
+            if not sex:
+                errors.append(self.csv_import_error(n, "Пол"))
+                continue
+            d = {"last_name": g("last_name"), "first_name": g("first_name"), "middle_name": g("middle_name"), "birth_date": birth,
+                 "sex": sex, "team": g("team") or "—", "coach": g("coach"), "rank": g("rank") or "Б/р",
+                 "distances": [{"distance": g("distance"), "best": ""}]}
+            errs, clean, picks = self.check_person(ev2, d, team_mode=True)
+            if errs:
+                errors.extend(f"Строка {n}: Ошибка импорта! Поле «{label.get(k, k)}»: {msg}. {tail}" for k, msg in errs.items())
+                continue
+            key = (_name_key(clean["last_name"]), _name_key(clean["first_name"]), clean["birth_date"])
+            fresh = [(nm, b) for nm, b in picks if (*key, nm) not in existing]
+            if not fresh:
+                continue                                       # такая заявка уже есть — повторно не добавляем
+            p = out.setdefault(key, {"clean": clean, "picks": [], "bib": "", "row": n})
+            for nm, b in fresh:
+                if nm not in [x[0] for x in p["picks"]]:
+                    p["picks"].append((nm, b))
+            bib = g("bib")
+            bib = bib[:-2] if re.fullmatch(r"\d+\.0", bib) else bib
+            if bib:
+                if not self.BIB_RE.fullmatch(bib):
+                    errors.append(f"Строка {n}: Ошибка импорта! Номер «{bib[:12]}» — до 10 цифр или букв, без пробелов. {tail}")
+                elif p["bib"] and p["bib"] != bib:
+                    errors.append(f"Строка {n}: Ошибка импорта! У {clean['last_name']} {clean['first_name']} разные номера в разных строках — номер один на все виды. {tail}")
+                else:
+                    p["bib"] = bib
+        # номера: из файла (не должен принадлежать другому человеку) → уже стоящий у этого человека → следующий свободный
+        owners: dict = {}
+        for key, p in out.items():
+            if p["bib"]:
+                owners.setdefault(p["bib"], []).append(key)
+        for b, keys in owners.items():
+            other = [k for k, v in existing_bib.items() if v == b and k not in keys]
+            if len(keys) > 1 or other:
+                errors.append(f"Строка {out[keys[0]]['row']}: Ошибка импорта! Номер «{b}» уже занят другим участником. {tail}")
+        nums = [int(x) for x in used | {p["bib"] for p in out.values() if p["bib"]} if x.isdigit()]
+        nxt = (max(nums) if nums else 0) + 1
+        for key, p in out.items():
+            p["bib"] = p["bib"] or existing_bib.get(key) or ""
+            if not p["bib"]:
+                p["bib"] = str(nxt)
+                nxt += 1
+        return list(out.values())
 
     def apply_regs_csv(self, ev: dict, blob: bytes, who: str, check: bool = False) -> tuple:
         """7.6: ГЛОБАЛЬНЫЙ CSV-КОРРЕКТОР. Файл, выгруженный из «Регистрации» и отредактированный в Excel/Блокноте, — первоисточник:
@@ -3659,27 +3742,31 @@ class Hub:
         for i, row in enumerate(table[:10]):
             low = [str(c or "").strip().lower() for c in row]
             idc = next((j for j, c in enumerate(low) if c in self.CSV_ID_HEADS), None)
-            if idc is None:
-                continue
             found = {k: next((j for j, c in enumerate(low) if c in heads), None) for k, heads in self.CSV_FIELD_HEADS.items()}
             found = {k: j for k, j in found.items() if j is not None}
+            if idc is None and not ({"last_name", "first_name"} & set(found)):
+                continue
             if found:
-                hi, cols = i, {"id": idc, **found}
+                hi, cols = i, ({"id": idc} if idc is not None else {}) | found
                 break
         if hi is None:
-            return 400, {"error": "В файле нет колонки «ID заявки» и колонок с данными. Возьмите файл, выгруженный кнопкой «Выгрузить CSV» в «Регистрации», и правьте его, не меняя первую строку."}
+            return 400, {"error": "В файле не найдена строка заголовков (Фамилия, Имя, Год рождения, Дисциплина…). Возьмите файл, выгруженный кнопкой «Выгрузить CSV» в «Регистрации», и правьте его, не меняя первую строку."}
         st = self._bib_state(ev["id"])
         regs, key_of = st["regs"], st["key_of"]
         errors, changes, per_person, seen = [], [], {}, set()
-        stats = {"rows": 0, "changed": 0, "cleared": 0, "same": 0, "anonymized": 0, "empty_bib": 0}
+        new_rows: list = []            # 8.1: строки без ID заявки — новые участники (проверяются здесь, пишутся при применении)
+        stats = {"rows": 0, "changed": 0, "cleared": 0, "same": 0, "anonymized": 0, "empty_bib": 0, "added": 0, "added_people": 0}
         label = {"last_name": "фамилия", "first_name": "имя", "middle_name": "отчество", "rank": "разряд", "team": "команда", "coach": "тренер"}
         cell = lambda row, k: (str(row[cols[k]] if cols[k] < len(row) else "") if k in cols else None)  # noqa: E731
         for n, row in enumerate(table[hi + 1:], hi + 2):
             if not any(str(c or "").strip() for c in row):
                 continue
             stats["rows"] += 1
-            rid_s = str(row[cols["id"]] if cols["id"] < len(row) else "").strip()
+            rid_s = str(row[cols["id"]] if "id" in cols and cols["id"] < len(row) else "").strip()
             rid_s = rid_s[:-2] if rid_s.endswith(".0") else rid_s
+            if not rid_s:
+                new_rows.append((n, row))
+                continue
             if not rid_s.isdigit() or int(rid_s) not in regs:
                 errors.append(f"строка {n}: заявки «{rid_s or '—'}» нет в этом соревновании — первую колонку менять нельзя")
                 continue
@@ -3732,6 +3819,7 @@ class Hub:
                 stats["cleared"] += sum(1 for _, o, v in diff if o and not v)
             else:
                 stats["same"] += 1
+        plan_new = self._csv_new_people(ev, st, cell, new_rows, errors)
         items = []
         for k, slot in per_person.items():
             if len(slot["bibs"]) > 1:
@@ -3741,13 +3829,19 @@ class Hub:
                 continue
             items.append({"ids": slot["ids"], "bib": next(iter(slot["bibs"]))})
         if errors:
-            return 400, {"error": "Файл не применён — исправьте и загрузите снова", "errors": errors[:30], "more": max(0, len(errors) - 30)}
+            first = errors[0]
+            return 400, {"error": first if "Ошибка импорта" in first else "Файл не применён — исправьте и загрузите снова",
+                         "errors": errors[:30], "more": max(0, len(errors) - 30), "stopped": True}
         if not stats["rows"]:
             return 400, {"error": "В файле нет строк с данными"}
+        stats["added"] = sum(len(p["picks"]) for p in plan_new)
+        stats["added_people"] = len(plan_new)
+        stats["new_examples"] = [f"{p['clean']['last_name']} {p['clean']['first_name']}, {p['clean']['birth_date'][:4]} · "
+                                 + ", ".join(n for n, _ in p["picks"]) + f" · № {p['bib']}" for p in plan_new[:12]]
         code, out = self.save_bibs(ev, items, who, dry=True) if items else (200, {"saved": 0})
         if code != 200:
             return code, out
-        stats["bibs"] = out.get("saved", 0)
+        stats["bibs"] = out.get("saved", 0) + len(plan_new)
         ex = [f"№{rid} {r['last_name']} {r['first_name']}: " + "; ".join(f"{label[k]} «{o or ''}» → «{v or ''}»" for k, o, v in diff)
               for rid, r, _, diff in changes[:12]]
         stats["examples"] = ex
@@ -3757,6 +3851,9 @@ class Hub:
         con = self.store.con
         con.execute("BEGIN")
         try:
+            chash = self._consent_hash(ev) if plan_new else ""
+            for p in plan_new:                                  # 8.1: новые участники — сразу «подтверждена» (status='approved')
+                p["ids"], _dup = self._store_person(ev, p["clean"], p["picks"], chash, "approved", "добавлен из CSV секретарём")
             for rid, r, new, diff in changes:
                 self.store.update_registration(rid, **{k: v for k, v in new.items() if k in dict((d[0], 1) for d in diff)})
                 if not r.get("relay"):                       # связанные строки сетки: имя, команда, тренер, разряд
@@ -3773,13 +3870,14 @@ class Hub:
         except Exception:
             con.execute("ROLLBACK")
             raise
+        items += [{"ids": p["ids"], "bib": p["bib"]} for p in plan_new if p.get("ids")]
         if items:
             code, out = self.save_bibs(ev, items, who)
             if code != 200:                                 # маловероятно после проверки; текстовые правки уже применены
                 return code, out
         self.store.audit(who, eid, "Данные заявок исправлены из CSV",
                          f"строк в файле: {stats['rows']}, заявок изменено: {stats['changed']}, очищено значений: {stats['cleared']}, "
-                         f"людей с номерами: {stats['bibs']}")
+                         f"людей с номерами: {stats['bibs']}, новых участников: {stats['added_people']} (заявок {stats['added']})")
         return 200, {"ok": True, "check": False, **stats}
 
     @staticmethod
