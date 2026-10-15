@@ -838,6 +838,8 @@ function renderTeam(){
   </form>
   <div class="foot">Заявки проверит секретарь соревнований. Стартовые номера и забеги будут в стартовом протоколе.</div>`);
   ["team","coach","contact"].forEach(x=>{ if(k[x]) $("t_"+x).value=k[x]; });
+  ["t_team","t_coach"].forEach(id=>$(id).addEventListener("change",()=>{ if(TEAM.buf) teamCheck(); }));
+  TEAM.buf=null;
   $("t_file").addEventListener("change",teamFile);
   $("tf").addEventListener("submit",teamSubmit);
   TEAM.check=null;
@@ -847,15 +849,20 @@ async function teamFile(){
   const f=$("t_file").files[0]; if(!f) return;
   $("e_file").textContent=""; $("t_fname").textContent=f.name+" — проверяем…"; $("t_send").disabled=true; $("t_preview").innerHTML="";
   if(f.size>3*1024*1024){ $("e_file").textContent="Файл больше 3 МБ"; return; }
+  TEAM.buf=await f.arrayBuffer(); TEAM.fname=f.name; $("t_file").value="";
+  await teamCheck();
+}
+// проверка файла по текущим «Команда» и «Тренер» формы; повторяется, когда их поправили после загрузки файла
+async function teamCheck(){
+  if(!TEAM.buf) return;
   try{
     const r=await fetch(`/r/${slug}/team-check`,{method:"POST",headers:{"Content-Type":"application/octet-stream",
-      "X-Team":encodeURIComponent($("t_team").value.trim()),"X-Coach":encodeURIComponent($("t_coach").value.trim())},body:await f.arrayBuffer()});
+      "X-Team":encodeURIComponent($("t_team").value.trim()),"X-Coach":encodeURIComponent($("t_coach").value.trim())},body:TEAM.buf});
     const d=await r.json().catch(()=>({}));
-    $("t_fname").textContent=f.name;
+    $("t_fname").textContent=TEAM.fname;
     if(!r.ok){ $("e_file").textContent=d.error||"Не удалось проверить файл"; TEAM.check=null; return; }
     TEAM.check=d; showCheck(d);
   }catch(e){ $("e_file").textContent="Нет связи с сервером. Попробуйте ещё раз."; }
-  $("t_file").value="";
 }
 function showCheck(d){
   const errTxt=e=>Object.values(e||{}).join("; ");

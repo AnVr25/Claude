@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.2.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.2.1` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `499236d`
-- **Дамп сформирован:** 2026-10-15 07:32 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `dd67f34`
+- **Дамп сформирован:** 2026-10-15 07:35 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
 - **Автопроверки:** Итого: 358 из 358 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7084 строк, `hub/ui.html` 2929, `hub/protocol.html` 688
+- **Объём исходников:** `hub/hub.py` 7083 строк, `hub/ui.html` 2929, `hub/protocol.html` 688
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -514,7 +514,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 4479–4580
+#### `Hub.generate_scoped` — `hub/hub.py` строки 4478–4579
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -621,7 +621,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-#### `Hub.lane_order` — `hub/hub.py` строки 4449–4458
+#### `Hub.lane_order` — `hub/hub.py` строки 4448–4457
 
 ```python
     @staticmethod
@@ -636,7 +636,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4601–4641
+#### `Hub.reset_heats` — `hub/hub.py` строки 4600–4640
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -682,7 +682,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return {"waves": len(names), "entries": n, "stopped": stopped}
 ```
 
-#### `Hub.age_limits` — `hub/hub.py` строки 4461–4465
+#### `Hub.age_limits` — `hub/hub.py` строки 4460–4464
 
 ```python
     @classmethod
@@ -692,7 +692,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 4467–4477
+#### `Hub.age_ok` — `hub/hub.py` строки 4466–4476
 
 ```python
     @classmethod
@@ -787,7 +787,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4681–4700
+#### `Hub.startlist` — `hub/hub.py` строки 4680–4699
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -2690,6 +2690,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+dd67f34 2026-10-15 feat: Excel-книга протоколов в формате эталона ВФЛА v8.2.0
 499236d 2026-10-15 major: запущен олимпийский монолит v8.1.0, интеллектуальный CSV-валидатор ошибок Excel, живой поиск результатов и шаблоны ВФЛА
 c9abdac 2026-10-15 major: запущен олимпийский монолит SakhStart v8.0.0, шаблоны ВФЛА Excel, живой поиск результатов, инфо-плашка модерации и очистка онлайн-заявок от дублирования
 1e1f803 2026-10-14 fix: проведен аудит вывода событий на локальном ПК, принудительно отображены Метания v7.7.7
@@ -2703,6 +2704,5 @@ f706502 2026-10-14 major: расширена рабочая зона регис�
 17778e5 2026-10-14 major: расширена рабочая зона Регистрации, ликвидированы бегунки таблиц и запущен глобальный CSV-корректор v7.6.1
 f097747 2026-10-14 major: запущен глобальный CSV-корректор данных, очистка отклонённых заявок и дашборд Шага 1 Мастера v7.6.0
 200fb44 2026-10-14 major: добавлен массовый импорт номеров из CSV, очистка отклонённых заявок и оптимизация Шага 1 Мастера v7.5.1
-66e7da8 2026-10-14 major: внедрен АРМ аудита администратора, автобэкап базы и автоисправление судейского ввода результатов v7.5.0
 ```
 

@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "8.2.0"
+VERSION = "8.2.1"
 BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4219,17 +4219,16 @@ class Hub:
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
-        # 8.0: команда и тренер вводятся один раз — в форме на сайте; в шаблоне этих колонок нет (в старых файлах они читаются)
-        cols = [c for c in self.TEAM_COLS if c[0] not in ("team", "coach")]
+        # 8.2.1: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
-                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера в файле указывать не нужно — они берутся из формы."],
-                [h for _, h, _ in cols]]
-        rows += [[""] * len(cols) for _ in range(60)]
+                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера можно не заполнять, если они указаны в форме."],
+                [h for _, h, _ in self.TEAM_COLS]]
+        rows += [[""] * len(self.TEAM_COLS) for _ in range(60)]
         return xlsx_build(
             sheets=[("Заявка", rows), ("Справочник", [["Дистанции"]] + [[d] for d in dists] + [[""], ["Пол"], ["М"], ["Ж"]])],
-            widths=[18, 14, 16, 15, 10, 12, 14, 30, 16], header_row=3, title_row=1,
+            widths=[18, 14, 16, 15, 10, 12, 14, 24, 22, 30, 16], header_row=3, title_row=1,
             validations=[("E4:E63", "\"М,Ж\""), ("F4:F63", f"Справочник!$A$2:$A${len(dists) + 1}"),
-                         ("I4:I63", "\"" + ",".join(self.RANKS) + "\"")],
+                         ("K4:K63", "\"" + ",".join(self.RANKS) + "\"")],
             date_cols=[3], hidden_sheets=[1])
 
     def parse_team_file(self, ev: dict, blob: bytes, name: str = "") -> tuple:
