@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "8.2.1"
+VERSION = "8.2.2"
 BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4211,17 +4211,17 @@ class Hub:
                  ("birth_date", "Дата рождения*", ("дата рожд", "д.р", "др", "рожд")),
                  ("sex", "Пол* (М/Ж)", ("пол",)), ("distance", "Дистанция*", ("дистанц", "вид")),
                  ("best", "Лучший результат", ("лучш", "результ", "заявл")),
-                 ("team", "Команда", ("команд", "клуб", "школ", "организ")),
-                 ("coach", "Тренер", ("тренер",)),
+                 ("team", "Команда*", ("команд", "клуб", "школ", "организ")),
+                 ("coach", "Тренер*", ("тренер",)),
                  ("representative", "Родитель / представитель (до 18 лет)", ("родит", "представ")),
                  ("rank", "Разряд / звание*", ("разряд", "звани")))
 
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
-        # 8.2.1: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
+        # 8.2.2: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
-                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера можно не заполнять, если они указаны в форме."],
+                          "Обязательны поля со звёздочкой: в том числе разряд (если разряда нет — «Б/р»), команда и тренер — на сайте их отдельно вводить не нужно."],
                 [h for _, h, _ in self.TEAM_COLS]]
         rows += [[""] * len(self.TEAM_COLS) for _ in range(60)]
         return xlsx_build(
@@ -4290,6 +4290,10 @@ class Hub:
             d = {**r, "team": self._clean(r.get("team"), 80) or team, "coach": self._clean(r.get("coach"), 80) or coach,
                  "contact": data.get("contact"), "distances": [{"distance": r.get("distance"), "best": r.get("best")}]}
             errs, clean, picks = self.check_person(ev, d, team_mode=True)
+            if errs.get("team"):
+                errs["team"] = "укажите команду в файле (колонка «Команда*»)"
+            if data.get("_strict") and not d["coach"]:
+                errs["coach"] = "укажите тренера в файле (колонка «Тренер*»)"
             if not errs and picks and picks[0][0] in ev["_left"]:
                 ev["_left"][picks[0][0]] -= 1
             res.append({"row": r.get("_row"), "name": f"{clean['last_name']} {clean['first_name']}".strip(),
@@ -4309,14 +4313,9 @@ class Hub:
         return ref.year - b.year - ((ref.month, ref.day) < (b.month, b.day))
 
     def submit_team(self, ev: dict, data: dict, rows: list, status: str = "pending", actor: str = "форма") -> tuple:
-        if not self._clean(data.get("team"), 80) and any(not self._clean(r.get("team")) for r in rows):
-            return 400, {"error": "Укажите команду", "fields": {"team": "обязательное поле"}}
         if actor == "форма":
+            data = {**data, "_strict": True}      # 8.2.2: команда и тренер — только из файла (колонки «Команда*», «Тренер*»), отдельных полей на сайте нет
             fe = {}
-            if not self._clean(data.get("coach")):
-                fe["coach"] = "укажите ФИО тренера / представителя команды"
-            if not self._clean(data.get("contact")):
-                fe["contact"] = "укажите телефон или e-mail для связи"
             if not data.get("consent"):
                 fe["consent"] = "нужно подтвердить наличие согласий"
             if not data.get("policy"):
@@ -4327,8 +4326,7 @@ class Hub:
         if chk["bad"]:
             return 400, {"error": f"Исправьте строки с ошибками: {chk['bad']}", "check": self._strip_check(chk)}
         chash = self._consent_hash(ev)
-        note = (f"командная заявка: {self._clean(data.get('coach'), 80)}" if actor == "форма"
-                else "импорт секретарём")
+        note = ("командная заявка (файл)" if actor == "форма" else "импорт секретарём")
         added, dups = 0, []
         for x in chk["rows"]:
             ids, dup = self._store_person(ev, x["_clean"], x["_picks"], chash, status, note)
@@ -4337,7 +4335,8 @@ class Hub:
                 dups.append(f"{x['name']} ({', '.join(dup)})")
         self.store.audit(actor, ev["id"], "Командная заявка" if actor == "форма" else "Импорт заявок",
                          f"{self._clean(data.get('team'), 80) or '—'}: {added} заявок" + (f", повторов {len(dups)}" if dups else ""))
-        return 201, {"ok": True, "added": added, "duplicates": dups, "team": self._clean(data.get("team"), 80)}
+        return 201, {"ok": True, "added": added, "duplicates": dups,
+                     "team": self._clean(data.get("team"), 80) or ", ".join(sorted({x["team"] for x in chk["rows"] if x.get("team")}))[:160]}
 
     def submit_relay(self, ev: dict, data: dict, status: str = "pending", actor: str = "форма") -> tuple:
         """Заявка эстафетной команды: название, дистанция-эстафета и участники по этапам. → (код, ответ)"""
@@ -6874,7 +6873,7 @@ class Hub:
                 if e:
                     return js({"error": e}, 400)
                 chk = self.check_team(ev, {"team": unquote(headers.get("x-team", "")),
-                                           "coach": unquote(headers.get("x-coach", ""))}, rows)
+                                           "coach": unquote(headers.get("x-coach", "")), "_strict": True}, rows)
                 out = self._strip_check(chk)
                 for x, raw in zip(out["rows"], rows):
                     x["raw"] = {k: raw.get(k, "") for k, _, _ in self.TEAM_COLS}

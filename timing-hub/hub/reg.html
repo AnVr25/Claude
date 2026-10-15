@@ -810,21 +810,14 @@ function relayDone(d){
 }
 let TEAM={check:null,keep:{}};
 function renderTeam(){
-  const d=INFO, k=TEAM.keep;
+  const d=INFO;
   if(!d.open) return render();
   paint(modeSwitch("team")+RULES+`
   <form id="tf" novalidate>
-    <div class="card"><h2>Команда</h2>
-      <div class="grid">
-        <div class="full">${field("t_team","Команда / школа / город",1,'maxlength="80"')}</div>
-        ${field("t_coach","Тренер / представитель команды",1,'maxlength="80" placeholder="Фамилия Имя Отчество"')}
-        ${field("t_contact","Телефон или e-mail",1,'maxlength="80"')}
-      </div>
-    </div>
     <div class="card"><h2>Список участников</h2>
       <div class="step"><span class="n">1</span><div><b>Скачайте шаблон</b><div class="muted">Excel-файл с нужными колонками и списком дистанций этих соревнований.</div>
         <a class="btnlink" href="/r/${esc(slug)}/template.xlsx"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>Скачать шаблон Excel</a></div></div>
-      <div class="step"><span class="n">2</span><div><b>Заполните</b><div class="muted">Одна строка — один участник на одну дистанцию. Дату рождения — как 14.05.2011. Пол — М или Ж. Разряд обязателен: если его нет, пишите «Б/р».</div></div></div>
+      <div class="step"><span class="n">2</span><div><b>Заполните</b><div class="muted">Одна строка — один участник на одну дистанцию. Дату рождения — как 14.05.2011. Пол — М или Ж. Разряд обязателен: если его нет, пишите «Б/р». <b>Команда и Тренер — тоже в файле (обязательные колонки)</b>: отдельно вводить их на сайте не нужно.</div></div></div>
       <div class="step"><span class="n">3</span><div><b>Загрузите заполненный файл</b>
         <label class="filebox" id="w_file"><input type="file" id="t_file" accept=".xlsx,.csv"><span id="t_fname">Нажмите, чтобы выбрать файл (.xlsx или .csv)</span></label>
         <div class="err" id="e_file"></div></div></div>
@@ -837,14 +830,11 @@ function renderTeam(){
     <div class="formerr" id="formErr"></div>
   </form>
   <div class="foot">Заявки проверит секретарь соревнований. Стартовые номера и забеги будут в стартовом протоколе.</div>`);
-  ["team","coach","contact"].forEach(x=>{ if(k[x]) $("t_"+x).value=k[x]; });
-  ["t_team","t_coach"].forEach(id=>$(id).addEventListener("change",()=>{ if(TEAM.buf) teamCheck(); }));
   TEAM.buf=null;
   $("t_file").addEventListener("change",teamFile);
   $("tf").addEventListener("submit",teamSubmit);
   TEAM.check=null;
 }
-function tKeep(){TEAM.keep={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value};}
 async function teamFile(){
   const f=$("t_file").files[0]; if(!f) return;
   $("e_file").textContent=""; $("t_fname").textContent=f.name+" — проверяем…"; $("t_send").disabled=true; $("t_preview").innerHTML="";
@@ -852,12 +842,11 @@ async function teamFile(){
   TEAM.buf=await f.arrayBuffer(); TEAM.fname=f.name; $("t_file").value="";
   await teamCheck();
 }
-// проверка файла по текущим «Команда» и «Тренер» формы; повторяется, когда их поправили после загрузки файла
+// проверка файла: команда и тренер берутся только из самого файла (колонки «Команда*» и «Тренер*»)
 async function teamCheck(){
   if(!TEAM.buf) return;
   try{
-    const r=await fetch(`/r/${slug}/team-check`,{method:"POST",headers:{"Content-Type":"application/octet-stream",
-      "X-Team":encodeURIComponent($("t_team").value.trim()),"X-Coach":encodeURIComponent($("t_coach").value.trim())},body:TEAM.buf});
+    const r=await fetch(`/r/${slug}/team-check`,{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:TEAM.buf});
     const d=await r.json().catch(()=>({}));
     $("t_fname").textContent=TEAM.fname;
     if(!r.ok){ $("e_file").textContent=d.error||"Не удалось проверить файл"; TEAM.check=null; return; }
@@ -877,17 +866,13 @@ function showCheck(d){
 async function teamSubmit(ev){
   ev.preventDefault(); clearErr();
   const loc={};
-  if(!$("t_team").value.trim())loc.t_team="обязательное поле";
-  if(!$("t_coach").value.trim())loc.t_coach="обязательное поле";
-  if(!$("t_contact").value.trim())loc.t_contact="обязательное поле";
   if(!$("t_consent").checked)loc.t_consent="нужно подтвердить";
   if(!$("t_policy").checked)loc.t_policy="подтвердите ознакомление с Политикой";
   if(!TEAM.check)loc.file="загрузите файл";
   if(Object.keys(loc).length){showErr(loc);return;}
-  tKeep();
   $("t_send").disabled=true; $("t_send").textContent="Отправляем…";
   try{
-    const body={team:$("t_team").value,coach:$("t_coach").value,contact:$("t_contact").value,consent:true,policy:true,website:$("t_website").value,
+    const body={consent:true,policy:true,website:$("t_website").value,
       rows:TEAM.check.rows.map(x=>Object.assign({_row:x.row},x.raw))};
     const r=await fetch(`/r/${slug}/team`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const d=await r.json().catch(()=>({}));

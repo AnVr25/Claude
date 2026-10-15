@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 8.2.1 (--version)", r.returncode == 0 and r.stdout.strip() == "8.2.1", r.stdout + r.stderr)
+    check("версия сервера 8.2.2 (--version)", r.returncode == 0 and r.stdout.strip() == "8.2.2", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.2.1" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.2.2" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -510,7 +510,7 @@ print(json.dumps(out,ensure_ascii=False))
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "8.2.1" and st["build_date"] == "2026-10-15", txt[:300])
+              and st["version"] == "8.2.2" and st["build_date"] == "2026-10-15", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -523,7 +523,7 @@ print(json.dumps(out,ensure_ascii=False))
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.2.1", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.2.2", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1155,15 +1155,15 @@ print(json.dumps(out,ensure_ascii=False))
         tab = hubmod.xlsx_read(tpl)
         check("шаблон: заголовки и список дистанций", "Фамилия*" in tab[2] and "Дистанция*" in tab[2]
               and b"300" in zipfile.ZipFile(io.BytesIO(tpl)).read("xl/worksheets/sheet2.xml"), str(tab[:3]))
-        check("8.2.1: шаблон Excel команды — прежний: колонки «Команда», «Тренер» и «Разряд / звание*» на своих местах (K), позиции колонок не сдвинуты; в онлайн-форме инструкция про звёздочки и плашка модерации",
-              tab[2][7] == "Команда" and tab[2][8] == "Тренер" and tab[2][10] == "Разряд / звание*"
+        check("8.2.2: шаблон Excel команды — колонки «Команда*», «Тренер*» (обязательные, на прежних местах H, I), «Разряд / звание*» — K; в онлайн-форме инструкция про звёздочки и плашка модерации",
+              tab[2][7] == "Команда*" and tab[2][8] == "Тренер*" and tab[2][10] == "Разряд / звание*"
               and "строго в соответствии со знаками звёздочек (*)" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
               and "появится в открытых списках участников соревнований сразу после проверки, модерации и утверждения Главным секретарём соревнований" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
               and "async function teamCheck" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read(), str(tab[2]))
         head = tab[2]
         filled = [["Заявка"], ["подсказка"], head,
-                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "", "", "", "кмс"],
-                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "", "", "", "б/р"],
+                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "Корсаков", "Тренеров Т.Т.", "", "кмс"],
+                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "Корсаков", "Тренеров Т.Т.", "", "б/р"],
                   ["Ошибкин", "", "", "31.02.2011", "X", "42 км", "", "", "", ""]]
         xb = hubmod.xlsx_build([("Заявка", filled)], header_row=3, title_row=1)
 
@@ -1190,13 +1190,20 @@ print(json.dumps(out,ensure_ascii=False))
         check("команда с ошибками в файле не принимается", code == 400 and out.get("check", {}).get("bad") == 1, str(out)[:200])
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "", "contact": "", "consent": False,
                             "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
-        check("без тренера, контакта, согласия и отметки о Политике — ошибка", code == 400
-              and set(out.get("fields", {})) == {"coach", "contact", "consent", "policy"}, str(out))
+        check("без согласия и отметки о Политике — ошибка; отдельных полей «Команда», «Тренер», «Телефон» на сайте больше нет", code == 400
+              and set(out.get("fields", {})) == {"consent", "policy"}, str(out))
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "Тренеров Т.Т.", "contact": "8-900",
                             "consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
         check("командная заявка принята: 2 участника", code == 201 and out["added"] == 2, str(out))
         code, out = pub_raw(f"/r/{slug}/team", json.dumps({"team": "Корсаков", "coach": "Тренеров Т.Т.", "contact": "8-900",
                             "consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
+        c8a, o8a = pub_raw(f"/r/{slug}/team", json.dumps({"consent": True, "policy": True, "rows": [dict(r_, coach="") for r_ in rows[:2]]}).encode(), {"Content-Type": "application/json"})
+        c8b, o8b = pub_raw(f"/r/{slug}/team", json.dumps({"consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
+        rg = open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
+        tf_ = rg[rg.index("function renderTeam"):rg.index("function teamSubmit")]
+        check("8.2.2: командная заявка — команда и тренер только из файла: без тренера в строке файла — ошибка строки; с командой и тренером в файле принимается без полей формы; в форме нет полей «Команда», «Тренер», «Телефон»",
+              c8a == 400 and "coach" in json.dumps(o8a, ensure_ascii=False) and c8b == 201 and o8b.get("team") == "Корсаков"
+              and "t_team" not in tf_ and "t_coach" not in tf_ and "t_contact" not in tf_, f"{c8a} {str(o8a)[:200]} {c8b} {o8b}")
         check("повторная отправка той же команды — повторы пропущены", code == 201 and out["added"] == 0 and len(out["duplicates"]) == 2, str(out))
         _, txt = http("GET", f"/api/events/{e4}/regs")
         kr = [r for r in json.loads(txt)["regs"] if r["team"] == "Корсаков"]
@@ -1411,7 +1418,7 @@ print(json.dumps(out,ensure_ascii=False))
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 8.2.1 и дата сборки 15.10.2026", st3["version"] == "8.2.1" and st3["build_date"] == "2026-10-15", txt[:200])
+        check("7.2: версия 8.2.2 и дата сборки 15.10.2026", st3["version"] == "8.2.2" and st3["build_date"] == "2026-10-15", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
