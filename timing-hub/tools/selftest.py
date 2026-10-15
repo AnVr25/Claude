@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 8.1.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.1.0", r.stdout + r.stderr)
+    check("версия сервера 8.2.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.2.0", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.1.0" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.2.0" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -276,15 +276,19 @@ out={}
 for fin in (False,True):
     code,ct,blob,hd=h.protocol_xlsx(ev,{},fin)
     z=zipfile.ZipFile(io.BytesIO(blob)); xml="".join(z.read(n).decode('utf-8') for n in z.namelist() if n.startswith('xl/worksheets/'))
-    out['final' if fin else 'start']={'ok':code==200 and blob[:2]==b'PK','nan':bool(re.search(r'>(nan|NaN|None|null)<',xml)),'xml':xml}
+    wbx=z.read('xl/workbook.xml').decode('utf-8')
+    sh=re.findall(r'<sheet name="([^"]*)" sheetId="\d+"( state="hidden")? ',wbx)
+    out['final' if fin else 'start']={'ok':code==200 and blob[:2]==b'PK','nan':bool(re.search(r'>(nan|NaN|None|null)<',xml)),'xml':xml,
+      'vis':[n for n,h_ in sh if not h_],'hid':[n for n,h_ in sh if h_],'dfo':'name="ДФО"' in wbx,'tabs':xml.count('<tabColor')}
 er=h.store.entries_rows(1)
 out['rows']=[[r['name'],r['birth_year'],r['team'],r['coach'],r['sex']] for r in er]
 out['w']=[hub.implement_weight('Толкание ядра','М',2005,2026),hub.implement_weight('Толкание ядра','М',2008,2026),hub.implement_weight('Толкание ядра','М',2014,2026),hub.implement_weight('Толкание ядра','Ж',2011,2026),hub.implement_weight('Толкание ядра','Ж',2005,2026),hub.implement_weight('Метание мяча','Ж',2012,2026),hub.implement_weight('Толкание ядра 5 кг','М',2000,2026)]
 out['clean']=[hub.xl_clean(v) for v in (None,'nan','NaN',' None ','Иванов')]
 st=out['start']['xml']; fi=out['final']['xml']
 out['start']['xml']=''; out['final']['xml']=''
-out['flags']={'sec3':'Сек. 3' in st,'rank':'RANK(' in fi,'max':'MAX(F' in fi,'pts':'IF(' in fi,'weight5':'5 кг' in fi and '6 кг' in fi,'a4':'paperSize="9"' in st and 'orientation="portrait"' in st and 'orientation="landscape"' in st,
-  'orgs':'МИНИСТЕРСТВО СПОРТА САХАЛИНСКОЙ ОБЛАСТИ' in st and 'ФЛАСО' in st and 'Комнацкого' in st,'names':'Анова' in fi and 'Школа' in fi,'teams':'Командный зачёт' in fi and 'SUM(' in fi}
+out['flags']={'sec3':'Сек. 3' in st,'rank':'RANK(' in fi,'max':'MAX(' in fi,'pts':'IF(' in fi,'weight5':'5 кг' in fi and '7,26 кг' in fi,'a4':'paperSize="9"' in st and 'orientation="portrait"' in st and 'orientation="landscape"' in st,
+  'orgs':'МИНИСТЕРСТВО СПОРТА САХАЛИНСКОЙ ОБЛАСТИ' in st and 'ФЛАСО' in st and 'КОМНАЦКОГО' in st,'names':'Анова' in fi and 'Школа' in fi,'teams':'ИТОГИ КОМАНДНОГО ПЕРВЕНСТВА' in fi and 'RANK(' in fi,
+  'lookup':'VLOOKUP(' in st and 'INDEX(' in fi and 'MATCH(' in fi}
 print(json.dumps(out,ensure_ascii=False))
 """
     rx = subprocess.run([sys.executable, "-c", code_x, os.path.abspath(hub_path), xd], capture_output=True, text=True)
@@ -299,7 +303,12 @@ print(json.dumps(out,ensure_ascii=False))
           and xj.get("clean") == ["", "", "", "", "Иванов"], rx.stdout[:300])
     fl = xj.get("flags", {})
     check("8.0: Excel по образцу ВФЛА — шапка (Министерство спорта, ФЛАСО, СШОР им. Комнацкого), бег книжным листом на 3 секундомера, техника альбомным; место = RANK, очки и лучший результат — формулы; масса снаряда в названии; командный зачёт на SUM",
-          all(fl.get(k) for k in ("sec3", "rank", "max", "pts", "weight5", "a4", "orgs", "names", "teams")), str(fl))
+          all(fl.get(k) for k in ("sec3", "rank", "max", "pts", "weight5", "a4", "orgs", "names", "teams", "lookup")), str(fl))
+    vis = xj.get("final", {}).get("vis", [])
+    check("8.2: книга как эталон ВФЛА — вкладки СПИСОК УЧАСТНИКОВ (первая), ТИТУЛ, СУДЬИ, РЕГИОН, КОМАНДА, СВОД и пары «дисциплина М/Ж» + «… ИТОГ»; проведённые дисциплины видны и подсвечены цветом ярлычка, остальные из каталога остаются в книге, но скрыты; ДФО — именованный диапазон СВОД",
+          vis[:6] == ["СПИСОК УЧАСТНИКОВ", "ТИТУЛ", "СУДЬИ", "РЕГИОН", "КОМАНДА", "СВОД"]
+          and {"60 Ж", "60 Ж ИТОГ", "ЯДРО М", "ЯДРО М ИТОГ"} <= set(vis) and "100 М" not in vis and "100 М" in xj["final"]["hid"] and len(xj["final"]["hid"]) > 40
+          and "ЯДРО Ж" in xj["final"]["hid"] and xj["final"]["dfo"] and xj["final"]["tabs"] > 10 and xj["start"]["vis"] == vis, str(xj.get("final", {}).get("vis")) + str(len(xj.get("final", {}).get("hid", []))))
     check("8.0: масса снаряда: ядро М 20+ — 7,26 кг, 18–19 — 6, 14–17 — 5, до 13 — 4; Ж 18+ — 4 кг, младше — 3; мяч — 150 г; вес из названия сохраняется",
           xj.get("w") == ["7,26 кг", "6 кг", "4 кг", "3 кг", "4 кг", "150 г", "5 кг"], str(xj.get("w")))
     uih8 = open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "ui.html"), encoding="utf-8").read()
@@ -501,7 +510,7 @@ print(json.dumps(out,ensure_ascii=False))
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "8.1.0" and st["build_date"] == "2026-10-15", txt[:300])
+              and st["version"] == "8.2.0" and st["build_date"] == "2026-10-15", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -514,7 +523,7 @@ print(json.dumps(out,ensure_ascii=False))
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.1.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.2.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1401,7 +1410,7 @@ print(json.dumps(out,ensure_ascii=False))
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 8.1.0 и дата сборки 15.10.2026", st3["version"] == "8.1.0" and st3["build_date"] == "2026-10-15", txt[:200])
+        check("7.2: версия 8.2.0 и дата сборки 15.10.2026", st3["version"] == "8.2.0" and st3["build_date"] == "2026-10-15", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1617,15 +1626,18 @@ print(json.dumps(out,ensure_ascii=False))
             with urllib.request.urlopen(req, timeout=10) as resp:
                 blob, ct, cd = resp.read(), resp.headers.get("Content-Type", ""), resp.headers.get("Content-Disposition", "")
             z = _zf.ZipFile(io.BytesIO(blob))
-            return z.read("xl/worksheets/sheet1.xml").decode("utf-8"), z.read("xl/workbook.xml").decode("utf-8"), ct, cd
+            wbx = z.read("xl/workbook.xml").decode("utf-8")
+            vis_idx = [i + 1 for i, m_ in enumerate(re.findall(r'<sheet name="[^"]*" sheetId="\d+"( state="hidden")? ', wbx)) if not m_]
+            return "".join(z.read(f"xl/worksheets/sheet{i}.xml").decode("utf-8") for i in vis_idx), wbx, ct, cd
         xr, wr, ctr, cdr = xl("60 м")
         xt, wt, _, _ = xl("Прыжок в длину")
         check("5.2 → 8.0: Excel бега по образцу ВФЛА — дорожка, ФИО, год, команда, номер участника, три графы секундомеров, результат, место, очки; книжный лист А4",
-              "spreadsheetml" in ctr and ".xlsx" in urllib.parse.unquote(cdr) and all(h in xr for h in ("Дорожка", "Номер участника",
-              "Фамилия, Имя", "Год рожд.", "Команда / МО", "Результат забега", "Сек. 1", "Сек. 2", "Сек. 3", "Результат", "Место", "Очки"))
-              and "Аргунов" in xr and 'orientation="portrait"' in xr and 'paperSize="9"' in xr and "Попытка 1" not in xr, xr[:200])
+              "spreadsheetml" in ctr and ".xlsx" in urllib.parse.unquote(cdr) and all(h in xr for h in ("дорожка", "Номер участника",
+              "Фамилия, Имя", "Дата рождения", "Команда / организация", "Результат забега", "Сек. 1", "Сек. 2", "Сек. 3", "Результат", "место", "Очки"))
+              and "Аргунов" in xr and 'orientation="portrait"' in xr and 'paperSize="9"' in xr and "Попытки" not in xr,
+              str([h for h in ("дорожка", "Номер участника", "Фамилия, Имя", "Дата рождения", "Команда / организация", "Результат забега", "Сек. 1", "Результат", "место", "Очки") if h not in xr]))
         check("5.2 → 8.0: Excel техники — шесть попыток, «Лучший результат», номер участника; альбомный лист А4",
-              all(h in xt for h in ("№ п/п", "Попытка 1", "Попытка 6", "Лучший результат", "Номер участника"))
+              all(h in xt for h in ("№ п/п", "Попытки", "Результат", "Нагр. номер"))
               and 'orientation="landscape"' in xt and "Сек. 1" not in xt, xt[:200])
         # 5.2: экстренная отмена старта — время старта обнуляется, сетку снова можно пересобрать
         w60 = run[0]["name"]
