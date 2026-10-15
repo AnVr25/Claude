@@ -33,13 +33,13 @@ a{color:inherit}
 .gear .dot{position:absolute;right:4px;top:4px;margin:0}
 
 /* выпадающие меню */
-.menu{display:none;position:absolute;left:0;top:calc(100% + 6px);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 14px 34px #0b1d3733;min-width:300px;max-width:min(420px,92vw);padding:6px;z-index:40}
+.menu{display:none;position:absolute;left:0;top:calc(100% + 6px);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 14px 34px #0b1d3733;min-width:300px;width:max-content;max-width:min(460px,92vw);max-height:calc(100vh - 130px);overflow-y:auto;overflow-x:hidden;padding:6px;z-index:40}
 .menu.right{left:auto;right:0}
 .menu.open{display:block}
 .menu a,.menu button.mi{display:block;width:100%;text-align:left;background:none;border:0;font:inherit;color:inherit;padding:8px 10px;border-radius:4px;text-decoration:none;cursor:pointer}
 .menu a:hover,.menu button.mi:hover{background:var(--ice)}
-.menu a b,.menu button.mi b{display:block;font:600 15px var(--head)}
-.menu a small,.menu button.mi small{display:block;color:var(--muted);font-size:12.5px}
+.menu a b,.menu button.mi b{display:block;font:600 15px var(--head);white-space:normal;overflow-wrap:anywhere}
+.menu a small,.menu button.mi small{display:block;color:var(--muted);font-size:12.5px;white-space:normal;overflow-wrap:anywhere}
 .menu .sel{background:var(--ice);box-shadow:inset 3px 0 0 var(--track)}
 .menu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
 .menu .live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--track);margin-right:6px;vertical-align:middle;animation:pulse 1.6s infinite}
@@ -762,12 +762,11 @@ a.btn.xls:hover{background:#E9F5EE}
       <div class="counts" id="gCounts"></div>
       <div class="rowacts regtools" style="margin:0 0 10px">
         <button class="primary" id="gApproveAll">Подтвердить все ожидающие</button>
-        <button id="gImport" title="Загрузить заявки из Excel или CSV — они сразу подтверждены">Загрузить из Excel</button>
         <button id="gRecat" title="Пересчитать категории по правилам">Пересчитать категории</button>
         <span class="spacer"></span>
         <button class="danger hide" id="gClearRej" title="Безвозвратно удалить из базы все отклонённые заявки этого соревнования">❌ Очистить отклонённые заявки</button>
         <a class="btn sm" id="gCsv">Выгрузить CSV</a>
-        <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: данные обновятся по ID заявки, а строки с пустым ID добавятся как новые участники (Фамилия, Имя, Год рождения, Дисциплина обязательны)">📥 Загрузить и применить изменения из CSV</button>
+        <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: данные обновятся по ID заявки, а строки с пустым ID добавятся как новые участники (Фамилия, Имя, Год рождения, Дисциплина обязательны)">📥 Загрузить CSV</button>
       </div>
       <div class="tbl free"><table class="regtbl">
         <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
@@ -900,7 +899,6 @@ a.btn.xls:hover{background:#E9F5EE}
   </div>
   <div class="wzp-steps" id="wzpSteps" role="tablist"></div>
   <div class="wzp-body" id="wzpBody"></div>
-  <div class="cartbox cartmount"></div>
 </section>
 
 <!-- 5. РЕЗУЛЬТАТЫ -->
@@ -1705,33 +1703,6 @@ $("mAdd").onclick = async () => {
     toast(`${r.name} добавлен(а)${r.category?" · "+r.category:""}`); regLoaded = null; await loadRegs(); }
   catch(err){ toast("Ошибка: "+err.message); }
 };
-$("gImport").onclick = () => {
-  const ev = curEvent(); if (!ev) return;
-  if (!(ev.reg_distances||"").trim()) return toast("Сначала задайте дистанции и сохраните настройки");
-  const i = document.createElement("input"); i.type = "file"; i.accept = ".xlsx,.csv";
-  i.onchange = async () => {
-    const f = i.files[0]; if (!f) return;
-    const team = prompt("Команда — для строк, где она не указана в файле (можно оставить пустым):", "") ;
-    if (team === null) return;
-    const q = `?team=${encodeURIComponent(team.trim())}`, blob = await f.arrayBuffer();
-    const post = async (extra) => { const r = await fetch(`/api/events/${ev.id}/import${q}${extra}`, {method:"POST",
-      headers:{"X-Requested-With":"timing-hub","Content-Type":"application/octet-stream"}, body:blob});
-      const d = await r.json().catch(()=>({})); if (!r.ok && !d.check) throw new Error(d.error||r.status); return d; };
-    try{
-      const c = await post("&check=1");
-      if (c.bad) {
-        const lines = c.rows.filter(x => Object.keys(x.errors).length).slice(0,15).map(x => `строка ${x.row}: ${x.name||"—"} — ${Object.values(x.errors).join("; ")}`);
-        alert(`В файле ${c.bad} строк с ошибками, ничего не загружено. Исправьте и загрузите снова:\n\n` + lines.join("\n") + (c.bad>15?"\n…":""));
-        return;
-      }
-      if (!confirm(`Загрузить ${c.ok} заявок из «${f.name}»? Они будут сразу подтверждены.`)) return;
-      const d = await post("");
-      toast(`Загружено заявок: ${d.added}` + (d.duplicates && d.duplicates.length ? `, повторов пропущено: ${d.duplicates.length}` : ""));
-      regLoaded = null; await loadRegs(); loadEvents();
-    }catch(err){ toast("Ошибка: " + err.message); }
-  };
-  i.click();
-};
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
 const sexOfE = (e) => { const x = String(e.sex||"").toUpperCase(); if (x==="М"||x==="Ж") return x; const c = String(e.category||"").toLowerCase();
   if (/юнош|мальч|мужч|^муж/.test(c)) return "М"; if (/девуш|девоч|женщ|^жен/.test(c)) return "Ж"; return ""; };
@@ -2031,7 +2002,7 @@ const wzp = (() => {
       <details class="wzp-help"><summary>Как это работает</summary>
         <p>${tech ? "Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат»."
           : "Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3»."}
-          Над бланком — вкладки «Все участники», «Мальчики», «Девочки» и категории; нужную можно сразу положить в корзину печати.
+          Над бланком — вкладки «Все участники», «Мальчики», «Девочки» и категории: выберите нужную и нажмите «Печать».
           ✎ Название, дату, место, начало и примечание судей можно поправить прямо в бланке — кликните по тексту; на бумагу попадёт только введённый текст.
           Excel — вся книга протоколов: проведённые дисциплины подсвечены, остальные скрыты.</p></details>
       ${myHeats().length ? `<iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>`

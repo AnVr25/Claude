@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.3.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.3.1` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `61249c3`
-- **Дамп сформирован:** 2026-10-15 08:03 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 360 из 360 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7082 строк, `hub/ui.html` 2944, `hub/protocol.html` 688
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `28f50ba`
+- **Дамп сформирован:** 2026-10-15 08:45 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 361 из 361 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 7082 строк, `hub/ui.html` 2915, `hub/protocol.html` 686
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -1607,7 +1607,7 @@ function startSheet(o){
 }
 ```
 
-#### `renderStart` — `hub/protocol.html` строки 545–551
+#### `renderStart` — `hub/protocol.html` строки 543–549
 
 ```js
 function renderStart(){
@@ -1702,19 +1702,18 @@ function showSheets(secs){
 }
 ```
 
-#### `drawTabs` — `hub/protocol.html` строки 521–527
+#### `drawTabs` — `hub/protocol.html` строки 521–526
 
 ```js
 function drawTabs(tabs){
   const box=$("ptabs");
   if(!tabs){ box.innerHTML=""; box.hidden=true; return; }
   box.hidden=false;
-  box.innerHTML=`<div class="tl" role="tablist" aria-label="Группы протокола">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${t.id===TAB}" class="${t.id===TAB?"on":""}" data-tab="${esc(t.id)}">${esc(t.label)}<i>${t.n}</i></button>`).join("")}</div>`
-    +(PUB?"":`<button type="button" class="cartadd" id="tabCart">🛒 Добавить текущую вкладку в корзину печати</button><span class="cartmsg" id="cartMsg" role="status"></span>`);
+  box.innerHTML=`<div class="tl" role="tablist" aria-label="Группы протокола">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${t.id===TAB}" class="${t.id===TAB?"on":""}" data-tab="${esc(t.id)}">${esc(t.label)}<i>${t.n}</i></button>`).join("")}</div>`;
 }
 ```
 
-#### `addTabToCart` — `hub/protocol.html` строки 532–544
+#### `addTabToCart` — `hub/protocol.html` строки 530–542
 
 ```js
 async function addTabToCart(){
@@ -1732,7 +1731,7 @@ async function addTabToCart(){
 }
 ```
 
-#### `buildFinal` — `hub/protocol.html` строки 581–684
+#### `buildFinal` — `hub/protocol.html` строки 579–682
 
 ```js
 function buildFinal(o={}){
@@ -1841,7 +1840,7 @@ function buildFinal(o={}){
 }
 ```
 
-#### `render` — `hub/protocol.html` строки 570–579
+#### `render` — `hub/protocol.html` строки 568–577
 
 ```js
 function render(){
@@ -1856,7 +1855,7 @@ function render(){
 }
 ```
 
-#### `renderCart` — `hub/protocol.html` строки 553–564
+#### `renderCart` — `hub/protocol.html` строки 551–562
 
 ```js
 async function renderCart(){
@@ -1873,7 +1872,7 @@ async function renderCart(){
 }
 ```
 
-#### `syncStartCtl` — `hub/protocol.html` строки 565–568
+#### `syncStartCtl` — `hub/protocol.html` строки 563–566
 
 ```js
 function syncStartCtl(){
@@ -1884,7 +1883,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1735–1792
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1706–1763
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1948,7 +1947,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1794–2305
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1765–2276
 
 ```js
 const wzp = (() => {
@@ -2191,7 +2190,7 @@ const wzp = (() => {
       <details class="wzp-help"><summary>Как это работает</summary>
         <p>${tech ? "Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат»."
           : "Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3»."}
-          Над бланком — вкладки «Все участники», «Мальчики», «Девочки» и категории; нужную можно сразу положить в корзину печати.
+          Над бланком — вкладки «Все участники», «Мальчики», «Девочки» и категории: выберите нужную и нажмите «Печать».
           ✎ Название, дату, место, начало и примечание судей можно поправить прямо в бланке — кликните по тексту; на бумагу попадёт только введённый текст.
           Excel — вся книга протоколов: проведённые дисциплины подсвечены, остальные скрыты.</p></details>
       ${myHeats().length ? `<iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>`
@@ -2531,7 +2530,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1542–1542
+#### `rankOpts` — `hub/ui.html` строки 1540–1540
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2641,7 +2640,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 360 из 360 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 361 из 361 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2694,6 +2693,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+28f50ba 2026-10-15 feat: компактный Мастер протоколов — один ряд действий, без дублей кнопок, невысокие поля результатов v8.3.0
 61249c3 2026-10-15 fix: командная заявка — команда и тренер только из Excel, убраны дублирующие поля формы v8.2.2
 5e0e53b 2026-10-15 fix: возвращён прежний шаблон командной заявки, файл перепроверяется при правке команды и тренера v8.2.1
 dd67f34 2026-10-15 feat: Excel-книга протоколов в формате эталона ВФЛА v8.2.0
@@ -2707,6 +2707,5 @@ fe6548b 2026-10-14 fix: исправлен дефолтный путь config.js
 baf6679 2026-10-14 test: исправлена проверка офлайн-автономности (синтаксис) v7.7.1
 06190b1 2026-10-14 ui: кнопки импорта/экспорта CSV перенесены наверх страницы для удобства секретаря v7.7.1
 f706502 2026-10-14 major: расширена рабочая зона регистрации, запущен глобальный CSV-корректор и интерактивная правка шапок протоколов v7.7.0
-17778e5 2026-10-14 major: расширена рабочая зона Регистрации, ликвидированы бегунки таблиц и запущен глобальный CSV-корректор v7.6.1
 ```
 

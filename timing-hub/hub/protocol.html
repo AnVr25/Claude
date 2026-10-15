@@ -522,12 +522,10 @@ function drawTabs(tabs){
   const box=$("ptabs");
   if(!tabs){ box.innerHTML=""; box.hidden=true; return; }
   box.hidden=false;
-  box.innerHTML=`<div class="tl" role="tablist" aria-label="Группы протокола">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${t.id===TAB}" class="${t.id===TAB?"on":""}" data-tab="${esc(t.id)}">${esc(t.label)}<i>${t.n}</i></button>`).join("")}</div>`
-    +(PUB?"":`<button type="button" class="cartadd" id="tabCart">🛒 Добавить текущую вкладку в корзину печати</button><span class="cartmsg" id="cartMsg" role="status"></span>`);
+  box.innerHTML=`<div class="tl" role="tablist" aria-label="Группы протокола">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${t.id===TAB}" class="${t.id===TAB?"on":""}" data-tab="${esc(t.id)}">${esc(t.label)}<i>${t.n}</i></button>`).join("")}</div>`;
 }
 $("ptabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-tab]"); if(b){ TAB=b.dataset.tab; render(); return; }
-  if(e.target.id==="tabCart") addTabToCart();
 });
 async function addTabToCart(){
   const start=isStartView(), it=currentItem(start), tab=tabsFor(start).find(t=>t.id===TAB)||{label:"Все участники"};
