@@ -161,6 +161,8 @@ button.ghost:hover{border-color:var(--hover-line);background:var(--soft)}
 .done .big{width:64px;height:64px;margin:0 auto;border-radius:50%;background:var(--ok);color:#fff;font:600 34px/64px var(--head)}
 .done h2{font-size:26px;margin:16px 0 6px}
 .done>div>b{font-size:17px}
+.rules{margin:0 0 14px;padding:14px 16px;border-radius:var(--r);background:var(--panel);border:2px solid var(--start);font:600 17px/1.35 var(--head);color:var(--ink)}
+.modnote{margin-top:12px;padding:12px 14px;border-radius:var(--r);background:#FFF4D6;border-left:4px solid #E0A100;font-size:15px;font-weight:600;color:#3B2F00;text-align:left}
 .notice{padding:12px 14px;border-radius:var(--r);background:var(--soft);border-left:3px solid var(--start);font-size:14px;text-align:left}
 .state{display:flex;gap:14px;align-items:flex-start}
 .state .ic{flex:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--tint);color:var(--bad)}
@@ -658,6 +660,8 @@ function header(){
     ${d.open&&d.deadline?`<div class="dl">Приём заявок ${esc(dtRu(d.deadline))}</div>`:""}`)
     +(d.info?`<div class="info">${esc(d.info)}</div>`:"");
 }
+const MODNOTE=`<div class="modnote" role="note">⚠️ Обратите внимание: Спортсмен появится в открытых списках участников соревнований сразу после проверки, модерации и утверждения Главным секретарём соревнований.</div>`;
+const RULES=`<div class="rules" role="note">⚠️ Просим вас заполнять поля онлайн-формы строго в соответствии со знаками звёздочек (*)</div>`;
 function field(id,label,req,attrs="",hint=""){
   return `<div id="w_${id}"><label class="f" for="${id}">${label}${req?" <i>*</i>":""}${hint?` <small>${hint}</small>`:""}</label><input id="${id}" ${attrs}><div class="err" id="e_${id}"></div></div>`;
 }
@@ -667,7 +671,7 @@ function render(keep){
   const one=d.distances.length===1, me=meLoad();
   const left=x=>{const i=(d.dist_info||[]).find(y=>y.name===x); return i&&i.left!=null?i.left:null;};
   const leftTxt=n=>n===0?"мест нет":`осталось ${n} ${plural(n,["место","места","мест"])}`;
-  paint(modeSwitch("one")+(me?`<div class="me" id="meBox"><b>Заполнить как в прошлый раз: ${esc(me.last_name)} ${esc(me.first_name)}${me.birth_date?", "+esc(me.birth_date.slice(0,4)):""}</b><button type="button" id="meFill">Заполнить</button><button type="button" class="ghost" id="meForget">Забыть</button></div>`:"")+`
+  paint(modeSwitch("one")+RULES+(me?`<div class="me" id="meBox"><b>Заполнить как в прошлый раз: ${esc(me.last_name)} ${esc(me.first_name)}${me.birth_date?", "+esc(me.birth_date.slice(0,4)):""}</b><button type="button" id="meFill">Заполнить</button><button type="button" class="ghost" id="meForget">Забыть</button></div>`:"")+`
   <form id="f" novalidate>
     <div class="card"><h2>Участник</h2>
       <div class="grid">
@@ -685,7 +689,7 @@ function render(keep){
     <div class="card"><h2>Команда</h2>
       <div class="grid">
         ${field("team","Команда / школа / город",1,'maxlength="80" placeholder="СШОР им. Комнацкого"')}
-        ${field("coach","Тренер",0,'maxlength="80" placeholder="Фамилия И. О."')}
+        ${field("coach","Тренер",1,'maxlength="80" placeholder="Фамилия И. О."')}
         <div class="full">${field("contact","Телефон или e-mail",0,'maxlength="80" autocomplete="tel"',"— для связи по заявке")}</div>
       </div>
     </div>
@@ -741,7 +745,7 @@ function renderRelay(){
       <div id="w_r${i}_sex"><label class="f">Пол <i>*</i></label><div class="seg"><label><input type="radio" name="r${i}_sex" value="М">М</label><label><input type="radio" name="r${i}_sex" value="Ж">Ж</label></div><div class="err" id="e_r${i}_sex"></div></div>
       <div class="full" id="w_r${i}_rank"><label class="f" for="r${i}_rank">Разряд / звание <i>*</i></label>${rankSel("r"+i+"_rank")}<div class="err" id="e_r${i}_rank"></div></div>
     </div></div>`;
-  paint(modeSwitch("relay")+`
+  paint(modeSwitch("relay")+RULES+`
   <form id="rf" novalidate>
     <div class="card"><h2>Эстафета</h2>
       <div class="grid">
@@ -795,10 +799,11 @@ async function relaySubmit(ev){
 function relayDone(d){
   paint(`<div class="card done">
     <div class="big">✓</div>
-    <h2>Заявка эстафеты принята</h2>
+    <h2>Спасибо за регистрацию! Заявка эстафеты принята</h2>
     <div><b>${esc(d.relay||"")}</b> · ${esc(d.distance||"")}</div>
     <div class="muted">${esc((d.members||[]).map((m,i)=>(i+1)+". "+m).join(", "))}</div>
     <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Номер команды и забег появятся в стартовом протоколе.</div>
+    ${MODNOTE}
     <button class="ghost" id="more">Заявить ещё одну команду</button>
   </div>`); toTop();
   $("more").onclick=()=>{RELAY.keep.relay="";renderRelay();toTop();};
@@ -807,7 +812,7 @@ let TEAM={check:null,keep:{}};
 function renderTeam(){
   const d=INFO, k=TEAM.keep;
   if(!d.open) return render();
-  paint(modeSwitch("team")+`
+  paint(modeSwitch("team")+RULES+`
   <form id="tf" novalidate>
     <div class="card"><h2>Команда</h2>
       <div class="grid">
@@ -889,11 +894,12 @@ async function teamSubmit(ev){
 function teamDone(d){
   paint(`<div class="card done">
     <div class="big">✓</div>
-    <h2>Заявка команды принята</h2>
+    <h2>Спасибо за регистрацию! Заявка команды принята</h2>
     <div><b>${esc(d.team||"")}</b></div>
     <div class="muted">Принято заявок: ${d.added}</div>
     ${d.duplicates&&d.duplicates.length?`<div class="muted" style="margin-top:6px">Уже были зарегистрированы (пропущены): ${esc(d.duplicates.join("; "))}</div>`:""}
     <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовые номера и забеги появятся в стартовом протоколе.</div>
+    ${MODNOTE}
     <button class="ghost" id="more">Загрузить ещё один файл</button>
   </div>`); toTop();
   $("more").onclick=()=>{renderTeam();toTop();};
@@ -928,6 +934,7 @@ async function submit(ev){
   if(!body.sex)loc.sex="выберите пол";
   if(!body.rank)loc.rank="укажите разряд; если разряда нет — «Б/р»";
   if(!body.team.trim())loc.team="обязательное поле";
+  if(!body.coach.trim())loc.coach="обязательное поле";
   if(!body.distances.length)loc.distances="выберите дистанцию";
   if(body.birth_date&&age(body.birth_date)<18&&!body.representative.trim())loc.representative="укажите ФИО родителя";
   if(!body.consent)loc.consent="нужно согласие";
@@ -946,11 +953,12 @@ async function submit(ev){
 function done(d,body){
   paint(`<div class="card done">
     <div class="big">✓</div>
-    <h2>Заявка принята</h2>
+    <h2>Спасибо за регистрацию! Заявка принята</h2>
     <div><b>${esc(d.name||"")}</b></div>
     <div class="muted">${esc([(d.distances||[]).join(", "),d.category].filter(Boolean).join(" · "))}</div>
     ${d.already&&d.already.length?`<div class="muted" style="margin-top:6px">Уже были зарегистрированы: ${esc(d.already.join(", "))}</div>`:""}
     <div class="notice" style="margin-top:16px">Статус: на рассмотрении у секретаря. Стартовый номер и забег появятся в стартовом протоколе.</div>
+    ${MODNOTE}
     <button class="ghost" id="more">Зарегистрировать ещё одного участника</button>
     <div class="muted" style="font-size:13px;margin-top:8px">Команда и тренер подставятся сами — удобно тренеру, который регистрирует группу.</div>
   </div>`); toTop();

@@ -40,8 +40,8 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "7.7.7"
-BUILD_DATE = "2026-10-14"        # дата сборки: показывается в «Системе» и в /api/status
+VERSION = "8.0.0"
+BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
 
@@ -224,6 +224,217 @@ def xlsx_build(sheets: list, widths=None, header_row=None, title_row=None, valid
         for i, (_, rows) in enumerate(sheets):
             z.writestr(f"xl/worksheets/sheet{i + 1}.xml", sheet_xml(rows, i == 0))
     return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+#  8.0: Excel-протоколы по образцу ВФЛА — шапка, границы, формулы, печать на А4
+# --------------------------------------------------------------------------- #
+def xl_clean(v) -> str:
+    """Текст для ячейки: пустое и «nan / none / null» никогда не попадают в документ."""
+    if v is None:
+        return ""
+    t = str(v).strip()
+    return "" if t.lower() in ("nan", "none", "null", "nat", "undefined") else t
+
+
+class XF:
+    """Формула ячейки: XF("=SUM(A1:A3)", кэш) — кэш показывают программы без пересчёта."""
+    def __init__(self, formula: str, cached=None):
+        self.formula, self.cached = formula, cached
+
+
+class XDoc:
+    """Лист Excel с оформлением: шрифты, границы, заливки, объединения, формулы, разрывы страниц, печать на А4."""
+    def __init__(self, name: str, orientation: str = "portrait", widths=()):
+        self.name, self.orientation, self.widths = name, orientation, list(widths)
+        self.cells: dict = {}
+        self.merges: list = []
+        self.heights: dict = {}
+        self.breaks: list = []
+        self.print_cols = len(self.widths)
+
+    def put(self, r: int, c: int, v=None, **st) -> None:
+        self.cells[(r, c)] = (v, st)
+
+    def merge(self, r1: int, c1: int, r2: int, c2: int, v=None, **st) -> None:
+        self.merges.append((r1, c1, r2, c2))
+        for r in range(r1, r2 + 1):
+            for c in range(c1, c2 + 1):
+                self.cells[(r, c)] = (v if (r, c) == (r1, c1) else None, st)
+
+    @property
+    def last_row(self) -> int:
+        return max((r for r, _ in self.cells), default=1)
+
+
+def xlsx_doc(sheets: list) -> bytes:
+    """Книга из листов XDoc. Стили собираются по мере использования; формулы — с кэшем значения."""
+    import zipfile
+    from xml.sax.saxutils import escape
+
+    def esc(v):
+        return escape(str(v), {'"': "&quot;"})
+
+    fonts, fills, borders, xfs, numfmts = [], [], [], [], {}
+
+    def idx(lst, item):
+        if item not in lst:
+            lst.append(item)
+        return lst.index(item)
+    idx(fonts, ("Arial", 10, 0, 0, ""))
+    idx(fills, ("none",)), idx(fills, ("gray125",))
+    idx(borders, ("", "", "", ""))
+    xfs.append((0, 0, 0, 0, "", "", 0, 0))
+
+    def style_id(st: dict) -> int:
+        if not st:
+            return 0
+        f = idx(fonts, ("Arial", st.get("size", 10), 1 if st.get("bold") else 0, 1 if st.get("italic") else 0, st.get("color", "")))
+        fl = idx(fills, ("solid", st["fill"])) if st.get("fill") else 0
+        b = st.get("border", "")
+        bd = idx(borders, ((b,) * 4) if isinstance(b, str) else tuple(b)) if b else 0
+        nf = st.get("fmt")
+        nid = 0
+        if nf:
+            nid = numfmts.setdefault(nf, 164 + len(numfmts))
+        key = (f, fl, bd, nid, st.get("h", ""), st.get("v", "center"), 1 if st.get("wrap") else 0, st.get("indent", 0))
+        if key not in xfs:
+            xfs.append(key)
+        return xfs.index(key)
+
+    def cell_xml(ref, v, sid):
+        s = f' s="{sid}"' if sid else ""
+        if v is None or v == "":
+            return f'<c r="{ref}"{s}/>' if sid else ""
+        if isinstance(v, XF):
+            f = esc(v.formula.lstrip("="))
+            c = v.cached
+            if c is None or c == "":
+                return f'<c r="{ref}"{s} t="str"><f>{f}</f><v></v></c>'
+            if isinstance(c, str):
+                return f'<c r="{ref}"{s} t="str"><f>{f}</f><v>{esc(c)}</v></c>'
+            return f'<c r="{ref}"{s}><f>{f}</f><v>{c}</v></c>'
+        if isinstance(v, bool):
+            v = int(v)
+        if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+            return f'<c r="{ref}"{s}/>' if sid else ""          # NaN / inf никогда не попадают в файл
+        if isinstance(v, (int, float)):
+            return f'<c r="{ref}"{s}><v>{v}</v></c>'
+        return f'<c r="{ref}"{s} t="inlineStr"><is><t xml:space="preserve">{esc(xl_clean(v))}</t></is></c>'
+
+    sheet_xml = []
+    for d in sheets:
+        rows: dict = {}
+        for (r, c), (v, st) in d.cells.items():
+            rows.setdefault(r, []).append((c, cell_xml(f"{_col(c - 1)}{r}", v, style_id(st))))
+        out = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+               '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+               'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+               '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'
+               '<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>'
+               '<sheetFormatPr defaultRowHeight="15"/>']
+        if d.widths:
+            out.append("<cols>" + "".join(f'<col min="{i + 1}" max="{i + 1}" width="{w}" customWidth="1"/>'
+                                          for i, w in enumerate(d.widths)) + "</cols>")
+        out.append("<sheetData>")
+        for r in sorted(rows):
+            ht = f' ht="{d.heights[r]}" customHeight="1"' if r in d.heights else ""
+            out.append(f'<row r="{r}"{ht}>' + "".join(x for _, x in sorted(rows[r], key=lambda t: t[0])) + "</row>")
+        out.append("</sheetData>")
+        if d.merges:
+            out.append(f'<mergeCells count="{len(d.merges)}">' + "".join(
+                f'<mergeCell ref="{_col(c1 - 1)}{r1}:{_col(c2 - 1)}{r2}"/>' for r1, c1, r2, c2 in d.merges) + "</mergeCells>")
+        out.append('<printOptions horizontalCentered="1"/>'
+                   '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>'
+                   f'<pageSetup paperSize="9" orientation="{d.orientation}" fitToWidth="1" fitToHeight="0"/>'
+                   '<headerFooter><oddFooter>&amp;C&amp;8Страница &amp;P из &amp;N</oddFooter></headerFooter>')
+        if d.breaks:
+            out.append(f'<rowBreaks count="{len(d.breaks)}" manualBreakCount="{len(d.breaks)}">'
+                       + "".join(f'<brk id="{b}" max="16383" man="1"/>' for b in d.breaks) + "</rowBreaks>")
+        out.append("</worksheet>")
+        sheet_xml.append("".join(out))
+
+    def fill_xml(f):
+        if f[0] != "solid":
+            return f'<fill><patternFill patternType="{f[0]}"/></fill>'
+        return f'<fill><patternFill patternType="solid"><fgColor rgb="FF{f[1]}"/><bgColor indexed="64"/></patternFill></fill>'
+
+    def border_xml(b):
+        side = lambda tag, s: f'<{tag} style="{s}"><color rgb="FF000000"/></{tag}>' if s else f"<{tag}/>"
+        return "<border>" + side("left", b[0]) + side("right", b[1]) + side("top", b[2]) + side("bottom", b[3]) + "<diagonal/></border>"
+    styles = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+              '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              + (f'<numFmts count="{len(numfmts)}">' + "".join(f'<numFmt numFmtId="{i}" formatCode="{esc(k)}"/>' for k, i in numfmts.items()) + "</numFmts>" if numfmts else "")
+              + f'<fonts count="{len(fonts)}">'
+              + "".join(f'<font>{"<b/>" if b else ""}{"<i/>" if i else ""}<sz val="{sz}"/>'
+                        + (f'<color rgb="FF{col}"/>' if col else "") + f'<name val="{nm}"/></font>' for nm, sz, b, i, col in fonts)
+              + "</fonts>" + f'<fills count="{len(fills)}">' + "".join(fill_xml(f) for f in fills) + "</fills>"
+              + f'<borders count="{len(borders)}">' + "".join(border_xml(b) for b in borders) + "</borders>"
+              '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+              + f'<cellXfs count="{len(xfs)}">'
+              + "".join('<xf numFmtId="%d" fontId="%d" fillId="%d" borderId="%d" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" '
+                        'applyBorder="1" applyAlignment="1"><alignment%s vertical="%s"%s%s/></xf>'
+                        % (x[3], x[0], x[1], x[2], f' horizontal="{x[4]}"' if x[4] else "", x[5] or "center",
+                           ' wrapText="1"' if x[6] else "", f' indent="{x[7]}"' if x[7] else "") for x in xfs)
+              + '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        n = len(sheets)
+        z.writestr("[Content_Types].xml",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                   '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                   '<Default Extension="xml" ContentType="application/xml"/>'
+                   '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                   '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+                   + "".join(f'<Override PartName="/xl/worksheets/sheet{i + 1}.xml" '
+                             'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(n))
+                   + "</Types>")
+        z.writestr("_rels/.rels",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                   '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+                   "</Relationships>")
+        names = "".join(f'<definedName name="_xlnm.Print_Area" localSheetId="{i}">\'{esc(d.name)}\'!$A$1:${_col(d.print_cols - 1)}${d.last_row}</definedName>'
+                        for i, d in enumerate(sheets) if d.print_cols)
+        z.writestr("xl/workbook.xml",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                   '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+                   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+                   + "".join(f'<sheet name="{esc(d.name)}" sheetId="{i + 1}" r:id="rId{i + 1}"/>' for i, d in enumerate(sheets))
+                   + "</sheets>" + (f"<definedNames>{names}</definedNames>" if names else "") + '<calcPr fullCalcOnLoad="1"/></workbook>')
+        z.writestr("xl/_rels/workbook.xml.rels",
+                   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                   '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   + "".join(f'<Relationship Id="rId{i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+                             f'Target="worksheets/sheet{i + 1}.xml"/>' for i in range(n))
+                   + f'<Relationship Id="rId{n + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+                   "</Relationships>")
+        z.writestr("xl/styles.xml", styles)
+        for i, x in enumerate(sheet_xml):
+            z.writestr(f"xl/worksheets/sheet{i + 1}.xml", x)
+    return buf.getvalue()
+
+
+def implement_weight(dist: str, sex: str, birth_year, year: int) -> str:
+    """Масса снаряда по виду, полу и возрасту (на год соревнований). Если вес уже есть в названии дисциплины — берём его.
+    Ядро: мужчины 20+ — 7,26 кг, юниоры 18–19 — 6 кг, юноши 14–17 — 5 кг, мальчики до 13 — 4 кг; женщины и юниорки 18+ — 4 кг, девушки и девочки до 17 — 3 кг.
+    Мяч — 150 г. Остальные снаряды (диск, молот, копьё) в протокол автоматически не подставляются: вес указывается в названии дисциплины."""
+    name = xl_clean(dist).lower()
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(кг|г)\b", name)
+    if m:
+        return f"{m.group(1).replace('.', ',')} {m.group(2)}"
+    try:
+        age = int(year) - int(str(birth_year)[:4])
+    except (TypeError, ValueError):
+        return ""
+    if "мяч" in name:
+        return "150 г"
+    if "ядр" in name:
+        if str(sex).upper().startswith("Ж"):
+            return "4 кг" if age >= 18 else "3 кг"
+        return "7,26 кг" if age >= 20 else "6 кг" if age >= 18 else "5 кг" if age >= 14 else "4 кг"
+    return ""
 
 
 def xlsx_read(blob: bytes, max_rows: int = 1000) -> list:
@@ -908,10 +1119,22 @@ class Store:
             raise
 
     def entries_rows(self, eid: int) -> list:
+        # 8.0: пустые ФИО, год, команда, тренер, пол, разряд и категория берутся из заявки (registrations) по жёсткому ключу reg_id —
+        # в протоколах и Excel нет «NaN», «None» и пустых ячеек, пока данные есть в заявке
         rows = self._rows(self.con.execute(
-            "SELECT id, bib, wave, name, birth_year, team, category, lane, coach, seed, reg_id, sex, result, status, points,"
-            " picked_at, members, rank, detail, done_rank, result_at FROM entries"
-            " WHERE event_id = ? ORDER BY CAST(bib AS INTEGER), bib, id", (eid,)))
+            "SELECT e.id, e.bib, e.wave,"
+            " COALESCE(NULLIF(TRIM(e.name), ''), NULLIF(TRIM(COALESCE(g.last_name, '') || ' ' || COALESCE(g.first_name, '')), ''), '') AS name,"
+            " COALESCE(NULLIF(TRIM(e.birth_year), ''), SUBSTR(g.birth_date, 1, 4), '') AS birth_year,"
+            " COALESCE(NULLIF(TRIM(e.team), ''), NULLIF(TRIM(g.team), ''), '') AS team,"
+            " COALESCE(NULLIF(TRIM(e.category), ''), NULLIF(TRIM(g.category), ''), '') AS category,"
+            " e.lane,"
+            " COALESCE(NULLIF(TRIM(e.coach), ''), NULLIF(TRIM(g.coach), ''), '') AS coach,"
+            " e.seed, e.reg_id,"
+            " COALESCE(NULLIF(TRIM(e.sex), ''), g.sex, '') AS sex,"
+            " e.result, e.status, e.points, e.picked_at, e.members,"
+            " COALESCE(NULLIF(TRIM(e.rank), ''), NULLIF(TRIM(g.rank), ''), '') AS rank,"
+            " e.detail, e.done_rank, e.result_at FROM entries e LEFT JOIN registrations g ON g.id = e.reg_id"
+            " WHERE e.event_id = ? ORDER BY CAST(e.bib AS INTEGER), e.bib, e.id", (eid,)))
         for r in rows:
             try:
                 r["detail"] = json.loads(r["detail"]) if r.get("detail") else None
@@ -2471,6 +2694,8 @@ class Hub:
                 return ok(self.compute(ev))
             if action == "results.csv":
                 return self._results_csv(ev)
+            if action == "results.xlsx":        # 8.0: итоговый протокол в Excel по образцу ВФЛА
+                return self.protocol_xlsx(ev, qs, final=True)
             if action == "entries":
                 rows = self.store.entries_rows(eid)
                 lines = []
@@ -3892,15 +4117,17 @@ class Hub:
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
+        # 8.0: команда и тренер вводятся один раз — в форме на сайте; в шаблоне этих колонок нет (в старых файлах они читаются)
+        cols = [c for c in self.TEAM_COLS if c[0] not in ("team", "coach")]
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
-                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера можно не заполнять, если они указаны в форме."],
-                [h for _, h, _ in self.TEAM_COLS]]
-        rows += [[""] * len(self.TEAM_COLS) for _ in range(60)]
+                          "Обязательны поля со звёздочкой, в том числе разряд (если разряда нет — «Б/р»). Команду и тренера в файле указывать не нужно — они берутся из формы."],
+                [h for _, h, _ in cols]]
+        rows += [[""] * len(cols) for _ in range(60)]
         return xlsx_build(
             sheets=[("Заявка", rows), ("Справочник", [["Дистанции"]] + [[d] for d in dists] + [[""], ["Пол"], ["М"], ["Ж"]])],
-            widths=[18, 14, 16, 15, 10, 12, 14, 24, 22, 30, 16], header_row=3, title_row=1,
+            widths=[18, 14, 16, 15, 10, 12, 14, 30, 16], header_row=3, title_row=1,
             validations=[("E4:E63", "\"М,Ж\""), ("F4:F63", f"Справочник!$A$2:$A${len(dists) + 1}"),
-                         ("K4:K63", "\"" + ",".join(self.RANKS) + "\"")],
+                         ("I4:I63", "\"" + ",".join(self.RANKS) + "\"")],
             date_cols=[3], hidden_sheets=[1])
 
     def parse_team_file(self, ev: dict, blob: bytes, name: str = "") -> tuple:
@@ -4848,56 +5075,319 @@ class Hub:
 
 
     def startlist_xlsx(self, ev: dict, qs: dict):
-        """5.2: стартовый протокол дисциплины в Excel для судей с ручкой. Бег — забег, дорожка и три графы
-        секундомеров; техника — порядок выполнения, шесть попыток и «Лучший результат». Фильтр — как на шаге 1."""
-        from urllib.parse import quote
-        dist = str(qs.get("distance") or qs.get("dist") or "").strip()
-        sex = str(qs.get("sex") or "").strip().upper()[:1]
-        ages = [a for a in str(qs.get("ages") or "").split(",") if a in self.age_limits()]
-        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
-        tech = self.discipline_kind(dist) == "tech"
+        """5.2 → 8.0: стартовый протокол в Excel (образец ВФЛА): бег — 3 секундомера на книжном листе, техника — 6 попыток на альбомном."""
+        return self.protocol_xlsx(ev, qs, final=False)
 
-        def keep(e):
+    # ------------------------------------------------------------------ #
+    #  8.0: Excel-протоколы (стартовый и итоговый) по образцу ВФЛА
+    # ------------------------------------------------------------------ #
+    XL_ORG = ("МИНИСТЕРСТВО СПОРТА САХАЛИНСКОЙ ОБЛАСТИ",
+              "Региональная спортивная общественная организация «Федерация лёгкой атлетики Сахалинской области» (ФЛАСО)",
+              "ГБУ ДО СШОР им. Э.М. Комнацкого")
+
+    def _xl_filter(self, ev: dict, qs: dict):
+        """Фильтры шага 1 Мастера: дисциплина, пол, возрастные группы → функция keep(строка)."""
+        dist = xl_clean(qs.get("distance") or qs.get("dist"))
+        sex = xl_clean(qs.get("sex")).upper()[:1]
+        ages = [a for a in xl_clean(qs.get("ages")).split(",") if a in self.age_limits()]
+        year = int(ev["date"][:4]) if ev.get("date") else dt.date.today().year
+
+        def keep(e: dict, d: str) -> bool:
+            if dist and d != dist:
+                return False
             if sex in ("М", "Ж") and str(e.get("sex") or "").upper() != sex:
                 return False
             return self.age_ok(year, e.get("birth_year") or "", ages)
-        sl = self.startlist(ev)
-        groups = []
-        for h in sl["heats"]:
-            es = [e for e in h["entries"] if (e.get("distance") or h.get("distance") or "") == dist and keep(e)]
-            if es:
-                groups.append((h, es))
-        head = (["№ п/п", "Порядок выполнения", "Нагрудный номер", "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город"]
-                + [f"Попытка {i}" for i in range(1, 7)] + ["Лучший результат"]) if tech else \
-               ["№ п/п", "Забег №", "Дорожка", "Нагрудный номер", "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город",
-                "Секундомер 1", "Секундомер 2", "Секундомер 3"]
-        when = ".".join(reversed((ev.get("date") or "").split("-")))
-        sub = " · ".join(x for x in ("Стартовый протокол", dist, {"М": "мальчики / юноши", "Ж": "девочки / девушки"}.get(sex, ""),
-                                       when, ev.get("place") or "") if x)
-        rows = [[ev["name"]], [sub], head]
-        group_rows = []
-        for h, es in groups:
-            label = h["name"] if h["name"].startswith("Общий список") else " · ".join(x for x in (h["name"], h.get("category")) if x)
-            rows.append([label] + [""] * (len(head) - 1))
-            group_rows.append(len(rows))
-            heat_no = (re.fullmatch(r"Забег (\d+)", h["name"]) or [None, ""])[1]
-            es = sorted(es, key=lambda e: (e.get("lane") is None, e.get("lane") or 0)) if not tech else es
-            for i, e in enumerate(es, 1):
-                base = [str(e.get("bib") or ""), e.get("name") or "", str(e.get("birth_year") or ""), e.get("rank") or "",
-                        e.get("team") or ""]
-                if tech:
-                    rows.append([i, ""] + base + [""] * 7)
+        return keep, year, dist, sex
+
+    @staticmethod
+    def _xl_num(v):
+        """«5,43» / «1:50,5» → число (метры или секунды); непонятное → None."""
+        t = xl_clean(v).replace(",", ".")
+        m = re.fullmatch(r"(?:(\d+):)?(\d+(?:\.\d+)?)", t)
+        if not m:
+            return None
+        x = float(m.group(2)) + (int(m.group(1)) * 60 if m.group(1) else 0)
+        return x if x == x else None
+
+    def _xl_block_head(self, d: XDoc, r: int, ev: dict, n: int, title: str, grp: str, disc: str, when: str) -> int:
+        half = max(2, n // 2)
+        big = dict(bold=True, h="center")
+        d.merge(r, 1, r, n, self.XL_ORG[0], size=13, **big)
+        d.heights[r] = 20
+        d.merge(r + 1, 1, r + 1, n, self.XL_ORG[1], size=9, wrap=True, **big)
+        d.heights[r + 1] = 26
+        d.merge(r + 2, 1, r + 2, n, self.XL_ORG[2], size=10, **big)
+        d.merge(r + 3, 1, r + 3, n, xl_clean(ev.get("organizer")) if xl_clean(ev.get("organizer")) not in self.XL_ORG else "",
+                size=9, h="center")
+        d.merge(r + 4, 1, r + 4, n, xl_clean(ev.get("name")), size=14, bold=True, italic=True, h="center", wrap=True)
+        d.heights[r + 4] = 36
+        when_ev = ".".join(reversed(xl_clean(ev.get("date")).split("-"))) if ev.get("date") else ""
+        if n < 8:            # узкая таблица (командный зачёт): место и дата одной строкой по центру
+            d.merge(r + 5, 1, r + 5, n, " · ".join(x for x in (xl_clean(ev.get("place")), when_ev) if x), size=10, h="center", bold=True)
+        else:
+            d.merge(r + 5, 1, r + 5, half, "Место проведения: " + xl_clean(ev.get("place")), size=10, h="left")
+            d.merge(r + 5, half + 1, r + 5, n, "Дата проведения: " + when_ev, size=10, h="right", bold=True)
+        d.merge(r + 6, 1, r + 6, n, title, size=18, bold=True, h="center")
+        d.heights[r + 6] = 30
+        d.merge(r + 7, 1, r + 7, n, grp, size=13, bold=True, h="center")
+        d.merge(r + 8, 1, r + 8, n, disc, size=13, bold=True, h="center", wrap=True)
+        d.heights[r + 8] = 22
+        d.merge(r + 9, 1, r + 9, n, when, size=10, h="center", italic=True)
+        return r + 11
+
+    @staticmethod
+    def _xl_group_title(es: list, category: str, year: int) -> str:
+        yrs = sorted({int(str(e.get("birth_year"))[:4]) for e in es if str(e.get("birth_year") or "")[:4].isdigit()})
+        cat = xl_clean(category).upper()
+        if re.search(r"\d{4}", cat) or not yrs:
+            return cat or "ВСЕ УЧАСТНИКИ"
+        span = f"{yrs[0]}" if yrs[0] == yrs[-1] else f"{yrs[0]}-{yrs[-1]}"
+        return f"{cat} {span} г.р.".strip()
+
+    def _xl_split_weight(self, dist: str, es: list, year: int) -> list:
+        """Метания: участники с разной массой снаряда (по полу и возрасту) — отдельные протоколы, как на соревнованиях."""
+        by: dict = {}
+        for e in es:
+            by.setdefault(implement_weight(dist, e.get("sex"), e.get("birth_year"), year), []).append(e)
+        return [by[k] for k in sorted(by, key=lambda w: (w == "", w))] if len(by) > 1 else [es]
+
+    def _xl_disc_title(self, dist: str, es: list, year: int) -> str:
+        ws = []
+        for e in es:
+            w = implement_weight(dist, e.get("sex"), e.get("birth_year"), year)
+            if w and w not in ws:
+                ws.append(w)
+        base = xl_clean(dist) or "Дисциплина не указана"
+        if ws and not re.search(r"\d+\s*(кг|г)\b", base.lower()):
+            base += f" ({' / '.join(sorted(ws))})"
+        return base
+
+    def _xl_columns(self, tech: bool, final: bool):
+        if tech:
+            head = ["№ п/п", "Фамилия, Имя", "Год рожд.", "Команда / МО", "Номер участника"] + [f"Попытка {i}" for i in range(1, 7)] \
+                   + ["Лучший результат", "Место", "Очки"]
+            widths = [6, 30, 9, 22, 11] + [9] * 6 + [12, 8, 8]
+        else:
+            head = ["Забег" if final else "Дорожка", "Фамилия, Имя", "Год рожд.", "Команда / МО", "Номер участника",
+                    "Сек. 1", "Сек. 2", "Сек. 3", "Результат", "Место", "Очки"]
+            widths = [8, 30, 9, 22, 11, 9, 9, 9, 12, 8, 8]
+        return head, widths
+
+    def _xl_table(self, d: XDoc, r: int, tech: bool, final: bool, entries: list, pts_mode: str) -> int:
+        """Шапка таблицы + строки. pts_mode: '' — без очков, 'formula' — по шкале мест, 'stored' — введённые очки."""
+        head, _ = self._xl_columns(tech, final)
+        n = len(head)
+        hs = dict(bold=True, size=9, h="center", wrap=True, border="thin", fill="E7E6E6")
+        if tech:
+            for c in range(1, n + 1):
+                d.merge(r, c, r + 1, c, head[c - 1], **hs)
+        else:
+            for c in (1, 2, 3, 4, 5, 9, 10, 11):
+                d.merge(r, c, r + 1, c, head[c - 1], **hs)
+            d.merge(r, 6, r, 8, "Результат забега", **hs)
+            for c in (6, 7, 8):
+                d.put(r + 1, c, head[c - 1], **hs)
+        d.heights[r], d.heights[r + 1] = 20, 16
+        r0 = r + 2
+        bs = dict(size=10, border="thin", h="center")
+        best_c, place_c, pts_c = (12, 13, 14) if tech else (9, 10, 11)
+        hc = n + 2                                   # служебный столбец с числом (вне области печати) — по нему считается место
+        last = r0 + len(entries) - 1
+        for i, e in enumerate(entries):
+            rr = r0 + i
+            d.heights[rr] = 20 if final else 24
+            d.put(rr, 1, e.get("_c1", i + 1), **bs)
+            d.put(rr, 2, xl_clean(e.get("name")), size=10, border="thin", h="left", indent=1)
+            d.put(rr, 3, xl_clean(e.get("birth_year")), **bs)
+            d.put(rr, 4, xl_clean(e.get("team")), size=10, border="thin", h="center", wrap=True)
+            d.put(rr, 5, xl_clean(e.get("bib")), size=13, bold=True, border="thin", h="center")
+            if tech:
+                att = e.get("_att") or []
+                for k in range(6):
+                    v = att[k] if k < len(att) else ""
+                    nv = self._xl_num(v)
+                    d.put(rr, 6 + k, nv if nv is not None else xl_clean(v), **bs, **({"fmt": "0.00"} if nv is not None else {}))
+                best = e.get("_num")
+                if final and any(self._xl_num(x) is not None for x in att):
+                    nv = [self._xl_num(x) for x in att if self._xl_num(x) is not None]
+                    d.put(rr, best_c, XF(f"=MAX(F{rr}:K{rr})", max(nv)), size=10, bold=True, border="thin", h="center", fmt="0.00")
+                    d.put(rr, hc, XF(f"={_col(best_c - 1)}{rr}", max(nv)), size=8, color="808080")
+                elif final and best is not None:
+                    d.put(rr, best_c, best, size=10, bold=True, border="thin", h="center", fmt="0.00")
+                    d.put(rr, hc, best, size=8, color="808080")
                 else:
-                    rows.append([i, heat_no or h["name"], e.get("lane") or ""] + base + ["", "", ""])
-        if not groups:
-            rows.append(["Сетки по этой дисциплине ещё нет — сформируйте её на шаге 3 Мастера"] + [""] * (len(head) - 1))
-        widths = ([6, 11, 10, 28, 8, 8, 22] + [10] * 6 + [12]) if tech else [6, 9, 9, 10, 28, 8, 8, 22, 12, 12, 12]
-        blob = xlsx_build([("Стартовый протокол", rows)], widths=widths, header_row=3, title_row=1,
-                          group_rows=tuple(group_rows), orientation="landscape" if tech else "portrait",
-                          data_height=24, repeat_header=True)
-        fname = re.sub(r'[\\/:*?"<>|]+', " ", f"Стартовый протокол — {dist or ev['name']}.xlsx")
+                    d.put(rr, best_c, xl_clean(e.get("_status")), size=10, bold=True, border="thin", h="center")
+            else:
+                sw = e.get("_sw") or []
+                for k in range(3):
+                    d.put(rr, 6 + k, xl_clean(sw[k]) if k < len(sw) else "", **bs)
+                d.put(rr, best_c, xl_clean(e.get("_res")) or xl_clean(e.get("_status")), size=10, bold=True, border="thin", h="center")
+                if final and e.get("_num") is not None:
+                    d.put(rr, hc, e["_num"], size=8, color="808080")
+            order = 1 if not tech else 0
+            has = final and e.get("_num") is not None
+            if final:
+                rng = f"${_col(hc - 1)}${r0}:${_col(hc - 1)}${last}"
+                cached = e.get("_place") if has else ""
+                d.put(rr, place_c, XF(f'=IF(ISNUMBER({_col(hc - 1)}{rr}),RANK({_col(hc - 1)}{rr},{rng},{order}),"")', cached), size=11, bold=True, border="thin", h="center")
+            else:
+                d.put(rr, place_c, "", **bs)
+            if pts_mode == "formula" and final:
+                pc = f"{_col(place_c - 1)}{rr}"
+                cp = ""
+                if has and e.get("_place"):
+                    p = e["_place"]
+                    cp = 20 if p == 1 else 17 if p == 2 else max(1, 18 - p)
+                d.put(rr, pts_c, XF(f'=IF({pc}="","",IF({pc}=1,20,IF({pc}=2,17,MAX(1,18-{pc}))))', cp), size=10, bold=True, border="thin", h="center")
+            elif pts_mode == "stored" and final:
+                d.put(rr, pts_c, e.get("points") if e.get("points") is not None else "", size=10, bold=True, border="thin", h="center")
+            else:
+                d.put(rr, pts_c, "", **bs)
+        return last + 1
+
+    def _xl_block_foot(self, d: XDoc, r: int, ev: dict, n: int, count: int) -> int:
+        half = max(2, n // 2)
+        d.heights[r] = 8
+        r += 1
+        d.merge(r, 1, r, 2, "Главный судья", size=10, bold=True, h="left")
+        d.merge(r, 3, r, half + 1, "", size=10, border=("", "", "", "thin"))
+        d.merge(r, half + 2, r, n, xl_clean(ev.get("chief_judge")) or "/____________________/", size=10, h="left", indent=1)
+        d.heights[r] = 26
+        r += 1
+        d.merge(r, 1, r, 2, "Главный секретарь", size=10, bold=True, h="left")
+        d.merge(r, 3, r, half + 1, "", size=10, border=("", "", "", "thin"))
+        d.merge(r, half + 2, r, n, xl_clean(ev.get("chief_secretary")) or "/____________________/", size=10, h="left", indent=1)
+        d.heights[r] = 26
+        r += 1
+        d.merge(r, 1, r, half + 1, f"Дата формирования протокола: {now_local():%d.%m.%Y} г.", size=9, italic=True, h="left")
+        d.merge(r, half + 2, r, n, f"Количество участников: {count}", size=9, italic=True, h="right")
+        return r + 1
+
+    def protocol_xlsx(self, ev: dict, qs: dict, final: bool):
+        """Стартовый (final=False) или итоговый (final=True) протокол в Excel по образцу ВФЛА: бег — книжный лист на 3 секундомера,
+        техника — альбомный на 6 попыток, место и очки — формулами; данные участника подтягиваются из заявки по reg_id."""
+        from urllib.parse import quote
+        keep, year, dist_f, sex_f = self._xl_filter(ev, qs)
+        force_land = xl_clean(qs.get("orient")) == "landscape"
+        blocks = []          # (tech, title-parts, entries, heat-label, time)
+        if final:
+            res = self.compute(ev)
+            erows = {r["id"]: r for r in self.store.entries_rows(ev["id"])}
+            imported = any(r.get("points") is not None for r in erows.values())
+            groups: dict = {}
+            for x in res["finished"]:
+                if keep(x, x.get("distance") or ""):
+                    groups.setdefault((x.get("distance") or "", x.get("category") or ""), ([], []))[0].append(x)
+            for x in res["not_seen"]:
+                if keep(x, x.get("distance") or ""):
+                    groups.setdefault((x.get("distance") or "", x.get("category") or ""), ([], []))[1].append(x)
+            for (dist, cat), (fin, rest) in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+                tech = self.discipline_kind(dist) == "tech"
+                es = []
+                for x in sorted(fin, key=lambda x: x.get("place_overall") or 0):
+                    num = (x.get("value") if x.get("rtype") else x.get("seconds"))
+                    heat = (re.search(r"\d+", x.get("wave") or "") or [None])[0] if not tech else None
+                    es.append({**x, "_num": num, "_res": x.get("result"), "_att": x.get("attempts"),
+                               "_sw": x.get("sw"), "_c1": heat or ""})
+                for x in rest:
+                    es.append({**x, "_num": None, "_status": x.get("status") or "нет результата", "_att": x.get("attempts"),
+                               "_sw": x.get("sw"), "_c1": ""})
+                for part in self._xl_split_weight(dist, es, year):
+                    nums = [e["_num"] for e in part if e.get("_num") is not None]
+                    for e in part:           # место внутри блока — как его пересчитает формула RANK
+                        if e.get("_num") is not None:
+                            e["_place"] = 1 + sum(1 for v in nums if (v > e["_num"] if tech else v < e["_num"]))
+                    if tech:
+                        part = [{**e, "_c1": i} for i, e in enumerate(part, 1)]
+                    blocks.append((tech, dist, cat, part, "", ""))
+        else:
+            sl = self.startlist(ev)
+            for h in sl["heats"]:
+                bydist: dict = {}
+                for e in h["entries"]:
+                    dd = e.get("distance") or h.get("distance") or ""
+                    if keep(e, dd):
+                        bydist.setdefault(dd, []).append(e)
+                for dd, es in bydist.items():
+                    tech = self.discipline_kind(dd) == "tech"
+                    es = sorted(es, key=lambda e: (e.get("lane") is None, e.get("lane") or 0)) if not tech else es
+                    es = [{**e, "_c1": (e.get("lane") or "") if not tech else i} for i, e in enumerate(es, 1)]
+                    st = (h.get("start_time") or "")[11:16] or xl_clean(ev.get("start_clock"))
+                    for part in self._xl_split_weight(dd, es, year):
+                        if tech:
+                            part = [{**e, "_c1": i} for i, e in enumerate(part, 1)]
+                        blocks.append((tech, dd, h.get("category") or (part[0].get("category") if part else ""), part, h["name"], st))
+            imported = False
+        run_doc = XDoc("Бег", "landscape" if force_land else "portrait")
+        tech_doc = XDoc("Техника", "landscape")
+        pts_mode = ""
+        if final:
+            pts_mode = "stored" if imported else ("formula" if ev.get("team_best") else "")
+        for tech, dist, cat, es, heat, when in blocks:
+            d = tech_doc if tech else run_doc
+            head, widths = self._xl_columns(tech, final)
+            d.widths = widths + [3, 10]
+            d.print_cols = len(widths)
+            n = len(widths)
+            r = d.last_row + 1 if d.cells else 1
+            when_txt = " · ".join(x for x in (heat if heat and not heat.startswith("Общий список") else "",
+                                              f"Время начала: {when}" if when else "") if x)
+            r = self._xl_block_head(d, r, ev, n, "ИТОГОВЫЙ ПРОТОКОЛ" if final else "СТАРТОВЫЙ ПРОТОКОЛ",
+                                    self._xl_group_title(es, cat, year), self._xl_disc_title(dist, es, year), when_txt)
+            r = self._xl_table(d, r, tech, final, es, pts_mode)
+            r = self._xl_block_foot(d, r, ev, n, len(es))
+            d.breaks.append(r)
+        sheets = [d for d in (run_doc, tech_doc) if d.cells]
+        if final:
+            res_teams = res.get("teams") or []
+            if res_teams:
+                sheets.append(self._xl_teams(ev, res_teams))
+        if not sheets:
+            d = XDoc("Протокол", "portrait", [90])
+            d.put(1, 1, "Сетки по выбранным дисциплинам ещё нет — сформируйте её на шаге 3 Мастера" if not final
+                  else "Результатов по выбранным дисциплинам пока нет", size=12, bold=True)
+            sheets = [d]
+        blob = xlsx_doc(sheets)
+        label = "Итоговый протокол" if final else "Стартовый протокол"
+        fname = re.sub(r'[\\/:*?"<>|]+', " ", f"{label} — {dist_f or ev['name']}.xlsx")
         return 200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", blob, {
-            "Content-Disposition": f"attachment; filename=\"startlist.xlsx\"; filename*=UTF-8''{quote(fname)}"}
+            "Content-Disposition": f"attachment; filename=\"protocol.xlsx\"; filename*=UTF-8''{quote(fname)}"}
+
+    def _xl_teams(self, ev: dict, teams: list) -> XDoc:
+        """Командный зачёт: очки по колонкам (мальчики/девочки), итог и место — формулами."""
+        ncols = max(len(g["columns"]) for g in teams)
+        n = 1 + ncols + 2
+        d = XDoc("Командный зачёт", "portrait", [38] + [14] * ncols + [14, 10])
+        d.print_cols = n
+        r = 1
+        r = self._xl_block_head(d, r, ev, n, "ИТОГОВЫЙ ПРОТОКОЛ", "Командный зачёт", "", "") - 1
+        hs = dict(bold=True, size=9, h="center", wrap=True, border="thin", fill="E7E6E6")
+        for g in teams:
+            d.merge(r, 1, r, n, f"Возрастная группа: {xl_clean(g['group'])} · в зачёт идут {g['best']} лучших результатов", size=11, bold=True, h="left")
+            r += 1
+            d.put(r, 1, "Наименование команды", **hs)
+            for i, c in enumerate(g["columns"]):
+                d.put(r, 2 + i, c, **hs)
+            d.put(r, 2 + ncols, "Итого", **hs)
+            d.put(r, 3 + ncols, "Место", **hs)
+            r0 = r + 1
+            last = r0 + len(g["rows"]) - 1
+            for i, t in enumerate(g["rows"]):
+                rr = r0 + i
+                d.put(rr, 1, xl_clean(t["team"]), size=10, border="thin", h="left", indent=1)
+                for k, c in enumerate(g["columns"]):
+                    v = t["by"].get(c)
+                    d.put(rr, 2 + k, v if v is not None else "", size=10, border="thin", h="center")
+                for k in range(len(g["columns"]), ncols):
+                    d.put(rr, 2 + k, "", size=10, border="thin")
+                tot = XF(f"=SUM({_col(1)}{rr}:{_col(ncols)}{rr})", t["total"])
+                d.put(rr, 2 + ncols, tot, size=10, bold=True, border="thin", h="center")
+                d.put(rr, 3 + ncols, XF(f"=RANK({_col(1 + ncols)}{rr},{_col(1 + ncols)}${r0}:{_col(1 + ncols)}${last},0)", t["place"]),
+                      size=10, bold=True, border="thin", h="center")
+            r = last + 2
+        self._xl_block_foot(d, r, ev, n, sum(len(g["rows"]) for g in teams))
+        return d
 
     def _template_response(self, ev: dict):
         from urllib.parse import quote

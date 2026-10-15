@@ -189,6 +189,9 @@ tr.rej td{opacity:.55}
 .tabs i{font:700 12px var(--body);font-style:normal;background:var(--line);border-radius:99px;padding:1px 7px;margin-left:5px;color:var(--ink)}
 .tabs button.on i{background:var(--track);color:#fff}
 .tabs .search{margin-left:auto;max-width:280px}
+.wzp-finder{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.wzp-finder input{flex:1 1 320px;max-width:760px;font-size:17px;padding:10px 12px;border:2px solid var(--start)}
+.wzp-grid tr[hidden]{display:none}
 .counts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .counts span{padding:3px 10px;border-radius:99px;background:#F05A2218;color:var(--start);font-size:13px;font-weight:700}
 .regform{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-top:10px}
@@ -890,7 +893,7 @@ a.btn.xls:hover{background:#E9F5EE}
 <section id="tab-results" class="hide">
   <div class="pagehead">
     <div><h1 id="rName">Результаты</h1><p class="lead" id="rMeta"></p></div>
-    <div class="row"><a class="btn" id="rCsv">Скачать CSV</a><a class="btn primary" id="rProto" target="_blank">Протокол для печати ↗</a></div>
+    <div class="row"><a class="btn" id="rCsv">Скачать CSV</a><a class="btn" id="rXlsx" title="Образец ВФЛА: шапка, границы, места и очки формулами">📊 Итоговый протокол в Excel</a><a class="btn primary" id="rProto" target="_blank">Протокол для печати ↗</a></div>
   </div>
   <div class="alerts" id="rAlerts"></div>
   <div class="filters">
@@ -919,6 +922,7 @@ a.btn.xls:hover{background:#E9F5EE}
     <a id="dlProto" target="_blank"><b>Протокол результатов ↗</b><small>для печати и сайта</small></a>
     <a id="dlStart" target="_blank"><b>Стартовый протокол ↗</b><small>забеги и дорожки</small></a>
     <a id="dlCsv"><b>Результаты CSV</b><small>для Excel</small></a>
+    <a id="dlXlsx"><b>Итоговый протокол .xlsx</b><small>образец ВФЛА</small></a>
   </div>
   <div class="folders" id="fFolders"></div>
   <div class="panel" style="margin-top:12px">
@@ -2055,6 +2059,8 @@ const wzp = (() => {
         <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
+      <div class="row xlsrow"><a class="btn xls" id="wzpXlsxFinal" href="/api/events/${ev().id}/results.xlsx?${bibQ()}">📊 Выгрузить итоговый протокол в Excel (.xlsx)</a>
+        <span class="small muted">Образец ВФЛА: шапка Министерства спорта, ФЛАСО и СШОР, границы, масса снаряда, место и очки считаются формулами.</span></div>
       <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
       <p class="small muted" style="margin:0 0 6px">✎ Шапку бланка и примечание судей можно поправить прямо здесь — кликните по тексту; при печати остаётся только введённый текст.</p>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
@@ -2086,11 +2092,44 @@ const wzp = (() => {
     body.innerHTML = `${stepHead(4, k)}
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
+            <div class="wzp-finder"><input type="text" id="judge-finder" placeholder="🔍 Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)..." autocomplete="off" aria-label="Быстрый поиск спортсмена по номеру или фамилии" value="${esc(W.find || "")}"><span class="small muted" id="judge-finder-cnt" role="status" aria-live="polite"></span></div>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
         <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю. Отметки можно набрать буквами: днс, днф, дк, нр.</span>
         ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>
       ${startedBox()}${nav(true, "К итоговому протоколу")}`;
+    wireFinder(body);
+  }
+  // 8.0: живой поиск на финише — по мере набора номера («92») или первых букв фамилии строки таблицы скрываются на лету
+  const finderNorm = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").trim();
+  function applyFinder(body){
+    const inp = body.querySelector("#judge-finder"); if (!inp) return;
+    const q = finderNorm(inp.value), tb = body.querySelector("#wzpRows"); if (!tb) return;
+    let shown = 0, total = 0, catRow = null, catHas = false;
+    const flush = () => { if (catRow) catRow.hidden = !!q && !catHas; };
+    [...tb.rows].forEach(tr => {
+      if (tr.classList.contains("wzp-cat")) { flush(); catRow = tr; catHas = false; return; }
+      if (!tr.dataset.bib) return;
+      total++;
+      const bib = finderNorm(tr.dataset.bib), nm = finderNorm((tr.querySelector("td b") || {}).textContent);
+      const hit = !q || (/^\d+$/.test(q) ? bib.startsWith(q) : nm.split(/\s+/).some(w => w.startsWith(q)) || nm.includes(q));
+      tr.hidden = !hit; if (hit) { shown++; catHas = true; }
+    });
+    flush();
+    const cnt = body.querySelector("#judge-finder-cnt");
+    if (cnt) cnt.textContent = q ? (shown ? `Найдено: ${shown} из ${total}` : "Никого не нашли — проверьте номер или фамилию") : "";
+  }
+  function wireFinder(body){
+    const inp = body.querySelector("#judge-finder"); if (!inp) return;
+    inp.addEventListener("input", () => { W.find = inp.value; applyFinder(body); });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { inp.value = ""; W.find = ""; applyFinder(body); }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const first = [...body.querySelectorAll("#wzpRows tr[data-bib]")].find(tr => !tr.hidden);
+      const f = first && first.querySelector("input"); if (f) { f.focus(); f.select(); }
+    });
+    applyFinder(body);
   }
   // экстренная отмена старта (фальстарт, старт по ошибке): время старта забега обнуляется, сетку снова можно пересобрать
   function startedBox(){
@@ -2224,7 +2263,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;
@@ -2306,6 +2345,8 @@ function renderTimingHead(){
   $("dlStart").href = ev ? `/protocol?event=${ev.id}&kind=start` : "#";
   $("dlCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
   $("rCsv").href = ev ? `/api/events/${ev.id}/results.csv` : "#";
+  $("rXlsx").href = ev ? `/api/events/${ev.id}/results.xlsx` : "#";
+  $("dlXlsx").href = ev ? `/api/events/${ev.id}/results.xlsx` : "#";
   const ws = $("rWave"), wprev = ws.value;
   ws.innerHTML = '<option value="">все забеги</option>' + (ev ? ev.waves.map(w => `<option>${esc(w.name)}</option>`).join("") : "");
   $("rProto").href = ev ? `/protocol?event=${ev.id}` : "#";

@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 7.7.7 (--version)", r.returncode == 0 and r.stdout.strip() == "7.7.7", r.stdout + r.stderr)
+    check("версия сервера 8.0.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.0.0", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v7.7.7" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.0.0" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -252,6 +252,60 @@ def main() -> int:
     uh = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(hub_path))), "hub", "ui.html"), encoding="utf-8").read()
     check("7.7.7: главная — «Скоро» не зависит от даты на ПК: всё, что не идёт и не завершено, остаётся в списке; архивные — отдельно, с подсказкой",
           'const soon = active.filter(e => !now.includes(e) && !done.includes(e))' in uh and "Прошли — ещё не в архиве" not in uh and "В архиве: ${nArch}" in uh, "")
+    # 8.0: Excel-протоколы по образцу ВФЛА — данные из заявки по reg_id (без NaN), масса снаряда, формулы места и очков, лист А4
+    xd = tempfile.mkdtemp()
+    code_x = r"""
+import os,sys,json,sqlite3,zipfile,io,re
+sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub
+db=os.path.join(sys.argv[2],'x.db'); hub.Store(db); c=sqlite3.connect(db)
+c.execute("INSERT INTO events(id,name,date,place,status,created_at,chief_judge,chief_secretary,team_best) VALUES (1,'Тест','2026-10-17','Манеж','planned','2026-10-01 10:00:00','Судья С.С.','Секретарь К.К.',3)")
+c.execute("INSERT INTO waves(event_id,name,category,distance) VALUES (1,'Забег 1','Девочки','60 м')")
+c.execute("INSERT INTO waves(event_id,name,category,distance) VALUES (1,'Общий список','Юноши','Толкание ядра')")
+def reg(i,l,f,by,sx,dist,cat,rk):
+    c.execute("INSERT INTO registrations(id,event_id,last_name,first_name,birth_date,sex,team,coach,distance,category,status,bib,consent_at,created_at,rank) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(i,1,l,f,'%d-05-01'%by,sx,'Школа №%d'%i,'Тренер Т.',dist,cat,'approved',str(10+i),'x','x',rk))
+reg(1,'Анова','Анна',2011,'Ж','60 м','Девочки','б/р'); reg(2,'Банова','Белла',2011,'Ж','60 м','Девочки','б/р')
+reg(3,'Вов','Иван',2012,'М','Толкание ядра','Юноши','б/р'); reg(4,'Гов','Пётр',2005,'М','Толкание ядра','Юноши','1 р.')
+# в entries ФИО, год, команда, тренер, разряд ПУСТЫЕ — должны подтянуться из заявки по reg_id
+c.execute("INSERT INTO entries(event_id,bib,wave,name,birth_year,team,category,lane,coach,reg_id,sex,result,detail) VALUES (1,'11','Забег 1',NULL,NULL,NULL,'Девочки',1,NULL,1,NULL,'9,10',?)",(json.dumps({'t':[['9,1']][0]}),))
+c.execute("INSERT INTO entries(event_id,bib,wave,name,birth_year,team,category,lane,coach,reg_id,sex,result,status) VALUES (1,'12','Забег 1','','','','Девочки',2,'',2,'',NULL,'DNS')")
+c.execute("INSERT INTO entries(event_id,bib,wave,name,birth_year,team,category,lane,coach,reg_id,sex,result,detail) VALUES (1,'13','Общий список','','','','Юноши',NULL,'',3,'','7,50',?)",(json.dumps({'a':['7,10','X','7,50','-','-','-']}),))
+c.execute("INSERT INTO entries(event_id,bib,wave,name,birth_year,team,category,lane,coach,reg_id,sex,result,detail) VALUES (1,'14','Общий список','','','','Юноши',NULL,'',4,'','13,20',?)",(json.dumps({'a':['13,20','12,00','X','-','-','-']}),))
+c.commit()
+cfg=hub._merge(hub.DEFAULTS,{'db_path':db,'public':{'enabled':False}}); h=hub.Hub(cfg); ev=h.store.get_event(1)
+out={}
+for fin in (False,True):
+    code,ct,blob,hd=h.protocol_xlsx(ev,{},fin)
+    z=zipfile.ZipFile(io.BytesIO(blob)); xml="".join(z.read(n).decode('utf-8') for n in z.namelist() if n.startswith('xl/worksheets/'))
+    out['final' if fin else 'start']={'ok':code==200 and blob[:2]==b'PK','nan':bool(re.search(r'>(nan|NaN|None|null)<',xml)),'xml':xml}
+er=h.store.entries_rows(1)
+out['rows']=[[r['name'],r['birth_year'],r['team'],r['coach'],r['sex']] for r in er]
+out['w']=[hub.implement_weight('Толкание ядра','М',2005,2026),hub.implement_weight('Толкание ядра','М',2008,2026),hub.implement_weight('Толкание ядра','М',2014,2026),hub.implement_weight('Толкание ядра','Ж',2011,2026),hub.implement_weight('Толкание ядра','Ж',2005,2026),hub.implement_weight('Метание мяча','Ж',2012,2026),hub.implement_weight('Толкание ядра 5 кг','М',2000,2026)]
+out['clean']=[hub.xl_clean(v) for v in (None,'nan','NaN',' None ','Иванов')]
+st=out['start']['xml']; fi=out['final']['xml']
+out['start']['xml']=''; out['final']['xml']=''
+out['flags']={'sec3':'Сек. 3' in st,'rank':'RANK(' in fi,'max':'MAX(F' in fi,'pts':'IF(' in fi,'weight5':'5 кг' in fi and '6 кг' in fi,'a4':'paperSize="9"' in st and 'orientation="portrait"' in st and 'orientation="landscape"' in st,
+  'orgs':'МИНИСТЕРСТВО СПОРТА САХАЛИНСКОЙ ОБЛАСТИ' in st and 'ФЛАСО' in st and 'Комнацкого' in st,'names':'Анова' in fi and 'Школа' in fi,'teams':'Командный зачёт' in fi and 'SUM(' in fi}
+print(json.dumps(out,ensure_ascii=False))
+"""
+    rx = subprocess.run([sys.executable, "-c", code_x, os.path.abspath(hub_path), xd], capture_output=True, text=True)
+    try:
+        xj = json.loads(rx.stdout.strip().splitlines()[-1])
+    except Exception:
+        xj = {}
+    check("8.0: пустые ФИО / год / команда / тренер / пол в entries подтягиваются из заявки по reg_id (LEFT JOIN registrations)",
+          xj.get("rows") and all(r[0] and r[1] and r[2] and r[3] and r[4] for r in xj["rows"]) and xj["rows"][0][0] == "Анова Анна", rx.stdout[:300] + rx.stderr[-300:])
+    check("8.0: Excel стартового и итогового протокола — валидные файлы без «nan / None / null» в ячейках; xl_clean чистит такие значения",
+          xj.get("start", {}).get("ok") and xj.get("final", {}).get("ok") and not xj["start"]["nan"] and not xj["final"]["nan"]
+          and xj.get("clean") == ["", "", "", "", "Иванов"], rx.stdout[:300])
+    fl = xj.get("flags", {})
+    check("8.0: Excel по образцу ВФЛА — шапка (Министерство спорта, ФЛАСО, СШОР им. Комнацкого), бег книжным листом на 3 секундомера, техника альбомным; место = RANK, очки и лучший результат — формулы; масса снаряда в названии; командный зачёт на SUM",
+          all(fl.get(k) for k in ("sec3", "rank", "max", "pts", "weight5", "a4", "orgs", "names", "teams")), str(fl))
+    check("8.0: масса снаряда: ядро М 20+ — 7,26 кг, 18–19 — 6, 14–17 — 5, до 13 — 4; Ж 18+ — 4 кг, младше — 3; мяч — 150 г; вес из названия сохраняется",
+          xj.get("w") == ["7,26 кг", "6 кг", "4 кг", "3 кг", "4 кг", "150 г", "5 кг"], str(xj.get("w")))
+    uih8 = open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "ui.html"), encoding="utf-8").read()
+    check("8.0: шаг 4 Мастера — живой поиск «judge-finder» над таблицей: по номеру или фамилии строки скрываются на лету",
+          'id="judge-finder"' in uih8 and "Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)" in uih8 and "function applyFinder" in uih8
+          and uih8.index('id="judge-finder"') < uih8.index('<table class="wzp-grid">'), "")
     r = subprocess.run([sys.executable, hub_path, "--config", cfg_path, "--check"],
                        capture_output=True, text=True)
     check("настройки читаются (--check); старые ключи sources и wiclax игнорируются без ошибок",
@@ -444,7 +498,7 @@ def main() -> int:
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "7.7.7" and st["build_date"] == "2026-10-14", txt[:300])
+              and st["version"] == "8.0.0" and st["build_date"] == "2026-10-15", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -457,7 +511,7 @@ def main() -> int:
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "7.7.7", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.0.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1089,11 +1143,15 @@ def main() -> int:
         tab = hubmod.xlsx_read(tpl)
         check("шаблон: заголовки и список дистанций", "Фамилия*" in tab[2] and "Дистанция*" in tab[2]
               and b"300" in zipfile.ZipFile(io.BytesIO(tpl)).read("xl/worksheets/sheet2.xml"), str(tab[:3]))
+        check("8.0: в шаблоне Excel нет колонок «Команда» и «Тренер» — они вводятся один раз в форме; в онлайн-форме инструкция про звёздочки и плашка модерации",
+              "Команда" not in tab[2] and "Тренер" not in tab[2] and "Разряд / звание*" in tab[2]
+              and "строго в соответствии со знаками звёздочек (*)" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
+              and "появится в открытых списках участников соревнований сразу после проверки, модерации и утверждения Главным секретарём соревнований" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read(), str(tab[2]))
         head = tab[2]
         filled = [["Заявка"], ["подсказка"], head,
-                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "", "", "", "кмс"],
-                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "", "", "", "б/р"],
-                  ["Ошибкин", "", "", "31.02.2011", "X", "42 км", "", "", "", ""]]
+                  ["Командов", "Пётр", "", 40365, "м", "60м", "8,1", "", "кмс"],
+                  ["Командова", "Анна", "", "03.03.2011", "Ж", "300 м", "52.4", "", "б/р"],
+                  ["Ошибкин", "", "", "31.02.2011", "X", "42 км", "", "", ""]]
         xb = hubmod.xlsx_build([("Заявка", filled)], header_row=3, title_row=1)
 
         def pub_raw(path, data, headers):
@@ -1182,7 +1240,7 @@ def main() -> int:
         _, txt = http("GET", "/api/system/update")
         ust = json.loads(txt)
         check("обновление: статус для страницы — готово к установке, версия и дата сборки",
-              ust.get("ready") is True and ust["ready_info"]["version"] == "9.9.9" and ust["build_date"] == "2026-10-14", txt[:300])
+              ust.get("ready") is True and ust["ready_info"]["version"] == "9.9.9" and ust["build_date"] == "2026-10-15", txt[:300])
         code, txt = http("POST", "/api/system/update/install", b"{}", J)
         check("обновление: после подтверждения установка передана службе", code == 200 and os.path.exists(os.path.join(upd, "incoming.zip")), txt)
         code, txt = http("POST", "/api/system/update/install", b"{}", J)
@@ -1340,7 +1398,7 @@ def main() -> int:
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 7.7.7 и дата сборки 14.10.2026", st3["version"] == "7.7.7" and st3["build_date"] == "2026-10-14", txt[:200])
+        check("7.2: версия 8.0.0 и дата сборки 15.10.2026", st3["version"] == "8.0.0" and st3["build_date"] == "2026-10-15", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
@@ -1559,13 +1617,13 @@ def main() -> int:
             return z.read("xl/worksheets/sheet1.xml").decode("utf-8"), z.read("xl/workbook.xml").decode("utf-8"), ct, cd
         xr, wr, ctr, cdr = xl("60 м")
         xt, wt, _, _ = xl("Прыжок в длину")
-        check("5.2: Excel бега — № п/п, номер, ФИО, год, разряд, команда, забег, дорожка и три пустые графы секундомеров; книжный лист",
-              "spreadsheetml" in ctr and ".xlsx" in urllib.parse.unquote(cdr) and all(h in xr for h in ("№ п/п", "Забег №", "Дорожка", "Нагрудный номер",
-              "Фамилия, Имя", "Год рождения", "Разряд", "Команда / Город", "Секундомер 1", "Секундомер 2", "Секундомер 3"))
-              and "Аргунов" in xr and 'orientation="portrait"' in xr and "Print_Titles" in wr and "Попытка 1" not in xr, xr[:200])
-        check("5.2: Excel техники — порядок выполнения, шесть пустых попыток и «Лучший результат»; альбомный лист",
-              all(h in xt for h in ("Порядок выполнения", "Попытка 1", "Попытка 6", "Лучший результат", "Нагрудный номер"))
-              and 'orientation="landscape"' in xt and "Секундомер" not in xt and "Общий список" in xt, xt[:200])
+        check("5.2 → 8.0: Excel бега по образцу ВФЛА — дорожка, ФИО, год, команда, номер участника, три графы секундомеров, результат, место, очки; книжный лист А4",
+              "spreadsheetml" in ctr and ".xlsx" in urllib.parse.unquote(cdr) and all(h in xr for h in ("Дорожка", "Номер участника",
+              "Фамилия, Имя", "Год рожд.", "Команда / МО", "Результат забега", "Сек. 1", "Сек. 2", "Сек. 3", "Результат", "Место", "Очки"))
+              and "Аргунов" in xr and 'orientation="portrait"' in xr and 'paperSize="9"' in xr and "Попытка 1" not in xr, xr[:200])
+        check("5.2 → 8.0: Excel техники — шесть попыток, «Лучший результат», номер участника; альбомный лист А4",
+              all(h in xt for h in ("№ п/п", "Попытка 1", "Попытка 6", "Лучший результат", "Номер участника"))
+              and 'orientation="landscape"' in xt and "Сек. 1" not in xt, xt[:200])
         # 5.2: экстренная отмена старта — время старта обнуляется, сетку снова можно пересобрать
         w60 = run[0]["name"]
         http("POST", f"/api/events/{e9}/start", json.dumps({"wave": w60}).encode(), J)

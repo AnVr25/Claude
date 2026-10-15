@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `7.7.7`
-- **Дата сборки (`BUILD_DATE`):** `2026-10-14`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `0602e4b`
-- **Сформирован:** 2026-10-14 14:52 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 347 из 347 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 6215 строк, `hub/ui.html` 2871, `hub/reg.html` 962, `hub/board.html` 200
+- **Версия сервера (`VERSION`):** `8.0.0`
+- **Дата сборки (`BUILD_DATE`):** `2026-10-15`
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `1e1f803`
+- **Сформирован:** 2026-10-15 06:38 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 353 из 353 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 6705 строк, `hub/ui.html` 2912, `hub/reg.html` 970, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -440,7 +440,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 `generate_heats` удалён в 6.0.0 — единственный генератор `generate_scoped` (одна дисциплина) вызывается из `generate_all`.
 
-### `Hub.generate_scoped` — `hub/hub.py` строки 4150–4251 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
+### `Hub.generate_scoped` — `hub/hub.py` строки 4377–4478 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -547,7 +547,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-### `Hub.reset_heats` — `hub/hub.py` строки 4272–4312 (принудительный сброс, обнуляет время старта)
+### `Hub.reset_heats` — `hub/hub.py` строки 4499–4539 (принудительный сброс, обнуляет время старта)
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -595,7 +595,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.2 Пакетная генерация «heats-all»
 
-### `Hub.generate_all` — `hub/hub.py` строки 4253–4270 (все дисциплины с одобренными заявками одним проходом)
+### `Hub.generate_all` — `hub/hub.py` строки 4480–4497 (все дисциплины с одобренными заявками одним проходом)
 
 ```python
     def generate_all(self, ev: dict, lanes: int) -> dict:
@@ -618,7 +618,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return {"done": done, "skipped": skipped, "disciplines": len(dists), "entries": sum(x["entries"] for x in done)}
 ```
 
-Ветка `POST /api/events/<id>/heats-all` (`Hub._api…`, `hub/hub.py` строки 2904–2918):
+Ветка `POST /api/events/<id>/heats-all` (`Hub._api…`, `hub/hub.py` строки 3129–3143):
 
 ```python
         if action == "heats-all":
@@ -640,7 +640,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.3 Нагрудные номера: сохранение, очистка, единая картина
 
-### `Hub._bib_state` — `hub/hub.py` строки 3190–3208
+### `Hub._bib_state` — `hub/hub.py` строки 3415–3433
 
 ```python
     def _bib_state(self, eid: int) -> dict:
@@ -664,7 +664,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
                 "members": members, "person_bib": person_bib}
 ```
 
-### `Hub._own_bib` — `hub/hub.py` строки 3210–3212
+### `Hub._own_bib` — `hub/hub.py` строки 3435–3437
 
 ```python
     @staticmethod
@@ -672,7 +672,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return str(r.get("bib") or (e or {}).get("bib") or "").strip()
 ```
 
-### `Hub._reg_bib` — `hub/hub.py` строки 3214–3217
+### `Hub._reg_bib` — `hub/hub.py` строки 3439–3442
 
 ```python
     def _reg_bib(self, r: dict, st: dict) -> str:
@@ -681,7 +681,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return self._own_bib(r, st["ent_by_reg"].get(r["id"])) or st["person_bib"].get(st["key_of"].get(r["id"], ""), "")
 ```
 
-### `Hub._need_bibs` — `hub/hub.py` строки 3219–3231
+### `Hub._need_bibs` — `hub/hub.py` строки 3444–3456
 
 ```python
     def _need_bibs(self, regs: list, st: dict) -> None:
@@ -699,7 +699,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
             seen[b] = k
 ```
 
-### `Hub.save_bibs` — `hub/hub.py` строки 3313–3392
+### `Hub.save_bibs` — `hub/hub.py` строки 3538–3617
 
 ```python
     def save_bibs(self, ev: dict, items: list, who: str, dry: bool = False) -> tuple:
@@ -784,7 +784,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return 200, {"ok": True, "saved": len(plan), "spread": spread}
 ```
 
-### `Hub.clear_bibs` — `hub/hub.py` строки 3271–3311
+### `Hub.clear_bibs` — `hub/hub.py` строки 3496–3536
 
 ```python
     def clear_bibs(self, ev: dict, distance, who: str) -> dict:
@@ -832,7 +832,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.4 Публичный список участников
 
-### `Hub.participants_list` — `hub/hub.py` строки 1472–1519
+### `Hub.participants_list` — `hub/hub.py` строки 1695–1742
 
 ```python
     def participants_list(self, ev: dict) -> dict:
@@ -900,7 +900,7 @@ if method == "GET" and sub == "/participants.json":
 
 ### 4.5 Карты (Яндекс.Карты)
 
-### `Hub.venue_for` — `hub/hub.py` строки 1263–1290
+### `Hub.venue_for` — `hub/hub.py` строки 1486–1513
 
 ```python
     def venue_for(self, ev: dict) -> Optional[dict]:
@@ -961,7 +961,7 @@ def _name_key(name) -> str:
     return " ".join(str(name or "").replace("\u00a0", " ").lower().replace("ё", "е").split())
 ```
 
-### `Store._migrate_v74` — `hub/hub.py` строки 631–662 (запускается из `_migrate()` при каждом старте)
+### `Store._migrate_v74` — `hub/hub.py` строки 842–873 (запускается из `_migrate()` при каждом старте)
 
 ```python
     def _migrate_v74(self) -> None:
@@ -998,7 +998,7 @@ def _name_key(name) -> str:
             log.info("миграция 7.4: в %s строках участников восстановлены год рождения, команда и тренер", upd)
 ```
 
-### `Store._migrate_v7` — `hub/hub.py` строки 598–629 (7.0: удаление чипового хронометража, пересборка entries с собственным id)
+### `Store._migrate_v7` — `hub/hub.py` строки 809–840 (7.0: удаление чипового хронометража, пересборка entries с собственным id)
 
 ```python
     def _migrate_v7(self) -> None:
@@ -1037,7 +1037,7 @@ def _name_key(name) -> str:
 
 ### 4.7 Тренеры: регистрация и подтверждение e-mail, вход, сессии
 
-### `Hub.trainer_api` — `hub/hub.py` строки 5393–5512 (consent / register / verify / resend / login / logout)
+### `Hub.trainer_api` — `hub/hub.py` строки 5883–6002 (consent / register / verify / resend / login / logout)
 
 ```python
     def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
@@ -1162,7 +1162,7 @@ def _name_key(name) -> str:
         return 404, {"error": "нет такого адреса"}, None
 ```
 
-### `Hub.send_mail` — `hub/hub.py` строки 5258–5297
+### `Hub.send_mail` — `hub/hub.py` строки 5748–5787
 
 ```python
     def send_mail(self, to: str, subject: str, text: str) -> bool:
@@ -1207,7 +1207,7 @@ def _name_key(name) -> str:
         return True
 ```
 
-### `Hub.protocol_viewer` — `hub/hub.py` строки 5359–5364
+### `Hub.protocol_viewer` — `hub/hub.py` строки 5849–5854
 
 ```python
     def protocol_viewer(self, headers: dict) -> Optional[dict]:
@@ -1218,7 +1218,7 @@ def _name_key(name) -> str:
         return u if u["role"] == "trainer" or self._role(u["role"]) in ("admin", "judge") else None
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 5194–5204
+### `Hub.role_allows` — `hub/hub.py` строки 5684–5694
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -1282,7 +1282,7 @@ function layout(){
 }
 ```
 
-`participantsPage` — `hub/reg.html` строки 500–507
+`participantsPage` — `hub/reg.html` строки 502–509
 ```javascript
 function participantsPage(){
   const d=INFO;
@@ -1294,7 +1294,7 @@ function participantsPage(){
 }
 ```
 
-Весь JS модуля участников (`PL`, `PS`, `loadParticipants`, `plRefresh`, `plRows`, `drawPl`, обработчики) — `hub/reg.html` строки 595–649:
+Весь JS модуля участников (`PL`, `PS`, `loadParticipants`, `plRefresh`, `plRows`, `drawPl`, обработчики) — `hub/reg.html` строки 597–651:
 
 ```javascript
 // 7.2: открытый модуль «Заявленные участники» (по образцу списков MyRace): дисциплина → пол → возрастная группа → сквозной список
@@ -1561,7 +1561,7 @@ sync();load();requestAnimationFrame(frame);setInterval(tick,100);setInterval(loa
 
 ### 5.3 `hub/ui.html` — Мастер протоколов (`wzp`, шаги 1–5), целиком
 
-`hub/ui.html` строки 1762–2234. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
+`hub/ui.html` строки 1766–2273. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
 
 ```javascript
 const wzp = (() => {
@@ -1860,6 +1860,8 @@ const wzp = (() => {
         <label><input type="checkbox" id="wzpPubR" ${ev().pub_results ? "checked" : ""}> <b>Итоговый протокол — для тренеров</b><span class="small muted"> — только в личном кабинете тренера (нужен вход)</span></label>
         <span class="small muted">${ev().page_url ? `Страница соревнования: <a id="wzpPubLink" target="_blank" href="${esc(ev().page_url)}">${esc(ev().page_url)}</a>` : "Ссылка появится после первой публикации."}</span>
       </fieldset>
+      <div class="row xlsrow"><a class="btn xls" id="wzpXlsxFinal" href="/api/events/${ev().id}/results.xlsx?${bibQ()}">📊 Выгрузить итоговый протокол в Excel (.xlsx)</a>
+        <span class="small muted">Образец ВФЛА: шапка Министерства спорта, ФЛАСО и СШОР, границы, масса снаряда, место и очки считаются формулами.</span></div>
       <p class="small muted" style="margin:0">Закрытые протоколы для тренеров открываются в личном кабинете тренера; обработка персональных данных — по политике <a href="/privacy" target="_blank" rel="noopener">/privacy</a>.</p>
       <p class="small muted" style="margin:0 0 6px">✎ Шапку бланка и примечание судей можно поправить прямо здесь — кликните по тексту; при печати остаётся только введённый текст.</p>
       <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр итогового протокола"></iframe>
@@ -1891,11 +1893,44 @@ const wzp = (() => {
     body.innerHTML = `${stepHead(4, k)}
       <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
         «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
+            <div class="wzp-finder"><input type="text" id="judge-finder" placeholder="🔍 Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)..." autocomplete="off" aria-label="Быстрый поиск спортсмена по номеру или фамилии" value="${esc(W.find || "")}"><span class="small muted" id="judge-finder-cnt" role="status" aria-live="polite"></span></div>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
         <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю. Отметки можно набрать буквами: днс, днф, дк, нр.</span>
         ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>
       ${startedBox()}${nav(true, "К итоговому протоколу")}`;
+    wireFinder(body);
+  }
+  // 8.0: живой поиск на финише — по мере набора номера («92») или первых букв фамилии строки таблицы скрываются на лету
+  const finderNorm = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").trim();
+  function applyFinder(body){
+    const inp = body.querySelector("#judge-finder"); if (!inp) return;
+    const q = finderNorm(inp.value), tb = body.querySelector("#wzpRows"); if (!tb) return;
+    let shown = 0, total = 0, catRow = null, catHas = false;
+    const flush = () => { if (catRow) catRow.hidden = !!q && !catHas; };
+    [...tb.rows].forEach(tr => {
+      if (tr.classList.contains("wzp-cat")) { flush(); catRow = tr; catHas = false; return; }
+      if (!tr.dataset.bib) return;
+      total++;
+      const bib = finderNorm(tr.dataset.bib), nm = finderNorm((tr.querySelector("td b") || {}).textContent);
+      const hit = !q || (/^\d+$/.test(q) ? bib.startsWith(q) : nm.split(/\s+/).some(w => w.startsWith(q)) || nm.includes(q));
+      tr.hidden = !hit; if (hit) { shown++; catHas = true; }
+    });
+    flush();
+    const cnt = body.querySelector("#judge-finder-cnt");
+    if (cnt) cnt.textContent = q ? (shown ? `Найдено: ${shown} из ${total}` : "Никого не нашли — проверьте номер или фамилию") : "";
+  }
+  function wireFinder(body){
+    const inp = body.querySelector("#judge-finder"); if (!inp) return;
+    inp.addEventListener("input", () => { W.find = inp.value; applyFinder(body); });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { inp.value = ""; W.find = ""; applyFinder(body); }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const first = [...body.querySelectorAll("#wzpRows tr[data-bib]")].find(tr => !tr.hidden);
+      const f = first && first.querySelector("input"); if (f) { f.focus(); f.select(); }
+    });
+    applyFinder(body);
   }
   // экстренная отмена старта (фальстарт, старт по ошибке): время старта забега обнуляется, сетку снова можно пересобрать
   function startedBox(){
@@ -2029,7 +2064,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;
@@ -2063,7 +2098,7 @@ const wzp = (() => {
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 5194–5204
+### `Hub.role_allows` — `hub/hub.py` строки 5684–5694
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -2099,78 +2134,78 @@ const wzp = (() => {
 
 | Шаблон | Метод | `hub/hub.py` |
 |---|---|---|
-| `/api/` | GET | 5716 |
-| `/api/` | GET|POST | 5694 |
-| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 5676 |
-| `/api/calc` | POST | 2427 |
-| `/api/calendar` | GET|POST | 2434 |
-| `/api/clock` | GET|POST | 2373 |
-| `/api/consents` | GET | 5757 |
-| `/api/default-rules` | GET | 2429 |
-| `/api/disciplines` | GET | 2424 |
-| `/api/events` | GET|POST | 2439 |
-| `/api/events/` | GET|POST | 4385 |
-| `/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?` | GET|POST | 2457 |
-| `/api/events/(\d+)/bibs-csv` | GET|POST | 2338 |
-| `/api/events/(\d+)/files` | GET|POST | 2350 |
-| `/api/events/(\d+)/import` | GET|POST | 2312 |
-| `/api/events/(\d+)/regs-csv` | GET|POST | 2330 |
-| `/api/log` | GET|POST | 2382 |
-| `/api/login` | POST | 5665 |
-| `/api/logout` | POST | 5669 |
-| `/api/me` | GET|POST | 5545 |
-| `/api/me/password` | GET|POST | 5728 |
-| `/api/me/password` | POST | 5547 |
-| `/api/readers/scan` | POST | 5793 |
-| `/api/scoreboard/state` | GET|POST | 2393 |
-| `/api/status` | GET|POST | 5723 |
-| `/api/system` | GET|POST | 2375 |
-| `/api/system/audit` | GET | 2384 |
-| `/api/system/backup/db` | GET | 5741 |
-| `/api/system/backup/latest` | GET | 5732 |
-| `/api/system/retention` | POST | 5752 |
-| `/api/system/scoreboard/control` | GET|POST | 2391 |
-| `/api/system/update` | GET|POST | 2377 |
-| `/api/system/update` | POST | 2346 |
-| `/api/system/update/github` | POST | 5771 |
-| `/api/system/update/github/check` | GET | 5767 |
-| `/api/system/update/install` | POST | 2379 |
-| `/api/trainers` | GET | 5516 |
-| `/api/trainers` | GET|POST | 5762 |
-| `/api/trainers/` | GET|POST | 5762 |
-| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 5518 |
-| `/api/users` | GET | 5558 |
-| `/api/users` | GET|POST | 5728 |
-| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 5568 |
-| `/board` | GET|POST | 5810 |
-| `/login` | GET | 5662 |
-| `/privacy` | GET | 5658 |
-| `/protocol` | GET | 5707 |
-| `/protocol` | GET|POST | 5698 |
-| `/r` | GET | 5892 |
-| `/r` | GET|POST | 5688 |
-| `/r/` | GET | 5892 |
-| `/r/` | GET|POST | 5688 |
-| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 5929 |
-| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 5896 |
-| `/r/api/calendar` | GET | 5907 |
-| `/r/api/open` | GET | 5922 |
-| `/r/api/series` | GET | 5912 |
-| `/r/assets/` | GET | 5900 |
-| `/r/privacy` | GET | 5890 |
-| `/r/series` | GET | 5919 |
-| `/r/series/` | GET | 5919 |
-| `/r/trainer` | GET | 5892 |
-| `/r/trainer/` | GET | 5892 |
-| `/relay` | POST | 5980 |
-| `/results.json` | GET|POST | 5964 |
-| `/scoreboard` | GET|POST | 5810 |
-| `/sector` | GET|POST | 5810 |
-| `/simple` | GET|POST | 5841 |
+| `/api/` | GET | 6206 |
+| `/api/` | GET|POST | 6184 |
+| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 6166 |
+| `/api/calc` | POST | 2650 |
+| `/api/calendar` | GET|POST | 2657 |
+| `/api/clock` | GET|POST | 2596 |
+| `/api/consents` | GET | 6247 |
+| `/api/default-rules` | GET | 2652 |
+| `/api/disciplines` | GET | 2647 |
+| `/api/events` | GET|POST | 2662 |
+| `/api/events/` | GET|POST | 4612 |
+| `/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?` | GET|POST | 2680 |
+| `/api/events/(\d+)/bibs-csv` | GET|POST | 2561 |
+| `/api/events/(\d+)/files` | GET|POST | 2573 |
+| `/api/events/(\d+)/import` | GET|POST | 2535 |
+| `/api/events/(\d+)/regs-csv` | GET|POST | 2553 |
+| `/api/log` | GET|POST | 2605 |
+| `/api/login` | POST | 6155 |
+| `/api/logout` | POST | 6159 |
+| `/api/me` | GET|POST | 6035 |
+| `/api/me/password` | GET|POST | 6218 |
+| `/api/me/password` | POST | 6037 |
+| `/api/readers/scan` | POST | 6283 |
+| `/api/scoreboard/state` | GET|POST | 2616 |
+| `/api/status` | GET|POST | 6213 |
+| `/api/system` | GET|POST | 2598 |
+| `/api/system/audit` | GET | 2607 |
+| `/api/system/backup/db` | GET | 6231 |
+| `/api/system/backup/latest` | GET | 6222 |
+| `/api/system/retention` | POST | 6242 |
+| `/api/system/scoreboard/control` | GET|POST | 2614 |
+| `/api/system/update` | GET|POST | 2600 |
+| `/api/system/update` | POST | 2569 |
+| `/api/system/update/github` | POST | 6261 |
+| `/api/system/update/github/check` | GET | 6257 |
+| `/api/system/update/install` | POST | 2602 |
+| `/api/trainers` | GET | 6006 |
+| `/api/trainers` | GET|POST | 6252 |
+| `/api/trainers/` | GET|POST | 6252 |
+| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 6008 |
+| `/api/users` | GET | 6048 |
+| `/api/users` | GET|POST | 6218 |
+| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 6058 |
+| `/board` | GET|POST | 6300 |
+| `/login` | GET | 6152 |
+| `/privacy` | GET | 6148 |
+| `/protocol` | GET | 6197 |
+| `/protocol` | GET|POST | 6188 |
+| `/r` | GET | 6382 |
+| `/r` | GET|POST | 6178 |
+| `/r/` | GET | 6382 |
+| `/r/` | GET|POST | 6178 |
+| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 6419 |
+| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 6386 |
+| `/r/api/calendar` | GET | 6397 |
+| `/r/api/open` | GET | 6412 |
+| `/r/api/series` | GET | 6402 |
+| `/r/assets/` | GET | 6390 |
+| `/r/privacy` | GET | 6380 |
+| `/r/series` | GET | 6409 |
+| `/r/series/` | GET | 6409 |
+| `/r/trainer` | GET | 6382 |
+| `/r/trainer/` | GET | 6382 |
+| `/relay` | POST | 6470 |
+| `/results.json` | GET|POST | 6454 |
+| `/scoreboard` | GET|POST | 6300 |
+| `/sector` | GET|POST | 6300 |
+| `/simple` | GET|POST | 6331 |
 
 Внутренние ветки `_api` с разбором `action` (`/api/events/<id>/<action>`, допустимые символы `[a-z.-]+`):
 
-`archive`, `bibs`, `clear-bibs`, `clear-rejected`, `clearresults`, `copy`, `delete`, `entries`, `entry`, `files`, `finish`, `heats`, `heats-all`, `log`, `manual`, `pickup`, `publish`, `qr.png`, `regs`, `regs.csv`, `relay`, `reopen`, `reset`, `resetheats`, `results`, `results.csv`, `snapshot`, `start`, `startlist`, `startlist.xlsx`, `template.xlsx`, `ui`, `waves`
+`archive`, `bibs`, `clear-bibs`, `clear-rejected`, `clearresults`, `copy`, `delete`, `entries`, `entry`, `files`, `finish`, `heats`, `heats-all`, `log`, `manual`, `pickup`, `publish`, `qr.png`, `regs`, `regs.csv`, `relay`, `reopen`, `reset`, `resetheats`, `results`, `results.csv`, `results.xlsx`, `snapshot`, `start`, `startlist`, `startlist.xlsx`, `template.xlsx`, `ui`, `waves`
 
 ### 6.3 Сессии
 
