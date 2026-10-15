@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.2.2` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.3.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `5e0e53b`
-- **Дамп сформирован:** 2026-10-15 07:45 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 359 из 359 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7082 строк, `hub/ui.html` 2929, `hub/protocol.html` 688
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `61249c3`
+- **Дамп сформирован:** 2026-10-15 08:03 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 360 из 360 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 7082 строк, `hub/ui.html` 2944, `hub/protocol.html` 688
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -1884,7 +1884,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1724–1781
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1735–1792
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1948,7 +1948,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1783–2290
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1794–2305
 
 ```js
 const wzp = (() => {
@@ -2049,8 +2049,7 @@ const wzp = (() => {
   }
   function draw(){
     const k = kind(), t = STEP_T;
-    $("wzpAll").classList.toggle("hide", W.step !== 3);      // кнопка «ВСЕ протоколы» — рядом со списком дисциплин, на шаге 3
-    if (W.step !== 3) $("wzpAllOut").classList.add("hide");
+    if (W.step !== 3) W.allOut = "";                         // итог «Сформировать все» живёт только на шаге 3
     $("wzpKind").className = "wzp-kind " + k;
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
@@ -2103,13 +2102,13 @@ const wzp = (() => {
     const pend = W.regs.filter(r => r.distance === W.disc && r.status === "pending").length;
     body.innerHTML = `${stepHead(2, k)}
       <p class="small muted" style="margin:0">${esc(W.disc)} · возраст: ${W.ages.length ? W.ages.map(a => (DISC.ages.find(x => x.id === a) || {}).name).join(", ") : "любой"} · пол: ${esc(sexWord(W.sex))}.
-        Впишите нагрудный номер каждому участнику с клавиатуры (Enter — к следующему) и нажмите «Сохранить нагрудные номера». Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните снова: стартовый список, отметки и результаты переедут на новый номер.</p>
-      <p class="small" style="margin:0"><b>Номер спортсмена, заявленного на несколько видов, один на все виды:</b> впишите его один раз — он запишется во все дисциплины.</p>
+        Впишите номер каждому участнику (Enter — к следующему) и сохраните. <b>У заявленного на несколько видов номер один на все виды.</b>
+        <details class="wzp-help" style="display:inline"><summary style="display:inline">Подробнее</summary> Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните: стартовый список, отметки и результаты переедут на новый номер.</details></p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
       ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
-      <div class="row wzp-ctl bibctl"><button class="primary big" type="button" id="bibSave" disabled>💾 Сохранить нагрудные номера</button>
-        <button class="danger big redbtn" type="button" id="bibClear" disabled>❌ Очистить все номера дисциплины</button>
+      <div class="row wzp-ctl bibctl"><button class="primary" type="button" id="bibSave" disabled>💾 Сохранить номера</button>
+        <button class="quiet danger" type="button" id="bibClear" disabled>❌ Очистить номера</button>
         <span class="wzp-sync" id="bibSync" role="status" aria-live="polite"></span></div>
       ${nav(true, "К стартовому протоколу")}`;
     loadBibs().then(renderBibs).catch(err => { $("bibBox").innerHTML = `<p class="wzp-lock">Не удалось загрузить участников: ${esc(err.message)}</p>`; });
@@ -2178,19 +2177,24 @@ const wzp = (() => {
   function step3(body, k){
     const tech = k === "tech", n = regsIn().length, q = `kind=start&smode=${tech ? "list" : "heats"}&orient=${tech ? "landscape" : "portrait"}`;
     body.innerHTML = `${stepHead(3, k)}
-      ${tech ? '<div class="wzp-lock">🔒 Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат».</div>'
-        : `<p class="small muted" style="margin:0">Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3».</p>
-           <label class="small">Дорожек на стадионе <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}" style="width:80px"></label>`}
       <div id="bibWarn"></div>
-      <div class="row wzp-ctl"><button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "⚡ Сформировать общий список" : "⚡ Сформировать забеги"}</button>
-        <button class="danger" type="button" id="wzpReset" ${myHeats().length ? "" : "disabled"}>❌ Сбросить сетку / Удалить забеги</button>
-        <span class="small muted">${n} подтверждённых участников по фильтру шага 1</span></div>
-      ${myHeats().length ? `<div class="row xlsrow"><a class="btn xls" id="wzpXlsx" href="/api/events/${ev().id}/startlist.xlsx?${bibQ()}">📊 Выгрузить книгу стартовых протоколов в Excel (.xlsx)</a>
-        <span class="small muted">Книга как у ВФЛА: СПИСОК УЧАСТНИКОВ, ТИТУЛ, СУДЬИ, РЕГИОН, КОМАНДА, СВОД и листы дисциплин (старт и «ИТОГ»). Проведённые дисциплины подсвечены, остальные скрыты — их можно показать правой кнопкой по вкладке. ${tech ? "Техника — альбомный лист, 6 попыток." : "Бег — книжный лист, 3 секундомера."} Результаты, внесённые на стартовом листе, сами попадут в «ИТОГ».</span></div>` : ""}
-      ${myHeats().length ? `<p class="small muted" style="margin:0">Над бланком — вкладки: «Все участники», «Мальчики», «Девочки» и каждая категория. Нужную вкладку можно сразу положить в корзину печати.</p>
-        <p class="small muted" style="margin:0 0 6px">✎ Название, дату, место, начало и примечание судей (рекорды, погода, фактическое время старта) можно поправить прямо в бланке — кликните по тексту. На бумагу попадёт только введённый текст, пунктир и подсказки не печатаются.</p>
-        <iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>
-        <div class="row"><a class="btn" target="_blank" href="${protoUrl(q, false)}">Открыть для печати ↗</a></div>`
+      <div class="wzp-actions">
+        <button class="primary" type="button" id="wzpGen" ${n ? "" : "disabled"}>${tech ? "⚡ Сформировать общий список" : "⚡ Сформировать забеги"}</button>
+        <button type="button" id="wzpAll" title="Одним проходом сформировать сетки по всем дисциплинам, на которые есть одобренные заявки">⚡ Все дисциплины</button>
+        <button class="quiet danger" type="button" id="wzpReset" ${myHeats().length ? "" : "disabled"}>❌ Сбросить сетку</button>
+        ${tech ? "" : `<label class="small wzp-lanes">Дорожек <input type="number" id="wzpLanes" min="1" max="50" value="${W.lanes}"></label>`}
+        <span class="small muted">${n} подтверждённых по фильтру шага 1</span>
+        ${myHeats().length ? `<span class="grow"></span><a class="btn xls" id="wzpXlsx" title="Книга как у ВФЛА: список, титул, судьи, команды, листы дисциплин; проведённые подсвечены, остальные скрыты" href="/api/events/${ev().id}/startlist.xlsx?${bibQ()}">📊 Excel</a>
+          <a class="btn" target="_blank" href="${protoUrl(q, false)}">🖨 Печать ↗</a>` : ""}
+      </div>
+      ${W.allOut || ""}
+      <details class="wzp-help"><summary>Как это работает</summary>
+        <p>${tech ? "Техника: дорожек нет. Каждая категория — отдельный сквозной «Общий список» в порядке выполнения попыток; лист альбомный, 6 попыток и «Лучший результат»."
+          : "Бег: посев по заявленному результату — сильнейшие в последнем забеге, на центральных дорожках. Лист книжный, графы «Сек. 1 | Сек. 2 | Сек. 3»."}
+          Над бланком — вкладки «Все участники», «Мальчики», «Девочки» и категории; нужную можно сразу положить в корзину печати.
+          ✎ Название, дату, место, начало и примечание судей можно поправить прямо в бланке — кликните по тексту; на бумагу попадёт только введённый текст.
+          Excel — вся книга протоколов: проведённые дисциплины подсвечены, остальные скрыты.</p></details>
+      ${myHeats().length ? `<iframe class="wzp-frame" src="${protoUrl(q, true)}" title="Предпросмотр стартового протокола"></iframe>`
         : '<div class="card empty">Сетки по этой дисциплине пока нет — нажмите «⚡ Сформировать…».</div>'}
       ${nav(true, "К вводу результатов")}`;
     // без ручных номеров сетку не построить: показываем, сколько не хватает, и ведём на шаг 2
@@ -2218,11 +2222,11 @@ const wzp = (() => {
     try{
       W.lanes = +($("wzpLanes") || {}).value || W.lanes;
       const r = await api(`/api/events/${e0.id}/heats-all`, {lanes: W.lanes});
-      const out = $("wzpAllOut");
-      out.innerHTML = `<b>Готово: сформировано дисциплин ${r.done.length} из ${r.disciplines}, участников ${r.entries}.</b>`
+      W.allOut = `<div class="wzp-allout" role="status" aria-live="polite">`
+        + `<b>Готово: сформировано дисциплин ${r.done.length} из ${r.disciplines}, участников ${r.entries}.</b>`
         + (r.done.length ? `<ul>${r.done.map(x => `<li>${esc(x.distance)} — ${x.mode === "list" ? "общий список (6 попыток)" : "забеги: " + x.heats}, участников ${x.entries}</li>`).join("")}</ul>` : "")
         + (r.skipped.length ? `<div class="wzp-lock">Пропущено:<ul>${r.skipped.map(x => `<li><b>${esc(x.distance)}</b>: ${esc(x.reason)}</li>`).join("")}</ul>Впишите недостающие номера на шаге 2 нужной дисциплины и нажмите кнопку ещё раз.</div>` : "");
-      out.classList.remove("hide"); toast(`Сформировано: дисциплин ${r.done.length}, участников ${r.entries}`);
+      W.allOut += "</div>"; toast(`Сформировано: дисциплин ${r.done.length}, участников ${r.entries}`);
       loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render();
     }catch(err){ toast("Ошибка: " + err.message); alert("Протоколы не сформированы:\n" + err.message); }
     finally{ btn.disabled = false; btn.textContent = old; }
@@ -2278,13 +2282,13 @@ const wzp = (() => {
     let lastCat = null;
     const rowsHtml = sorted.map(r => { const c = r.category || "без категории", hd = c !== lastCat ? `<tr class="wzp-cat"><td colspan="${head.length}">${esc(c)}</td></tr>` : ""; lastCat = c; return hd + row(r); }).join("");
     body.innerHTML = `${stepHead(4, k)}
-      <p class="small muted" style="margin:0">${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
-        «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p>
+      <details class="wzp-help"><summary>Как вводить</summary><p>${tech ? "Запишите шесть попыток: расстояние в метрах (7.85 или 7,85), X — заступ, «-» — пропуск. Сервер сам найдёт лучшую попытку, проверит её по правилам и выставит итог." : pts ? "Введите сумму очков — целое число." : "Впишите время с ручных секундомеров (12.84 или 1:05.3) — одно, два или три, сколько было судей. Одно время — это и есть официальный результат; из двух берётся худшее, из трёх — среднее по величине; округление вверх до 0,1 с. На табло и в итоговом протоколе показывается один официальный результат — ячейки секундомеров туда не попадают."}
+        «Вып. разряд»: «Авто» — разряд по нормам ЕВСК (обновляется после сохранения); выберите разряд или «Не выполнен», чтобы задать его вручную — ручное значение главнее расчёта.</p></details>
             <div class="wzp-finder"><input type="text" id="judge-finder" placeholder="🔍 Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)..." autocomplete="off" aria-label="Быстрый поиск спортсмена по номеру или фамилии" value="${esc(W.find || "")}"><span class="small muted" id="judge-finder-cnt" role="status" aria-live="polite"></span></div>
             <div class="tbl"><table class="wzp-grid"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody id="wzpRows">${rowsHtml || `<tr><td colspan="${head.length}" class="empty">Нет участников: сформируйте сетку на шаге 3.</td></tr>`}</tbody></table></div>
       <div class="row wzp-ctl"><button class="primary" type="button" id="wzpSave">Сохранить результаты</button>
-        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама, как только вы переходите к следующему полю. Отметки можно набрать буквами: днс, днф, дк, нр.</span>
-        ${!sorted.length ? "" : '<button class="danger" type="button" id="wzpClear">❌ Удалить все результаты / Очистить протокол</button>'}</div>
+        <span class="wzp-sync" id="wzpSync" role="status" aria-live="polite">Каждая строка сохраняется сама при переходе к следующему полю. Отметки: днс, днф, дк, нр.</span>
+        ${!sorted.length ? "" : '<button class="quiet danger" type="button" id="wzpClear">❌ Очистить протокол</button>'}</div>
       ${startedBox()}${nav(true, "К итоговому протоколу")}`;
     wireFinder(body);
   }
@@ -2527,7 +2531,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1531–1531
+#### `rankOpts` — `hub/ui.html` строки 1542–1542
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2637,7 +2641,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 359 из 359 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 360 из 360 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2690,6 +2694,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+61249c3 2026-10-15 fix: командная заявка — команда и тренер только из Excel, убраны дублирующие поля формы v8.2.2
 5e0e53b 2026-10-15 fix: возвращён прежний шаблон командной заявки, файл перепроверяется при правке команды и тренера v8.2.1
 dd67f34 2026-10-15 feat: Excel-книга протоколов в формате эталона ВФЛА v8.2.0
 499236d 2026-10-15 major: запущен олимпийский монолит v8.1.0, интеллектуальный CSV-валидатор ошибок Excel, живой поиск результатов и шаблоны ВФЛА
@@ -2703,6 +2708,5 @@ baf6679 2026-10-14 test: исправлена проверка офлайн-ав
 06190b1 2026-10-14 ui: кнопки импорта/экспорта CSV перенесены наверх страницы для удобства секретаря v7.7.1
 f706502 2026-10-14 major: расширена рабочая зона регистрации, запущен глобальный CSV-корректор и интерактивная правка шапок протоколов v7.7.0
 17778e5 2026-10-14 major: расширена рабочая зона Регистрации, ликвидированы бегунки таблиц и запущен глобальный CSV-корректор v7.6.1
-f097747 2026-10-14 major: запущен глобальный CSV-корректор данных, очистка отклонённых заявок и дашборд Шага 1 Мастера v7.6.0
 ```
 
