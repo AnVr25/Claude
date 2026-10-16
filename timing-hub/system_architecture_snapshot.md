@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.3.1`
+- **Версия сервера (`VERSION`):** `8.4.0`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `28f50ba`
-- **Сформирован:** 2026-10-15 08:46 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 361 из 361 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 7082 строк, `hub/ui.html` 2915, `hub/reg.html` 962, `hub/board.html` 200
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `783f9d8`
+- **Сформирован:** 2026-10-16 23:48 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 363 из 363 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 7151 строк, `hub/ui.html` 2918, `hub/reg.html` 962, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -440,7 +440,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 `generate_heats` удалён в 6.0.0 — единственный генератор `generate_scoped` (одна дисциплина) вызывается из `generate_all`.
 
-### `Hub.generate_scoped` — `hub/hub.py` строки 4477–4578 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
+### `Hub.generate_scoped` — `hub/hub.py` строки 4544–4645 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -547,7 +547,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-### `Hub.reset_heats` — `hub/hub.py` строки 4599–4639 (принудительный сброс, обнуляет время старта)
+### `Hub.reset_heats` — `hub/hub.py` строки 4666–4706 (принудительный сброс, обнуляет время старта)
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -595,7 +595,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.2 Пакетная генерация «heats-all»
 
-### `Hub.generate_all` — `hub/hub.py` строки 4580–4597 (все дисциплины с одобренными заявками одним проходом)
+### `Hub.generate_all` — `hub/hub.py` строки 4647–4664 (все дисциплины с одобренными заявками одним проходом)
 
 ```python
     def generate_all(self, ev: dict, lanes: int) -> dict:
@@ -618,7 +618,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return {"done": done, "skipped": skipped, "disciplines": len(dists), "entries": sum(x["entries"] for x in done)}
 ```
 
-Ветка `POST /api/events/<id>/heats-all` (`Hub._api…`, `hub/hub.py` строки 3133–3147):
+Ветка `POST /api/events/<id>/heats-all` (`Hub._api…`, `hub/hub.py` строки 3200–3214):
 
 ```python
         if action == "heats-all":
@@ -640,7 +640,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.3 Нагрудные номера: сохранение, очистка, единая картина
 
-### `Hub._bib_state` — `hub/hub.py` строки 3419–3437
+### `Hub._bib_state` — `hub/hub.py` строки 3486–3504
 
 ```python
     def _bib_state(self, eid: int) -> dict:
@@ -664,7 +664,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
                 "members": members, "person_bib": person_bib}
 ```
 
-### `Hub._own_bib` — `hub/hub.py` строки 3439–3441
+### `Hub._own_bib` — `hub/hub.py` строки 3506–3508
 
 ```python
     @staticmethod
@@ -672,7 +672,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return str(r.get("bib") or (e or {}).get("bib") or "").strip()
 ```
 
-### `Hub._reg_bib` — `hub/hub.py` строки 3443–3446
+### `Hub._reg_bib` — `hub/hub.py` строки 3510–3513
 
 ```python
     def _reg_bib(self, r: dict, st: dict) -> str:
@@ -681,7 +681,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return self._own_bib(r, st["ent_by_reg"].get(r["id"])) or st["person_bib"].get(st["key_of"].get(r["id"], ""), "")
 ```
 
-### `Hub._need_bibs` — `hub/hub.py` строки 3448–3460
+### `Hub._need_bibs` — `hub/hub.py` строки 3515–3527
 
 ```python
     def _need_bibs(self, regs: list, st: dict) -> None:
@@ -699,7 +699,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
             seen[b] = k
 ```
 
-### `Hub.save_bibs` — `hub/hub.py` строки 3542–3621
+### `Hub.save_bibs` — `hub/hub.py` строки 3609–3688
 
 ```python
     def save_bibs(self, ev: dict, items: list, who: str, dry: bool = False) -> tuple:
@@ -784,7 +784,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return 200, {"ok": True, "saved": len(plan), "spread": spread}
 ```
 
-### `Hub.clear_bibs` — `hub/hub.py` строки 3500–3540
+### `Hub.clear_bibs` — `hub/hub.py` строки 3567–3607
 
 ```python
     def clear_bibs(self, ev: dict, distance, who: str) -> dict:
@@ -832,7 +832,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.4 Публичный список участников
 
-### `Hub.participants_list` — `hub/hub.py` строки 1699–1746
+### `Hub.participants_list` — `hub/hub.py` строки 1764–1811
 
 ```python
     def participants_list(self, ev: dict) -> dict:
@@ -1037,7 +1037,7 @@ def _name_key(name) -> str:
 
 ### 4.7 Тренеры: регистрация и подтверждение e-mail, вход, сессии
 
-### `Hub.trainer_api` — `hub/hub.py` строки 6260–6379 (consent / register / verify / resend / login / logout)
+### `Hub.trainer_api` — `hub/hub.py` строки 6329–6448 (consent / register / verify / resend / login / logout)
 
 ```python
     def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
@@ -1162,7 +1162,7 @@ def _name_key(name) -> str:
         return 404, {"error": "нет такого адреса"}, None
 ```
 
-### `Hub.send_mail` — `hub/hub.py` строки 6125–6164
+### `Hub.send_mail` — `hub/hub.py` строки 6194–6233
 
 ```python
     def send_mail(self, to: str, subject: str, text: str) -> bool:
@@ -1207,7 +1207,7 @@ def _name_key(name) -> str:
         return True
 ```
 
-### `Hub.protocol_viewer` — `hub/hub.py` строки 6226–6231
+### `Hub.protocol_viewer` — `hub/hub.py` строки 6295–6300
 
 ```python
     def protocol_viewer(self, headers: dict) -> Optional[dict]:
@@ -1218,7 +1218,7 @@ def _name_key(name) -> str:
         return u if u["role"] == "trainer" or self._role(u["role"]) in ("admin", "judge") else None
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 6061–6071
+### `Hub.role_allows` — `hub/hub.py` строки 6130–6140
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -1561,7 +1561,7 @@ sync();load();requestAnimationFrame(frame);setInterval(tick,100);setInterval(loa
 
 ### 5.3 `hub/ui.html` — Мастер протоколов (`wzp`, шаги 1–5), целиком
 
-`hub/ui.html` строки 1765–2276. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
+`hub/ui.html` строки 1768–2279. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
 
 ```javascript
 const wzp = (() => {
@@ -2102,7 +2102,7 @@ const wzp = (() => {
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 6061–6071
+### `Hub.role_allows` — `hub/hub.py` строки 6130–6140
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -2138,74 +2138,74 @@ const wzp = (() => {
 
 | Шаблон | Метод | `hub/hub.py` |
 |---|---|---|
-| `/api/` | GET | 6583 |
-| `/api/` | GET|POST | 6561 |
-| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 6543 |
-| `/api/calc` | POST | 2654 |
-| `/api/calendar` | GET|POST | 2661 |
-| `/api/clock` | GET|POST | 2600 |
-| `/api/consents` | GET | 6624 |
-| `/api/default-rules` | GET | 2656 |
-| `/api/disciplines` | GET | 2651 |
-| `/api/events` | GET|POST | 2666 |
-| `/api/events/` | GET|POST | 4712 |
-| `/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?` | GET|POST | 2684 |
-| `/api/events/(\d+)/bibs-csv` | GET|POST | 2565 |
-| `/api/events/(\d+)/files` | GET|POST | 2577 |
-| `/api/events/(\d+)/import` | GET|POST | 2539 |
-| `/api/events/(\d+)/regs-csv` | GET|POST | 2557 |
-| `/api/log` | GET|POST | 2609 |
-| `/api/login` | POST | 6532 |
-| `/api/logout` | POST | 6536 |
-| `/api/me` | GET|POST | 6412 |
-| `/api/me/password` | GET|POST | 6595 |
-| `/api/me/password` | POST | 6414 |
-| `/api/readers/scan` | POST | 6660 |
-| `/api/scoreboard/state` | GET|POST | 2620 |
-| `/api/status` | GET|POST | 6590 |
-| `/api/system` | GET|POST | 2602 |
-| `/api/system/audit` | GET | 2611 |
-| `/api/system/backup/db` | GET | 6608 |
-| `/api/system/backup/latest` | GET | 6599 |
-| `/api/system/retention` | POST | 6619 |
-| `/api/system/scoreboard/control` | GET|POST | 2618 |
-| `/api/system/update` | GET|POST | 2604 |
-| `/api/system/update` | POST | 2573 |
-| `/api/system/update/github` | POST | 6638 |
-| `/api/system/update/github/check` | GET | 6634 |
-| `/api/system/update/install` | POST | 2606 |
-| `/api/trainers` | GET | 6383 |
-| `/api/trainers` | GET|POST | 6629 |
-| `/api/trainers/` | GET|POST | 6629 |
-| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 6385 |
-| `/api/users` | GET | 6425 |
-| `/api/users` | GET|POST | 6595 |
-| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 6435 |
-| `/board` | GET|POST | 6677 |
-| `/login` | GET | 6529 |
-| `/privacy` | GET | 6525 |
-| `/protocol` | GET | 6574 |
-| `/protocol` | GET|POST | 6565 |
-| `/r` | GET | 6759 |
-| `/r` | GET|POST | 6555 |
-| `/r/` | GET | 6759 |
-| `/r/` | GET|POST | 6555 |
-| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 6796 |
-| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 6763 |
-| `/r/api/calendar` | GET | 6774 |
-| `/r/api/open` | GET | 6789 |
-| `/r/api/series` | GET | 6779 |
-| `/r/assets/` | GET | 6767 |
-| `/r/privacy` | GET | 6757 |
-| `/r/series` | GET | 6786 |
-| `/r/series/` | GET | 6786 |
-| `/r/trainer` | GET | 6759 |
-| `/r/trainer/` | GET | 6759 |
-| `/relay` | POST | 6847 |
-| `/results.json` | GET|POST | 6831 |
-| `/scoreboard` | GET|POST | 6677 |
-| `/sector` | GET|POST | 6677 |
-| `/simple` | GET|POST | 6708 |
+| `/api/` | GET | 6652 |
+| `/api/` | GET|POST | 6630 |
+| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 6612 |
+| `/api/calc` | POST | 2721 |
+| `/api/calendar` | GET|POST | 2728 |
+| `/api/clock` | GET|POST | 2667 |
+| `/api/consents` | GET | 6693 |
+| `/api/default-rules` | GET | 2723 |
+| `/api/disciplines` | GET | 2718 |
+| `/api/events` | GET|POST | 2733 |
+| `/api/events/` | GET|POST | 4780 |
+| `/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?` | GET|POST | 2751 |
+| `/api/events/(\d+)/bibs-csv` | GET|POST | 2632 |
+| `/api/events/(\d+)/files` | GET|POST | 2644 |
+| `/api/events/(\d+)/import` | GET|POST | 2606 |
+| `/api/events/(\d+)/regs-csv` | GET|POST | 2624 |
+| `/api/log` | GET|POST | 2676 |
+| `/api/login` | POST | 6601 |
+| `/api/logout` | POST | 6605 |
+| `/api/me` | GET|POST | 6481 |
+| `/api/me/password` | GET|POST | 6664 |
+| `/api/me/password` | POST | 6483 |
+| `/api/readers/scan` | POST | 6729 |
+| `/api/scoreboard/state` | GET|POST | 2687 |
+| `/api/status` | GET|POST | 6659 |
+| `/api/system` | GET|POST | 2669 |
+| `/api/system/audit` | GET | 2678 |
+| `/api/system/backup/db` | GET | 6677 |
+| `/api/system/backup/latest` | GET | 6668 |
+| `/api/system/retention` | POST | 6688 |
+| `/api/system/scoreboard/control` | GET|POST | 2685 |
+| `/api/system/update` | GET|POST | 2671 |
+| `/api/system/update` | POST | 2640 |
+| `/api/system/update/github` | POST | 6707 |
+| `/api/system/update/github/check` | GET | 6703 |
+| `/api/system/update/install` | POST | 2673 |
+| `/api/trainers` | GET | 6452 |
+| `/api/trainers` | GET|POST | 6698 |
+| `/api/trainers/` | GET|POST | 6698 |
+| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 6454 |
+| `/api/users` | GET | 6494 |
+| `/api/users` | GET|POST | 6664 |
+| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 6504 |
+| `/board` | GET|POST | 6746 |
+| `/login` | GET | 6598 |
+| `/privacy` | GET | 6594 |
+| `/protocol` | GET | 6643 |
+| `/protocol` | GET|POST | 6634 |
+| `/r` | GET | 6828 |
+| `/r` | GET|POST | 6624 |
+| `/r/` | GET | 6828 |
+| `/r/` | GET|POST | 6624 |
+| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 6865 |
+| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 6832 |
+| `/r/api/calendar` | GET | 6843 |
+| `/r/api/open` | GET | 6858 |
+| `/r/api/series` | GET | 6848 |
+| `/r/assets/` | GET | 6836 |
+| `/r/privacy` | GET | 6826 |
+| `/r/series` | GET | 6855 |
+| `/r/series/` | GET | 6855 |
+| `/r/trainer` | GET | 6828 |
+| `/r/trainer/` | GET | 6828 |
+| `/relay` | POST | 6916 |
+| `/results.json` | GET|POST | 6900 |
+| `/scoreboard` | GET|POST | 6746 |
+| `/sector` | GET|POST | 6746 |
+| `/simple` | GET|POST | 6777 |
 
 Внутренние ветки `_api` с разбором `action` (`/api/events/<id>/<action>`, допустимые символы `[a-z.-]+`):
 

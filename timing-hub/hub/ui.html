@@ -696,7 +696,8 @@ a.btn.xls:hover{background:#E9F5EE}
           <input id="sCoverUrl" placeholder="или ссылка на картинку https://…" style="margin-top:6px"></div>
         <div><label for="sSeries">Серия / кубок <span class="muted">(сумма очков за этапы)</span></label><input id="sSeries" list="seriesList" maxlength="80" placeholder="Кубок Сахалина по бегу 2026"><datalist id="seriesList"></datalist>
           <div class="small muted" id="sSeriesLink" style="margin-top:4px"></div></div>
-        <div><label for="sProgram">Программа — строки <span class="mono">18:30 | Выдача номеров</span></label><textarea id="sProgram" style="min-height:90px" placeholder="17:00 | Выдача стартовых пакетов&#10;18:45 | Разминка&#10;19:00 | Старт 5 км&#10;20:15 | Награждение"></textarea></div>
+        <div><label for="sProgram">Программа — по строке <span class="mono">10:00 | 60 м девочки до 14 лет</span></label><textarea id="sProgram" style="min-height:110px" placeholder="09:30 | Выдача номеров&#10;10:00 | 60 м девочки до 14 лет&#10;10:20 | 60 м мальчики до 14 лет&#10;11:00 | Толкание ядра"></textarea>
+          <div class="small muted" style="margin-top:4px">Время и название дисциплины отсюда сами попадают во все стартовые и итоговые протоколы и в Excel. Что-то изменилось — поправьте здесь и сохраните.</div></div>
         <div><label for="sContacts">Контакты организатора — по одной в строке</label><textarea id="sContacts" style="min-height:90px" placeholder="Секретарь: Петрова Анна, +7 924 000-00-00&#10;fla65@mail.ru&#10;https://t.me/fla65"></textarea></div>
       </div>
       <p class="small muted" style="margin:4px 0 0">Обложка — фото из «Документов» с галочкой «на сайте» или ссылка. Телефоны и почта на странице станут кнопками «позвонить» и «написать».</p>
@@ -757,7 +758,7 @@ a.btn.xls:hover{background:#E9F5EE}
     <div><h1>Регистрация</h1><p class="lead">Участники подают заявки по ссылке. Проверьте и подтвердите их — подтверждённые заявки сразу попадают в «Протоколы».</p></div>
   </div>
   <div class="regwide">
-      <div class="tabs"><span id="gTabs" style="display:contents"></span><input class="search" id="gSearch" placeholder="Фамилия, команда, тренер" aria-label="Поиск заявок"></div>
+      <div class="tabs"><span id="gTabs" style="display:contents"></span><input class="search" id="gSearch" placeholder="Фамилия, команда, тренер или № участника" aria-label="Поиск заявок по фамилии или нагрудному номеру"></div>
       <select id="gFilter" class="hide"><option value="">все</option><option value="pending">на рассмотрении</option><option value="approved">подтверждены</option><option value="rejected">отклонены</option></select>
       <div class="counts" id="gCounts"></div>
       <div class="rowacts regtools" style="margin:0 0 10px">
@@ -1613,7 +1614,9 @@ function renderRegs(){
   const cats = [...new Set(((ev.reg_rules||"").split("\n").map(l=>l.split(";")[0].trim()).filter(Boolean)).concat(r.regs.map(x=>x.category).filter(Boolean)))];
   $("gCats").innerHTML = cats.map(x => `<option>${esc(x)}</option>`).join("");
   const f = $("gFilter").value, q = $("gSearch").value.trim().toLowerCase();
-  const list = r.regs.filter(x => (!f || x.status===f) && (!q || (x.last_name+" "+x.first_name+" "+(x.team||"")+" "+(x.coach||"")).toLowerCase().includes(q)));
+  const isNum = /^\d+$/.test(q);     // 8.4: цифры — поиск по нагрудному номеру (в заявке или в сетке), буквы — по фамилии, имени, команде, тренеру
+  const list = r.regs.filter(x => (!f || x.status===f) && (!q || (isNum && [x.bib, x.entry_bib].some(b => String(b || "").startsWith(q)))
+    || (x.last_name+" "+x.first_name+" "+(x.team||"")+" "+(x.coach||"")+" "+(x.bib||"")+" "+(x.entry_bib||"")).toLowerCase().includes(q)));
   $("gBody").innerHTML = list.slice().reverse().map(x => `<tr data-id="${x.id}" class="${x.status==="rejected"?"rej":""}">
     <td class="mono small">${x.id}</td>
     <td><b>${esc(x.last_name)} ${esc(x.first_name)}</b> <span class="small muted">${esc(x.middle_name||"")}</span>

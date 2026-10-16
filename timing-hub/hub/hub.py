@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "8.3.1"
+VERSION = "8.4.0"
 BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -1575,6 +1575,71 @@ class Hub:
         return out[:30]
 
     @staticmethod
+    def _pnorm(t) -> str:
+        return re.sub(r"\s+", "", str(t or "").lower().replace("ё", "е").replace("×", "х").replace("x", "х").replace("\u00a0", ""))
+
+    _SEX_M = re.compile(r"мальчик|юнош|мужч|юниор(?!к)")
+    _SEX_F = re.compile(r"девоч|девуш|женщ|юниорк")
+
+    def program_time(self, ev: dict, dist: str, category: str = "") -> str:
+        """8.4: время начала дисциплины — СТРОГО из «Программы» карточки «Подготовка» (строки «10:00 | 60 м девочки»).
+        Строка подходит, если в ней названа дисциплина (60 м не путается с 60 м с/б и 160 м); при нескольких строках выбирается та,
+        где совпали пол и возрастная группа категории. Нет в программе — пусто. → «ЧЧ:ММ»"""
+        items = [i for i in self.parse_program(ev.get("program")) if i["time"] and i["title"]]
+        if not items or not xl_clean(dist):
+            return ""
+        names = {self._pnorm(dist)}
+        d0 = self.discipline(dist) or {}
+        names |= {self._pnorm(a) for a in (d0.get("aliases") or []) if re.search(r"[A-Za-zА-Яа-я]", str(a))}
+        names.discard("")
+        suffix = ("с/б", "сб", "с/п", "сп", "смеш")
+        own_suffix = any(x in self._pnorm(dist) for x in suffix)
+        cat = self._pnorm(category)
+        best, best_score = None, -1
+        for it in items:
+            t = self._pnorm(it["title"])
+            ok = False
+            for nm in names:
+                for m in re.finditer(re.escape(nm), t):
+                    a, b = m.span()
+                    if a > 0 and t[a - 1].isdigit():
+                        continue
+                    if not own_suffix and t[b:].startswith(suffix):
+                        continue
+                    if t[b:b + 1].isdigit():
+                        continue
+                    ok = True
+                    break
+                if ok:
+                    break
+            if not ok:
+                continue
+            score = 0
+            if cat:
+                if (self._SEX_M.search(cat) and self._SEX_M.search(t)) or (self._SEX_F.search(cat) and self._SEX_F.search(t)):
+                    score += 2
+                if (self._SEX_M.search(cat) and self._SEX_F.search(t)) or (self._SEX_F.search(cat) and self._SEX_M.search(t)):
+                    score -= 3
+                age = re.search(r"до\d+лет", cat)
+                if age and age.group() in t:
+                    score += 2
+            if score > best_score:
+                best, best_score = it, score
+        if not best:
+            return ""
+        m = re.match(r"(\d{1,2})[:.](\d{2})", best["time"])
+        return f"{int(m.group(1)):02d}:{m.group(2)}" if m else ""
+
+    def program_times(self, ev: dict, pairs) -> dict:
+        """{«дисциплина|категория»: время} для всех встречающихся пар; ключ «дисциплина|» — по дисциплине без категории."""
+        out: dict = {}
+        for d, c in {(xl_clean(d), xl_clean(c)) for d, c in pairs if xl_clean(d)} | {(xl_clean(d), "") for d, _ in pairs if xl_clean(d)}:
+            t = self.program_time(ev, d, c)
+            if t:
+                out[f"{d}|{c}"] = t
+        return out
+
+    @staticmethod
     def parse_contacts(text) -> list:
         """Контакты организатора: телефон → tel:, почта → mailto:, ссылка → как есть. → [{text, href}]"""
         out = []
@@ -1770,13 +1835,13 @@ class Hub:
         r = self.compute(ev)
         return {"event": self._public_event(ev), "started": r["started"],
                 "finished": self._public_rows(r["finished"]), "not_seen": self._public_rows(r["not_seen"]), "groups": r["groups"], "teams": r.get("teams") or [],
-                "final": (ev.get("status") == "finished")}
+                "ptimes": r.get("ptimes") or {}, "final": (ev.get("status") == "finished")}
 
     def public_startlist(self, ev: dict) -> dict:
         sl = self.startlist(ev)
         for h in sl["heats"]:
             h["entries"] = self._public_rows(h["entries"])
-        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._public_rows(sl["no_heat"])}
+        return {"event": self._public_event(ev), "heats": sl["heats"], "no_heat": self._public_rows(sl["no_heat"]), "ptimes": sl.get("ptimes") or {}}
 
     def import_calendar(self, year: int, who: str) -> dict:
         p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed", f"calendar-{int(year)}.json")
@@ -2466,6 +2531,8 @@ class Hub:
                             **({"status": status_of[r["id"]]} if r["id"] in status_of else {})}
                            for r in erows if (r["id"] not in first or r["id"] in status_of) and r["id"] not in entered]
 
+        res["ptimes"] = self.program_times(ev, [(r["distance"], r.get("category") or "") for r in res["finished"] + res["not_seen"]]
+                                           + [(w.get("distance") or "", w.get("category") or "") for w in self.store.waves(eid)])
         # ---- предупреждения
         A = res["alerts"]
         if not fin_dev and not entered:
@@ -4219,7 +4286,7 @@ class Hub:
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
-        # 8.3.1: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
+        # 8.4.0: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
                           "Обязательны поля со звёздочкой: в том числе разряд (если разряда нет — «Б/р»), команда и тренер — на сайте их отдельно вводить не нужно."],
                 [h for _, h, _ in self.TEAM_COLS]]
@@ -4314,7 +4381,7 @@ class Hub:
 
     def submit_team(self, ev: dict, data: dict, rows: list, status: str = "pending", actor: str = "форма") -> tuple:
         if actor == "форма":
-            data = {**data, "_strict": True}      # 8.3.1: команда и тренер — только из файла (колонки «Команда*», «Тренер*»), отдельных полей на сайте нет
+            data = {**data, "_strict": True}      # 8.4.0: команда и тренер — только из файла (колонки «Команда*», «Тренер*»), отдельных полей на сайте нет
             fe = {}
             if not data.get("consent"):
                 fe["consent"] = "нужно подтвердить наличие согласий"
@@ -4695,7 +4762,8 @@ class Hub:
                           "start_time": w.get("start_time"), "state": "finished" if w.get("finished_at") else
                           ("running" if w.get("start_time") else "planned"), "entries": lst})
         loose = [r for r in rows if not r["wave"]]
-        return {"event": self._event_view(ev), "heats": heats, "no_heat": loose}
+        pairs = [(h["distance"], h["category"]) for h in heats] + [(r["distance"], r.get("category") or "") for r in rows]
+        return {"event": self._event_view(ev), "heats": heats, "no_heat": loose, "ptimes": self.program_times(ev, pairs)}
 
     # ---- «Оборудование»: сервер, службы, VPN, кто подключён
     PAGES = {"/": "Админка", "/judge": "Судья", "/sector": "Судья на секторе", "/scoreboard": "Пульт табло", "/announcer": "Диктор", "/board": "Табло", "/protocol": "Протокол"}
@@ -5743,14 +5811,15 @@ class Hub:
             for e in es_all:
                 by_heat.setdefault(e.get("wave") or "", []).append(e)
             for heat, hes in by_heat.items():
-                st = ""
-                try:
-                    w = next((w for w in self.store.waves(ev["id"]) if w["name"] == heat), None)
-                    st = (w.get("start_time") or "")[11:16] if w else ""
-                except Exception:
-                    st = ""
-                st = st or xl_clean(ev.get("start_clock"))
                 cat = next((xl_clean(e.get("category")) for e in hes if xl_clean(e.get("category"))), "")
+                st = self.program_time(ev, name, cat)                       # 8.4: строго по программе из карточки «Подготовка»
+                if not st:
+                    try:
+                        w = next((w for w in self.store.waves(ev["id"]) if w["name"] == heat), None)
+                        st = (w.get("start_time") or "")[11:16] if w else ""
+                    except Exception:
+                        st = ""
+                    st = st or xl_clean(ev.get("start_clock"))
                 hs_ = heat if heat and not heat.startswith("Общий список") else ""
                 when = " · ".join(x for x in (hs_, f"Время начала: {st}" if st else "") if x)
                 lane_sorted = sorted(hes, key=lambda e: (e.get("lane") is None, e.get("lane") or 0, self._xl_bib(e.get("bib")) if isinstance(self._xl_bib(e.get("bib")), int) else 0))

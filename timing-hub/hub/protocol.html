@@ -350,9 +350,11 @@ const NOTE_PH="[ Кликните, чтобы добавить примечан�
 // поле шапки: contenteditable, сохранённая правка (если есть) вместо исходного текста
 const edf=(f,def,tag="span",cls="")=>{ const v=edGet(f); return `<${tag}${cls?` class="${cls}"`:""} contenteditable="true" spellcheck="false" data-ed="${f}" title="Кликните, чтобы исправить текст в бланке">${v==null?def:esc(v)}</${tag}>`; };
 // шапка бланка в одну полосу: Сахалин · ФЛАСО — заголовок, соревнование, дата и место — SakhStart
-function headHtml(ev,title,sub){
+// 8.4: время начала дисциплины — строго из «Программы» карточки «Подготовка» (считает сервер, ptimes); нет в программе — прежний порядок
+const PT=(d,c)=>{ const m=((R||SL)||{}).ptimes||{}; return m[(d||"")+"|"+(c||"")]||m[(d||"")+"|"]||""; };
+function headHtml(ev,title,sub,ptime){
   const starts=ev.waves.filter(w=>w.start_time).map(w=>w.start_time.slice(11,16));
-  const startTxt=ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
+  const startTxt=ptime||ev.start_clock||(starts.length?starts[0]:(ev.start_time?ev.start_time.slice(11,16):""));
   return `<header class="phead"><span class="logos"><img class="lg-sakh" src="${A}sakhalin-dark.png" alt="Сахалин"><span class="lg-sep"></span><img class="lg-flaso" src="${A}flaso-light.png" alt="ФЛАСО"></span>
     <div class="ph-c">${ev.organizer?`<div class="org" contenteditable="true" spellcheck="false" data-ed="org" title="Кликните, чтобы исправить текст в бланке">${edGet("org")==null?esc(ev.organizer):esc(edGet("org"))}</div>`:""}<h1>${title}</h1><div class="ev" contenteditable="true" spellcheck="false" data-ed="name" title="Кликните, чтобы исправить название соревнования">${edGet("name")==null?esc(ev.name):esc(edGet("name"))}</div>${sub?`<div class="ev sub">${sub}</div>`:""}
       <div class="meta"><span>Дата: <b contenteditable="true" spellcheck="false" data-ed="date" title="Кликните, чтобы исправить дату">${edGet("date")==null?(esc(dateRu(ev.date))||"—"):esc(edGet("date"))}</b></span><span>Место проведения: <b contenteditable="true" spellcheck="false" data-ed="place" title="Кликните, чтобы исправить место проведения">${edGet("place")==null?esc(ev.place||"—"):esc(edGet("place"))}</b></span><span>Начало: <b contenteditable="true" spellcheck="false" data-ed="start" title="Кликните, чтобы исправить время начала (например, фактическое)">${edGet("start")==null?esc(startTxt||"—"):esc(edGet("start"))}</b></span></div></div>
@@ -431,10 +433,11 @@ function startSheet(o){
     return `<table class="${grid?"att":"swt"}"><thead><tr>${head}</tr>${sub}</thead><tbody>
       ${entries.map((e,i)=>`<tr>${numbered?`<td class="c">${i+1}</td>`:""}${withLane?`<td class="c"><b>${e.lane??""}</b></td>`:""}<td class="c">${esc(e.bib)}</td><td>${esc(e.name||"")}${mem(e)}</td><td class="c">${esc(e.birth_year||"")}</td>${anyRank?`<td class="c">${esc(e.rank||"")}</td>`:""}<td>${esc(e.team||"")}</td>${coach&&anyCoach?`<td>${esc(e.coach||"")}</td>`:""}${anySeed?`<td class="r">${esc(e.seed||"")}</td>`:""}${cells}${numbered?"<td></td>":""}</tr>`).join("")}</tbody></table>`;
   };
-  let body="";
+  let body="", T0="";
+  const pst=(d,c)=>{ const t=PT(d,c); if(t&&!T0) T0=t; return t?` · начало ${esc(t)}`:""; };
   if(!list) parts.forEach(p=>{
     if(!gm(p)||!p.entries.length) return;
-    body+=`<h2>${esc(p.name)} <small>— ${esc(gtitle(p.distance,p.category))} · ${p.entries.length} уч.</small></h2>`+table(p.entries,p.rtype,p.slots,anyLane&&!p.tech,false);
+    body+=`<h2>${esc(p.name)} <small>— ${esc(gtitle(p.distance,p.category))} · ${p.entries.length} уч.${pst(p.distance,p.category)}</small></h2>`+table(p.entries,p.rtype,p.slots,anyLane&&!p.tech,false);
   });
   else{
     // «Общим списком»: все участники одной сквозной таблицей без забегов и дорожек
@@ -447,12 +450,12 @@ function startSheet(o){
     Object.values(groups).forEach(g=>{
       if(!g.entries.length) return;
       g.entries.sort((a,b)=>(parseInt(a.bib)||0)-(parseInt(b.bib)||0));
-      body+=`<h2>${esc(gtitle(g.dist,g.cat))} <small>— общий список${sf?" · "+(sf==="М"?"мальчики / юноши / мужчины":"девочки / девушки / женщины"):""} · ${g.entries.length} уч.</small></h2>`+table(g.entries,g.rtype,g.slots,false,true);
+      body+=`<h2>${esc(gtitle(g.dist,g.cat))} <small>— общий список${sf?" · "+(sf==="М"?"мальчики / юноши / мужчины":"девочки / девушки / женщины"):""} · ${g.entries.length} уч.${pst(g.dist,g.cat)}</small></h2>`+table(g.entries,g.rtype,g.slots,false,true);
     });
   }
   const empty=!body;
   if(empty) body=PUB?'<div class="empty">Стартовый протокол пока пуст.</div>':'<div class="empty">Сетки пока нет — сформируйте её в «Протоколы → Мастер», шаг 2.</div>';
-  const html=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ")+body+
+  const html=headHtml(ev,"СТАРТОВЫЙ ПРОТОКОЛ","",T0)+body+
     `<div class="tail"><div class="note">${list?"Участники записаны одним сквозным списком в порядке нагрудных номеров. ":"Забеги сформированы по заявленным результатам. "}${tech?"Графы «Попытка 1–6» и «Лучший результат» — для записи судьями от руки.":"Графы «Сек. 1–3» — для записи судьями показаний трёх ручных секундомеров."}</div>`+signs(ev)+
     `<div class="foot"><span>Сформировано: ${new Date().toLocaleString("ru-RU")}</span><span>${esc(ev.name)}</span></div></div>`;
   return {html,land,tech,empty};
@@ -581,7 +584,7 @@ function buildFinal(o={}){
   const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&(!DIST||x.distance===DIST);
   const techX=x=>isTech(x.rt||x.rtype,0,!!(x.attempts&&x.attempts.length));
   const anyDone=R.finished.some(x=>x.done_rank);
-  let anyTechShown=false;
+  let anyTechShown=false, T0="";
   const renum=list=>{ let prev=null,p=0; list.forEach((x,i)=>{ if(!prev||prev.result!==x.result) p=i+1; x._pl=p; prev=x; }); };
   const anyPts=R.finished.some(x=>x.points!=null);
   const fmtPts=v=>v==null?"":String(v).replace(".",",");
@@ -635,7 +638,8 @@ function buildFinal(o={}){
       const pl=x=>sf?x._pl:x.place_overall;
       const th=g.f.concat(g.d).some(techX);
       if(th) anyTechShown=true;
-      body+=`<h2>${esc(gtitle(d,c))} <small>— ${th?"техническая дисциплина, ":""}финишировали ${g.f.length}${g.d.length?`, без результата ${g.d.length}`:""}</small></h2>`
+      const pt_=PT(d,c); if(pt_&&!T0) T0=pt_;
+      body+=`<h2>${esc(gtitle(d,c))} <small>— ${th?"техническая дисциплина, ":""}финишировали ${g.f.length}${g.d.length?`, без результата ${g.d.length}`:""}${pt_?` · начало ${esc(pt_)}`:""}</small></h2>`
         +(th?`<table class="att tf">${techHead()}<tbody>${g.f.map(x=>techTr(x,pl(x),x.result)).join("")}${techOutRows(g.d)}</tbody></table>`
             :`<table>${head("Место",hasHeats)}<tbody>${g.f.map(x=>tr(x,pl(x),hasHeats,x.result,handNote(x))).join("")}${dnfRows(g.d,hasHeats)}</tbody></table>`);
     });
@@ -646,7 +650,8 @@ function buildFinal(o={}){
       const f=R.finished.filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)&&byTeam(x)).sort((a,b)=>a.place-b.place);
       const d=dnf?R.on_course.concat(R.not_seen).filter(x=>(x.wave||"")===w.name&&(!gf||gkey(x)===gf)&&byTeam(x)):[];
       if(!f.length&&!d.length) return;
-      const st=w.start_time?` · старт ${w.start_time.slice(11,19)}`:"";
+      const pt_=PT(w.distance,w.category); if(pt_&&!T0) T0=pt_;
+      const st=pt_?` · начало ${esc(pt_)}`:(w.start_time?` · старт ${w.start_time.slice(11,19)}`:"");
       const tf_=f.filter(techX), rf=f.filter(x=>!techX(x)), td_=d.filter(techX), rd_=d.filter(x=>!techX(x));
       if(sf){ renum(tf_); renum(rf); }
       const pl=x=>sf?x._pl:x.place;
@@ -671,7 +676,7 @@ function buildFinal(o={}){
   if(anyTechShown) notes.push("Лучший результат определён по шести попыткам: X — неудачная попытка, «–» — пропуск.");
   if(sf&&mode!=="teams") notes.push(sf==="М"?"Показаны только мальчики, юноши, мужчины. Места пересчитаны среди показанных.":"Показаны только девочки, девушки, женщины. Места пересчитаны среди показанных.");
   return {land:anyTechShown||!!o.landscape, html:`
-    ${headHtml(ev,mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ",tf&&mode!=="teams"?"Команда: "+esc(tf):"")}
+    ${headHtml(ev,mode==="teams"?"КОМАНДНЫЙ ЗАЧЁТ":"ПРОТОКОЛ РЕЗУЛЬТАТОВ",tf&&mode!=="teams"?"Команда: "+esc(tf):"",T0)}
     ${stampHtml()}${body}
     <div class="tail">${notes.length?`<div class="note">${notes.map(esc).join("<br>")}</div>`:""}
     <div class="sign">
