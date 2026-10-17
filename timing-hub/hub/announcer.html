@@ -36,6 +36,8 @@ button{font:inherit}
 .hero .bib{font:700 clamp(64px,10.5vw,190px)/.95 var(--head);color:var(--start);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
 .hero .who{min-width:0}
 .hero .nm{font:600 clamp(28px,4.2vw,76px)/1.12 var(--head);letter-spacing:.2px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hero .disc{font:700 clamp(18px,2.8vw,50px)/1.1 var(--head);color:var(--start);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.5vh}
+.hero .disc:empty{display:none}
 .hero .meta{color:var(--a-soft);font-size:clamp(15px,1.7vw,28px);margin-top:.6vh}
 .hero .time{font:600 clamp(36px,5.4vw,100px)/1 var(--head);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .hero.new{animation:pulse 2.5s ease-out}
@@ -87,6 +89,7 @@ html,body{overflow-x:hidden}
   .hero .time{grid-area:time;font-size:clamp(34px,10vw,56px)}
   .hero .who{grid-area:who}
   .hero .nm{font-size:clamp(26px,8vw,44px)}
+  .hero .disc{font-size:clamp(20px,6vw,30px)}
   .hero .meta{font-size:15px}
   .r{gap:3vw;font-size:clamp(18px,5vw,26px)}
 }
@@ -165,8 +168,8 @@ async function load(){
     $("next").innerHTML=nxt.map(x=>`<div class="r up"><span class="p"></span><span class="b">${esc(x.bib||"–")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc([x.team,grp?"":x.distance].filter(Boolean).join(" · "))}</span></span><span class="t">ждёт</span></div>`).join("");
     if(!fin.length){$("hero").innerHTML='<div class="empty" style="grid-column:1/-1">ждём первого результата…</div>';$("list").innerHTML="";return;}
     const h=fin[0], key=h.bib+"|"+tOf(h)+"|"+(h.result||"");
-    const meta=[h.team,h.wave,grp?"":h.distance].filter(Boolean).map(esc).join(" · ");
-    $("hero").innerHTML=`<div class="place">${h.place}</div><div class="bib">${esc(h.bib||"?")}</div><div class="who"><div class="nm">${esc(h.name||"")}</div>${meta?`<div class="meta">${meta}</div>`:""}</div><div class="time">${esc(h.result||h.time)}</div>`;
+    const meta=[h.team,h.wave].filter(Boolean).map(esc).join(" · ");
+    $("hero").innerHTML=`<div class="place">${h.place}</div><div class="bib">${esc(h.bib||"?")}</div><div class="who"><div class="disc">${esc([h.distance,h.category].filter(Boolean).join(" · "))}</div><div class="nm">${esc(h.name||"")}</div>${meta?`<div class="meta">${meta}</div>`:""}</div><div class="time">${esc(h.result||h.time)}</div>`;
     if(lastKey&&key!==lastKey){$("hero").classList.remove("new");void $("hero").offsetWidth;$("hero").classList.add("new");beep();}
     lastKey=key;
     $("list").innerHTML=fin.slice(1,9).map(x=>`<div class="r"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"?")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc(x.wave||"")}</span></span><span class="t">${esc(x.result||x.time)}</span></div>`).join("");

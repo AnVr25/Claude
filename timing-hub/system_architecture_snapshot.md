@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.6.1`
+- **Версия сервера (`VERSION`):** `8.6.2`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `18fa9d5`
-- **Сформирован:** 2026-10-17 02:36 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 370 из 370 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2939, `hub/reg.html` 962, `hub/board.html` 205
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `9e22d81`
+- **Сформирован:** 2026-10-17 02:43 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 371 из 371 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2939, `hub/reg.html` 962, `hub/board.html` 210
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -1388,6 +1388,10 @@ body{overflow:hidden;-webkit-font-smoothing:antialiased}
 
 /* Список последних финишировавших */
 main{flex:1;min-height:0;display:flex;flex-direction:column;padding:clamp(8px,1.6vh,26px) var(--bd-pad) 0}
+h2 b.dd{font:700 clamp(30px,4.6vw,110px)/1.05 var(--head);color:var(--bd-ink);letter-spacing:.01em;text-transform:uppercase}
+h2 .cc{font:700 clamp(26px,3.8vw,90px)/1.05 var(--head);color:var(--start);letter-spacing:.01em}
+h2 small{font:500 clamp(14px,1.5vw,30px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em;text-transform:uppercase}
+h2:has(.dd){display:flex;flex-wrap:wrap;align-items:baseline;gap:.1em .5em;letter-spacing:0;margin-bottom:.35em}
 h2{margin:0 0 .5em;font:500 clamp(15px,1.7vw,34px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em}
 .list{flex:1;min-height:0;overflow:hidden}
 .r,.hd{position:relative;display:grid;grid-template-columns:2.2em 2.7em minmax(0,1fr) minmax(0,.55fr) 4.9em;align-items:center;column-gap:.5em;
@@ -1511,7 +1515,7 @@ function attCells(x){
 }
 function renderAuto(r,hasW){
   SC.on=false; lastKey=""; document.body.dataset.tech="";
-  $("title").textContent="Последние результаты — новые сверху";
+  $("title").innerHTML="Последние результаты — новые сверху";
   $("hdPlace").textContent=hasW?"Место в забеге":"Место"; $("hdD").textContent="Дисциплина";
   // свежие сверху: финиш по судье или время ввода результата с сектора (метания, прыжки, секундомеры)
   const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,AUTO_N);
@@ -1524,9 +1528,10 @@ function renderAuto(r,hasW){
 function renderGroup(r,key,suffix){
   const [d,c]=key.split("|"), tech=r.finished.some(x=>x.distance===d&&(x.rt==="distance"||x.rt==="height"||(x.attempts||[]).length));
   const list=r.finished.filter(x=>(x.distance||"")===d&&(x.category||"")===c).sort((a,b)=>(a.place_overall||999)-(b.place_overall||999));
+  const wait0=(r.not_seen||[]).filter(x=>!x.status&&(x.distance||"")===d&&(x.category||"")===c).length;
   if(key!==lastKey){SC.t0=performance.now();lastKey=key;}
   SC.on=true; document.body.dataset.tech=tech?"1":"";
-  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>AUTO_N?` · ${list.length} участников`:""}${suffix||""}`;
+  $("title").innerHTML=`<b class="dd">${esc(d)}</b>${c?`<span class="cc">${esc(c)}</span>`:""}<small>таблица лидеров · ${list.length+wait0} уч.${esc(suffix||"")}</small>`;
   $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
   $("hd").classList.toggle("hide",!list.length);
   const wait=(r.not_seen||[]).filter(x=>!x.status&&(x.distance||"")===d&&(x.category||"")===c);
