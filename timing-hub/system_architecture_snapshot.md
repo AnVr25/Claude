@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.5.0`
+- **Версия сервера (`VERSION`):** `8.5.1`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `4bceee4`
-- **Сформирован:** 2026-10-17 00:04 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 364 из 364 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 7151 строк, `hub/ui.html` 2929, `hub/reg.html` 962, `hub/board.html` 200
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `287fa5d`
+- **Сформирован:** 2026-10-17 00:11 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 366 из 366 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2935, `hub/reg.html` 962, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -440,7 +440,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 `generate_heats` удалён в 6.0.0 — единственный генератор `generate_scoped` (одна дисциплина) вызывается из `generate_all`.
 
-### `Hub.generate_scoped` — `hub/hub.py` строки 4544–4645 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
+### `Hub.generate_scoped` — `hub/hub.py` строки 4551–4652 (сетка одной дисциплины: бег — забеги и дорожки, техника — общий список)
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -547,7 +547,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
         return {"heats": heats, "entries": len(rows), "kind": kind, "mode": "list" if tech else "heats"}
 ```
 
-### `Hub.reset_heats` — `hub/hub.py` строки 4666–4706 (принудительный сброс, обнуляет время старта)
+### `Hub.reset_heats` — `hub/hub.py` строки 4673–4713 (принудительный сброс, обнуляет время старта)
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -595,7 +595,7 @@ CREATE INDEX idx_reg_event ON registrations(event_id);
 
 ### 4.2 Пакетная генерация «heats-all»
 
-### `Hub.generate_all` — `hub/hub.py` строки 4647–4664 (все дисциплины с одобренными заявками одним проходом)
+### `Hub.generate_all` — `hub/hub.py` строки 4654–4671 (все дисциплины с одобренными заявками одним проходом)
 
 ```python
     def generate_all(self, ev: dict, lanes: int) -> dict:
@@ -1037,7 +1037,7 @@ def _name_key(name) -> str:
 
 ### 4.7 Тренеры: регистрация и подтверждение e-mail, вход, сессии
 
-### `Hub.trainer_api` — `hub/hub.py` строки 6329–6448 (consent / register / verify / resend / login / logout)
+### `Hub.trainer_api` — `hub/hub.py` строки 6336–6455 (consent / register / verify / resend / login / logout)
 
 ```python
     def trainer_api(self, method: str, sub: str, headers: dict, body: bytes, ip: str) -> tuple:
@@ -1162,7 +1162,7 @@ def _name_key(name) -> str:
         return 404, {"error": "нет такого адреса"}, None
 ```
 
-### `Hub.send_mail` — `hub/hub.py` строки 6194–6233
+### `Hub.send_mail` — `hub/hub.py` строки 6201–6240
 
 ```python
     def send_mail(self, to: str, subject: str, text: str) -> bool:
@@ -1207,7 +1207,7 @@ def _name_key(name) -> str:
         return True
 ```
 
-### `Hub.protocol_viewer` — `hub/hub.py` строки 6295–6300
+### `Hub.protocol_viewer` — `hub/hub.py` строки 6302–6307
 
 ```python
     def protocol_viewer(self, headers: dict) -> Optional[dict]:
@@ -1218,7 +1218,7 @@ def _name_key(name) -> str:
         return u if u["role"] == "trainer" or self._role(u["role"]) in ("admin", "judge") else None
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 6130–6140
+### `Hub.role_allows` — `hub/hub.py` строки 6137–6147
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -1561,7 +1561,7 @@ sync();load();requestAnimationFrame(frame);setInterval(tick,100);setInterval(loa
 
 ### 5.3 `hub/ui.html` — Мастер протоколов (`wzp`, шаги 1–5), целиком
 
-`hub/ui.html` строки 1775–2290. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
+`hub/ui.html` строки 1777–2296. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
 
 ```javascript
 const wzp = (() => {
@@ -1580,8 +1580,11 @@ const wzp = (() => {
   const ev = () => curEvent();
   const kind = () => kindOf(W.disc);
   const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
+  // 8.5.1: группа выбирается по САМОЙ УЗКОЙ границе (как в сводке шага 1): «до 14 лет» — это 13–14, а не все, кто моложе 14
+  const narrowAge = (age) => { const gs = (DISC.ages || []).filter(a => a.id !== "sen").sort((a, b) => a.max - b.max).concat((DISC.ages || []).filter(a => a.id === "sen"));
+    return (gs.find(a => age >= a.min && age <= a.max) || {}).id || ""; };
   const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
-    return W.ages.some(id => { const a = ageBy(id); return a && age >= a.min && age <= a.max; }); };
+    return W.ages.includes(narrowAge(age)); };
   const regsIn = () => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!W.sex || String(r.sex||"").toUpperCase() === W.sex) && ageOk(r));
   const entriesIn = () => {            // участники дисциплины из стартового списка с учётом фильтров
     const out = []; if (!W.sl) return out;
@@ -1853,7 +1856,8 @@ const wzp = (() => {
   }
   // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
   const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
-    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+    return W.ages.map(id => { const ag = []; for (let n = 0; n <= 120; n++) if (narrowAge(n) === id) ag.push(n);
+      return ag.length ? `${y - ag[ag.length - 1]}-${y - ag[0]}` : ""; }).filter(Boolean).join(";"); };
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
@@ -2106,7 +2110,7 @@ const wzp = (() => {
     JUDGE_DENY_POST = re.compile(r"/api/events/\d+/delete")          # удалить соревнование целиком
 ```
 
-### `Hub.role_allows` — `hub/hub.py` строки 6130–6140
+### `Hub.role_allows` — `hub/hub.py` строки 6137–6147
 
 ```python
     def role_allows(self, role: str, method: str, path: str) -> bool:
@@ -2142,74 +2146,74 @@ const wzp = (() => {
 
 | Шаблон | Метод | `hub/hub.py` |
 |---|---|---|
-| `/api/` | GET | 6652 |
-| `/api/` | GET|POST | 6630 |
-| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 6612 |
+| `/api/` | GET | 6659 |
+| `/api/` | GET|POST | 6637 |
+| `/api/auth/trainer/(consent|register|verify|resend|login|logout|me)` | GET|POST | 6619 |
 | `/api/calc` | POST | 2721 |
 | `/api/calendar` | GET|POST | 2728 |
 | `/api/clock` | GET|POST | 2667 |
-| `/api/consents` | GET | 6693 |
+| `/api/consents` | GET | 6700 |
 | `/api/default-rules` | GET | 2723 |
 | `/api/disciplines` | GET | 2718 |
 | `/api/events` | GET|POST | 2733 |
-| `/api/events/` | GET|POST | 4780 |
+| `/api/events/` | GET|POST | 4787 |
 | `/api/events/(\d+)(?:/([a-z.-]+))?(?:/(\d+))?` | GET|POST | 2751 |
 | `/api/events/(\d+)/bibs-csv` | GET|POST | 2632 |
 | `/api/events/(\d+)/files` | GET|POST | 2644 |
 | `/api/events/(\d+)/import` | GET|POST | 2606 |
 | `/api/events/(\d+)/regs-csv` | GET|POST | 2624 |
 | `/api/log` | GET|POST | 2676 |
-| `/api/login` | POST | 6601 |
-| `/api/logout` | POST | 6605 |
-| `/api/me` | GET|POST | 6481 |
-| `/api/me/password` | GET|POST | 6664 |
-| `/api/me/password` | POST | 6483 |
-| `/api/readers/scan` | POST | 6729 |
+| `/api/login` | POST | 6608 |
+| `/api/logout` | POST | 6612 |
+| `/api/me` | GET|POST | 6488 |
+| `/api/me/password` | GET|POST | 6671 |
+| `/api/me/password` | POST | 6490 |
+| `/api/readers/scan` | POST | 6736 |
 | `/api/scoreboard/state` | GET|POST | 2687 |
-| `/api/status` | GET|POST | 6659 |
+| `/api/status` | GET|POST | 6666 |
 | `/api/system` | GET|POST | 2669 |
 | `/api/system/audit` | GET | 2678 |
-| `/api/system/backup/db` | GET | 6677 |
-| `/api/system/backup/latest` | GET | 6668 |
-| `/api/system/retention` | POST | 6688 |
+| `/api/system/backup/db` | GET | 6684 |
+| `/api/system/backup/latest` | GET | 6675 |
+| `/api/system/retention` | POST | 6695 |
 | `/api/system/scoreboard/control` | GET|POST | 2685 |
 | `/api/system/update` | GET|POST | 2671 |
 | `/api/system/update` | POST | 2640 |
-| `/api/system/update/github` | POST | 6707 |
-| `/api/system/update/github/check` | GET | 6703 |
+| `/api/system/update/github` | POST | 6714 |
+| `/api/system/update/github/check` | GET | 6710 |
 | `/api/system/update/install` | POST | 2673 |
-| `/api/trainers` | GET | 6452 |
-| `/api/trainers` | GET|POST | 6698 |
-| `/api/trainers/` | GET|POST | 6698 |
-| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 6454 |
-| `/api/users` | GET | 6494 |
-| `/api/users` | GET|POST | 6664 |
-| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 6504 |
-| `/board` | GET|POST | 6746 |
-| `/login` | GET | 6598 |
-| `/privacy` | GET | 6594 |
-| `/protocol` | GET | 6643 |
-| `/protocol` | GET|POST | 6634 |
-| `/r` | GET | 6828 |
-| `/r` | GET|POST | 6624 |
-| `/r/` | GET | 6828 |
-| `/r/` | GET|POST | 6624 |
-| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 6865 |
-| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 6832 |
-| `/r/api/calendar` | GET | 6843 |
-| `/r/api/open` | GET | 6858 |
-| `/r/api/series` | GET | 6848 |
-| `/r/assets/` | GET | 6836 |
-| `/r/privacy` | GET | 6826 |
-| `/r/series` | GET | 6855 |
-| `/r/series/` | GET | 6855 |
-| `/r/trainer` | GET | 6828 |
-| `/r/trainer/` | GET | 6828 |
-| `/relay` | POST | 6916 |
-| `/results.json` | GET|POST | 6900 |
-| `/scoreboard` | GET|POST | 6746 |
-| `/sector` | GET|POST | 6746 |
-| `/simple` | GET|POST | 6777 |
+| `/api/trainers` | GET | 6459 |
+| `/api/trainers` | GET|POST | 6705 |
+| `/api/trainers/` | GET|POST | 6705 |
+| `/api/trainers/(\d+)/(verify|block|unblock|delete)` | GET|POST | 6461 |
+| `/api/users` | GET | 6501 |
+| `/api/users` | GET|POST | 6671 |
+| `/api/users(?:/([a-z0-9._-]{1,32})/(delete|update))?` | GET|POST | 6511 |
+| `/board` | GET|POST | 6753 |
+| `/login` | GET | 6605 |
+| `/privacy` | GET | 6601 |
+| `/protocol` | GET | 6650 |
+| `/protocol` | GET|POST | 6641 |
+| `/r` | GET | 6835 |
+| `/r` | GET|POST | 6631 |
+| `/r/` | GET | 6835 |
+| `/r/` | GET|POST | 6631 |
+| `/r/([A-Za-z0-9]{4,20})(/info|/template\.xlsx|/team-check|/team|/relay|/results\.json|/startlist\.json` | GET|POST | 6872 |
+| `/r/api/(?:auth/trainer/(consent|register|verify|resend|login|logout|me)|trainer/(events))` | GET|POST | 6839 |
+| `/r/api/calendar` | GET | 6850 |
+| `/r/api/open` | GET | 6865 |
+| `/r/api/series` | GET | 6855 |
+| `/r/assets/` | GET | 6843 |
+| `/r/privacy` | GET | 6833 |
+| `/r/series` | GET | 6862 |
+| `/r/series/` | GET | 6862 |
+| `/r/trainer` | GET | 6835 |
+| `/r/trainer/` | GET | 6835 |
+| `/relay` | POST | 6923 |
+| `/results.json` | GET|POST | 6907 |
+| `/scoreboard` | GET|POST | 6753 |
+| `/sector` | GET|POST | 6753 |
+| `/simple` | GET|POST | 6784 |
 
 Внутренние ветки `_api` с разбором `action` (`/api/events/<id>/<action>`, допустимые символы `[a-z.-]+`):
 

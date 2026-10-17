@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.5.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.5.1` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `4bceee4`
-- **Дамп сформирован:** 2026-10-17 00:04 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 364 из 364 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7151 строк, `hub/ui.html` 2929, `hub/protocol.html` 694
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `287fa5d`
+- **Дамп сформирован:** 2026-10-17 00:11 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 366 из 366 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 7158 строк, `hub/ui.html` 2935, `hub/protocol.html` 694
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -514,7 +514,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.2 Формирование сетки: полная и выборочная (Мастер)
 
-#### `Hub.generate_scoped` — `hub/hub.py` строки 4544–4645
+#### `Hub.generate_scoped` — `hub/hub.py` строки 4551–4652
 
 ```python
     def generate_scoped(self, ev: dict, lanes: int, scope: dict) -> dict:
@@ -636,7 +636,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
         return order[:n]
 ```
 
-#### `Hub.reset_heats` — `hub/hub.py` строки 4666–4706
+#### `Hub.reset_heats` — `hub/hub.py` строки 4673–4713
 
 ```python
     def reset_heats(self, ev: dict, distance: Optional[str] = None) -> dict:
@@ -692,20 +692,20 @@ CREATE INDEX idx_manual_event ON manual(event_id);
                 for a in (cls.disciplines()["data"].get("ages") or []) if a.get("id")}
 ```
 
-#### `Hub.age_ok` — `hub/hub.py` строки 4532–4542
+#### `Hub.age_ok` — `hub/hub.py` строки 4539–4549
 
 ```python
     @classmethod
     def age_ok(cls, year: int, birth, ages: list) -> bool:
-        """Год рождения подходит хотя бы под одну из выбранных групп; пустой выбор — подходят все."""
+        """Участник попадает в выбранную группу, если она — самая узкая для его возраста (как в сводке шага 1);
+        пустой выбор — подходят все. 8.5.1: раньше «до 14 лет» включало и малышей «до 12 лет»."""
         if not ages:
             return True
         try:
             age = year - int(str(birth)[:4])
         except ValueError:
             return False
-        lim = cls.age_limits()
-        return any(lim[a][0] <= age <= lim[a][1] for a in ages if a in lim)
+        return cls.age_group_of(age) in [a for a in ages if a in cls.age_limits()]
 ```
 
 ### 3.3 Номера и участники
@@ -787,7 +787,7 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 ### 3.4 Список для печати
 
-#### `Hub.startlist` — `hub/hub.py` строки 4746–4766
+#### `Hub.startlist` — `hub/hub.py` строки 4753–4773
 
 ```python
     def startlist(self, ev: dict) -> dict:
@@ -1889,7 +1889,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1716–1773
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1718–1775
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1953,7 +1953,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1775–2290
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1777–2296
 
 ```js
 const wzp = (() => {
@@ -1972,8 +1972,11 @@ const wzp = (() => {
   const ev = () => curEvent();
   const kind = () => kindOf(W.disc);
   const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
+  // 8.5.1: группа выбирается по САМОЙ УЗКОЙ границе (как в сводке шага 1): «до 14 лет» — это 13–14, а не все, кто моложе 14
+  const narrowAge = (age) => { const gs = (DISC.ages || []).filter(a => a.id !== "sen").sort((a, b) => a.max - b.max).concat((DISC.ages || []).filter(a => a.id === "sen"));
+    return (gs.find(a => age >= a.min && age <= a.max) || {}).id || ""; };
   const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
-    return W.ages.some(id => { const a = ageBy(id); return a && age >= a.min && age <= a.max; }); };
+    return W.ages.includes(narrowAge(age)); };
   const regsIn = () => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!W.sex || String(r.sex||"").toUpperCase() === W.sex) && ageOk(r));
   const entriesIn = () => {            // участники дисциплины из стартового списка с учётом фильтров
     const out = []; if (!W.sl) return out;
@@ -2245,7 +2248,8 @@ const wzp = (() => {
   }
   // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
   const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
-    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+    return W.ages.map(id => { const ag = []; for (let n = 0; n <= 120; n++) if (narrowAge(n) === id) ag.push(n);
+      return ag.length ? `${y - ag[ag.length - 1]}-${y - ag[0]}` : ""; }).filter(Boolean).join(";"); };
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
@@ -2540,7 +2544,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1548–1548
+#### `rankOpts` — `hub/ui.html` строки 1550–1550
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2650,7 +2654,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 364 из 364 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 366 из 366 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2703,6 +2707,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+287fa5d 2026-10-17 fix: выбор дисциплины не перекидывает на номера; фильтр пол/возраст наверху Мастера на шагах 2–5 v8.5.0
 4bceee4 2026-10-16 feat: время начала в протоколах и Excel строго по программе из «Подготовки», поиск заявок по нагрудному номеру v8.4.0
 783f9d8 2026-10-15 fix: список соревнований не вылезает за экран, убраны загрузка из Excel и корзина печати v8.3.1
 28f50ba 2026-10-15 feat: компактный Мастер протоколов — один ряд действий, без дублей кнопок, невысокие поля результатов v8.3.0
@@ -2716,6 +2721,5 @@ c9abdac 2026-10-15 major: запущен олимпийский монолит S
 cd87480 2026-10-14 release: собран финальный стадионный монолит v7.7.5 с Windows-автозапускчиком .bat в 2 клика
 fe6548b 2026-10-14 fix: исправлен дефолтный путь config.json для автономного запуска на Windows v7.7.3
 05aa516 2026-10-14 fix: исправлена верстка печатных бланков под строгий стандарт А4, добавлен разворот бега в горизонтальный формат v7.7.2
-baf6679 2026-10-14 test: исправлена проверка офлайн-автономности (синтаксис) v7.7.1
 ```
 

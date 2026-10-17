@@ -496,6 +496,8 @@ a.btn.xls:hover{background:#E9F5EE}
 .pubchk{margin:0;font-size:13px}
 .wzp-allout{margin:8px 0;padding:12px 14px;border:1px solid var(--ok);border-radius:var(--r);background:#17905A12}.wzp-allout ul{margin:6px 0 0 18px;padding:0}
 .wzp-dash{padding:14px 16px;margin:0 0 12px}.wzp-dash-main{margin:0 0 6px;font-size:16px}.ftab.stat{cursor:default;pointer-events:none}
+.bibtag{display:inline-block;margin-top:2px;padding:1px 8px;border-radius:99px;background:var(--ice);border:1px solid var(--line);font:700 14px var(--mono);color:var(--night)}
+.bibtag.hit{background:#FFE27A;border-color:#E0A100;box-shadow:0 0 0 2px #FFE27A88}
 .wzp-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
 .wzp-sticky{position:sticky;top:148px;z-index:12;background:var(--ice);padding:6px 0 2px;margin:0 0 8px;box-shadow:0 6px 8px -8px #0b1d3755}
 .wzp-sticky .wzp-top{margin:0 0 6px;align-items:flex-end}.wzp-sticky .wzp-steps{margin:0 0 4px}
@@ -774,7 +776,7 @@ a.btn.xls:hover{background:#E9F5EE}
         <button class="sm" id="gCsvApply" title="Загрузить отредактированный файл «Выгрузить CSV»: данные обновятся по ID заявки, а строки с пустым ID добавятся как новые участники (Фамилия, Имя, Год рождения, Дисциплина обязательны)">📥 Загрузить CSV</button>
       </div>
       <div class="tbl free"><table class="regtbl">
-        <thead><tr><th>№</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
+        <thead><tr><th>ID · №</th><th>Участник</th><th>Пол</th><th>Разряд</th><th>Группа</th><th>Вид программы</th><th>Лучший</th><th>Команда · тренер</th><th>Статус</th><th></th></tr></thead>
         <tbody id="gBody"></tbody>
       </table></div>
       <datalist id="gCats"></datalist>
@@ -1625,7 +1627,7 @@ function renderRegs(){
   const list = r.regs.filter(x => (!f || x.status===f) && (!q || (isNum && [x.bib, x.entry_bib].some(b => String(b || "").startsWith(q)))
     || (x.last_name+" "+x.first_name+" "+(x.team||"")+" "+(x.coach||"")+" "+(x.bib||"")+" "+(x.entry_bib||"")).toLowerCase().includes(q)));
   $("gBody").innerHTML = list.slice().reverse().map(x => `<tr data-id="${x.id}" class="${x.status==="rejected"?"rej":""}">
-    <td class="mono small">${x.id}</td>
+    <td class="mono small"><div class="muted" title="Служебный номер заявки">ID ${x.id}</div>${(x.bib || x.entry_bib) ? `<b class="bibtag${isNum && [x.bib, x.entry_bib].some(b => String(b || "").startsWith(q)) ? " hit" : ""}" title="Нагрудный номер">№ ${esc(x.bib || x.entry_bib)}</b>` : '<span class="muted" title="Нагрудный номер ещё не присвоен">№ —</span>'}</td>
     <td><b>${esc(x.last_name)} ${esc(x.first_name)}</b> <span class="small muted">${esc(x.middle_name||"")}</span>
       <div class="small muted">${x.anonymized_at ? esc(x.birth_date.slice(0,4)) + " г.р. · заявка обезличена" : esc(x.birth_date.split("-").reverse().join("."))}${x.representative?" · предст.: "+esc(x.representative):""}${x.contact?" · "+esc(x.contact):""}</div>
       ${x.dup_of?`<div class="dupe">повтор заявки №${x.dup_of}</div>`:""}${x.note?`<div class="small muted">${esc(x.note)}</div>`:""}</td>
@@ -1788,8 +1790,11 @@ const wzp = (() => {
   const ev = () => curEvent();
   const kind = () => kindOf(W.disc);
   const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
+  // 8.5.1: группа выбирается по САМОЙ УЗКОЙ границе (как в сводке шага 1): «до 14 лет» — это 13–14, а не все, кто моложе 14
+  const narrowAge = (age) => { const gs = (DISC.ages || []).filter(a => a.id !== "sen").sort((a, b) => a.max - b.max).concat((DISC.ages || []).filter(a => a.id === "sen"));
+    return (gs.find(a => age >= a.min && age <= a.max) || {}).id || ""; };
   const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
-    return W.ages.some(id => { const a = ageBy(id); return a && age >= a.min && age <= a.max; }); };
+    return W.ages.includes(narrowAge(age)); };
   const regsIn = () => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!W.sex || String(r.sex||"").toUpperCase() === W.sex) && ageOk(r));
   const entriesIn = () => {            // участники дисциплины из стартового списка с учётом фильтров
     const out = []; if (!W.sl) return out;
@@ -2061,7 +2066,8 @@ const wzp = (() => {
   }
   // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
   const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
-    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+    return W.ages.map(id => { const ag = []; for (let n = 0; n <= 120; n++) if (narrowAge(n) === id) ag.push(n);
+      return ag.length ? `${y - ag[ag.length - 1]}-${y - ag[0]}` : ""; }).filter(Boolean).join(";"); };
   const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
