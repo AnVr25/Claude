@@ -14,7 +14,7 @@ html,body{margin:0;height:100%;background:var(--night);color:var(--a-ink);font-f
 button{font:inherit}
 :focus{outline:none}
 :focus-visible{outline:3px solid var(--start);outline-offset:2px}
-.wrap{display:grid;grid-template-rows:auto auto 1fr auto;height:100%;gap:2.2vh}
+.wrap{display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;height:100%;gap:1.6vh}
 
 /* шапка */
 .top{display:flex;align-items:center;gap:clamp(14px,1.8vw,28px);padding:1.6vh var(--a-pad);border-bottom:3px solid var(--track);min-width:0}
@@ -26,6 +26,10 @@ button{font:inherit}
 .sec{padding:0 var(--a-pad);min-height:0}
 .label{font:500 clamp(13px,1.25vw,20px)/1.2 var(--head);color:var(--a-soft);text-transform:uppercase;letter-spacing:.14em;margin-bottom:1.2vh}
 
+/* выбор дисциплины: на телефоне — крупная кнопка-список */
+.pick{display:flex;gap:10px;align-items:center}
+.pick select{flex:1;min-width:0;min-height:48px;font:600 clamp(16px,2vw,28px)/1.2 var(--head);color:var(--a-ink);background:var(--night-2);border:2px solid var(--night-line);border-radius:var(--r);padding:8px 12px}
+.pick select:focus-visible{border-color:var(--start)}
 /* только что финишировал */
 .hero{position:relative;background:var(--night-2);border:2px solid var(--night-line);border-left:6px solid var(--track);border-radius:var(--r);padding:2.2vh 2.4vw;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:2.4vw;align-items:center;min-height:clamp(120px,22vh,260px)}
 .hero .place{font:600 clamp(40px,6vw,110px)/1 var(--head);color:var(--a-soft);font-variant-numeric:tabular-nums}
@@ -38,8 +42,11 @@ button{font:inherit}
 @keyframes pulse{from{border-color:var(--track);background:#3A1F35;box-shadow:0 0 0 8px rgba(231,30,37,.35)}to{}}
 
 /* перед ним */
-.list{overflow:hidden;display:flex;flex-direction:column}
-#list{overflow:hidden}
+.list{overflow:auto;display:flex;flex-direction:column}
+#list,#next{overflow:hidden}
+#nextBox{margin-bottom:1.6vh}
+#nextBox .label{color:var(--start)}
+.r.up{opacity:.92}.r.up .p{visibility:hidden}.r.up .t{color:var(--a-soft)}
 .r{display:grid;grid-template-columns:2em 2.8em minmax(0,1fr) auto;gap:1.6vw;align-items:baseline;padding:.9vh .2vw;border-bottom:1px solid var(--night-line);font:500 clamp(20px,2.5vw,42px)/1.2 var(--head)}
 .r .p{color:var(--a-soft);font-variant-numeric:tabular-nums}
 .r .b{color:var(--start);font-weight:600;font-variant-numeric:tabular-nums}
@@ -71,11 +78,15 @@ button:hover{border-color:var(--a-soft)}
     <div class="name" id="name">Экран диктора</div>
     <div class="clock" id="clock">—</div>
   </div>
+  <div class="sec pick"><select id="grp" aria-label="Какую дисциплину диктуем"><option value="">Все дисциплины</option></select></div>
   <div class="sec">
     <div class="label">Только что финишировал</div>
     <div class="hero" id="hero"><div class="empty" style="grid-column:1/-1">ждём первого финишёра…</div></div>
   </div>
-  <div class="sec list"><div class="label">Перед ним</div><div id="list"></div></div>
+  <div class="sec list">
+    <div id="nextBox" hidden><div class="label">Готовятся дальше</div><div id="next"></div></div>
+    <div class="label">Перед ним</div><div id="list"></div>
+  </div>
   <div class="foot">
     <div class="foot-l"><span id="stat"></span><span><button id="snd">🔔 звук: вкл</button> · F11 — во весь экран</span></div>
     <div class="logos">
@@ -90,6 +101,22 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const eid=new URLSearchParams(location.search).get("event");
 let offset=0,startMs=null,lastKey=null,sound=true,actx=null;
+const NEXT_N=6;
+const sv={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let grp=new URLSearchParams(location.search).get("group")??sv.get("ann.group."+eid)??"";
+const gkey=x=>(x.distance||"")+"|"+(x.category||"");
+const tOf=x=>x.finish_epoch_ms||x.entered_epoch_ms||0;
+$("grp").onchange=()=>{grp=$("grp").value;sv.set("ann.group."+eid,grp);lastKey=null;load();};
+function fillGroups(r){
+  const m=new Map();
+  r.finished.forEach(x=>{const k=gkey(x);if(k!=="|"){const g=m.get(k)||{k,d:x.distance,c:x.category,n:0,w:0};g.n++;m.set(k,g);}});
+  (r.not_seen||[]).forEach(x=>{const k=gkey(x);if(k!=="|"){const g=m.get(k)||{k,d:x.distance,c:x.category,n:0,w:0};g.w++;m.set(k,g);}});
+  const opts=[...m.values()].sort((a,b)=>(a.d+a.c).localeCompare(b.d+b.c,"ru"));
+  const sig=opts.map(o=>o.k+o.n+"/"+o.w).join(";")+"#"+grp;
+  if(fillGroups.sig===sig)return; fillGroups.sig=sig;
+  $("grp").innerHTML='<option value="">Все дисциплины</option>'+opts.map(o=>`<option value="${esc(o.k)}">${esc([o.d,o.c].filter(Boolean).join(" · "))} — ${o.n}${o.w?` из ${o.n+o.w}`:""}</option>`).join("");
+  $("grp").value=opts.some(o=>o.k===grp)?grp:""; if($("grp").value!==grp)grp="";
+}
 function fmt(ms){const n=ms<0;ms=Math.abs(ms);const t=Math.floor(ms/100),h=Math.floor(t/36000),m=Math.floor(t%36000/600),s=Math.floor(t%600/10),d=t%10;
   return (n?"-":"")+h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"."+d;}
 function beep(){if(!sound)return;try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();
@@ -103,15 +130,20 @@ async function load(){
   try{
     const r=await get(`/api/events/${encodeURIComponent(eid)}/results`);
     const ev=r.event; startMs=ev.start_epoch_ms; $("name").textContent=ev.name;
-    const fin=r.finished.slice().sort((a,b)=>b.finish_epoch_ms-a.finish_epoch_ms);
-    $("stat").textContent=`финишировали ${r.finished.length}`;
-    if(!fin.length)return;
-    const h=fin[0], key=h.bib+"|"+h.finish_epoch_ms;
-    const meta=[h.team,h.wave].filter(Boolean).map(esc).join(" · ");
-    $("hero").innerHTML=`<div class="place">${h.place}</div><div class="bib">${esc(h.bib||"?")}</div><div class="who"><div class="nm">${esc(h.name||"")}</div>${meta?`<div class="meta">${meta}</div>`:""}</div><div class="time">${esc(h.time)}</div>`;
+    fillGroups(r);
+    const inG=x=>!grp||gkey(x)===grp;
+    const fin=r.finished.filter(inG).sort((a,b)=>tOf(b)-tOf(a));
+    const nxt=(r.not_seen||[]).filter(x=>!x.status).filter(inG).slice(0,NEXT_N);
+    $("stat").textContent=`финишировали ${fin.length}`+((r.not_seen||[]).filter(x=>!x.status).filter(inG).length?` · ждут своей очереди ${(r.not_seen||[]).filter(x=>!x.status).filter(inG).length}`:"");
+    $("nextBox").hidden=!nxt.length;
+    $("next").innerHTML=nxt.map(x=>`<div class="r up"><span class="p"></span><span class="b">${esc(x.bib||"–")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc([x.team,grp?"":x.distance].filter(Boolean).join(" · "))}</span></span><span class="t">ждёт</span></div>`).join("");
+    if(!fin.length){$("hero").innerHTML='<div class="empty" style="grid-column:1/-1">ждём первого результата…</div>';$("list").innerHTML="";return;}
+    const h=fin[0], key=h.bib+"|"+tOf(h)+"|"+(h.result||"");
+    const meta=[h.team,h.wave,grp?"":h.distance].filter(Boolean).map(esc).join(" · ");
+    $("hero").innerHTML=`<div class="place">${h.place}</div><div class="bib">${esc(h.bib||"?")}</div><div class="who"><div class="nm">${esc(h.name||"")}</div>${meta?`<div class="meta">${meta}</div>`:""}</div><div class="time">${esc(h.result||h.time)}</div>`;
     if(lastKey&&key!==lastKey){$("hero").classList.remove("new");void $("hero").offsetWidth;$("hero").classList.add("new");beep();}
     lastKey=key;
-    $("list").innerHTML=fin.slice(1,9).map(x=>`<div class="r"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"?")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc(x.wave||"")}</span></span><span class="t">${esc(x.time)}</span></div>`).join("");
+    $("list").innerHTML=fin.slice(1,9).map(x=>`<div class="r"><span class="p">${x.place}</span><span class="b">${esc(x.bib||"?")}</span><span class="nm">${x.name?`<b>${esc(x.name)}</b>`:""}<span class="w">${esc(x.wave||"")}</span></span><span class="t">${esc(x.result||x.time)}</span></div>`).join("");
   }catch(e){$("stat").textContent="нет связи с сервером…";}
 }
 function tick(){$("clock").textContent=startMs?fmt(Date.now()+offset-startMs):"старт не дан";}

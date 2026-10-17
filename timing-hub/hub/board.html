@@ -35,6 +35,8 @@ h2{margin:0 0 .5em;font:500 clamp(15px,1.7vw,34px)/1.2 var(--head);color:var(--b
   padding:.11em .3em;border-bottom:1px solid var(--bd-line);font:500 var(--bd-row)/1.2 var(--head);font-variant-numeric:tabular-nums}
 .r>span{position:relative;z-index:1;min-width:0}
 .r .p{color:var(--bd-muted)}
+/* ещё без результата: очередь — приглушены, видно кто дальше */
+.r.up{opacity:.62}.r.up .t{color:var(--bd-muted);font-size:.6em;font-weight:500}
 .r .b{color:var(--start);font-weight:600}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .r .t{text-align:right;font-weight:700;white-space:nowrap;font-size:1.22em;line-height:1}
@@ -168,9 +170,12 @@ function renderGroup(r,key,suffix){
   $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>AUTO_N?` · ${list.length} участников`:""}${suffix||""}`;
   $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
   $("hd").classList.toggle("hide",!list.length);
+  const wait=(r.not_seen||[]).filter(x=>!x.status&&(x.distance||"")===d&&(x.category||"")===c);
+  const upRows=wait.map(x=>`<div class="r up"><span class="p"></span><span class="b">${esc(x.bib||"–")}</span><span class="n">${esc(x.name||"")}</span>${tech?'<span class="att" style="--n:6">'+"<i class=\"e\">·</i>".repeat(6)+'</span>':`<span class="d">${esc(x.team||"")}</span>`}<span class="t">далее</span></div>`).join("");
   $("track").innerHTML=list.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
     return `<div class="r ${isNew?"new":""}${x.place_overall<=3?" top":""}"><span class="p">${x.place_overall}</span><span class="b">${esc(x.bib)}</span><span class="n">${esc(x.name||"")}</span>${tech?attCells(x):`<span class="d">${esc(x.team||"")}</span>`}<span class="t">${esc(x.result||x.time)}</span></div>`;}).join("")
-    ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» результатов пока нет</div>`;
++upRows
+    ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» никого нет</div>`;
 }
 async function load(){
   if(!eid){$("name").textContent="Не выбрано соревнование";return;}

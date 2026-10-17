@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.5.3`
+- **Версия сервера (`VERSION`):** `8.6.0`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `6ef45a2`
-- **Сформирован:** 2026-10-17 02:02 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 368 из 368 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2939, `hub/reg.html` 962, `hub/board.html` 200
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `d50c22d`
+- **Сформирован:** 2026-10-17 02:31 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 369 из 369 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2939, `hub/reg.html` 962, `hub/board.html` 205
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -1394,6 +1394,8 @@ h2{margin:0 0 .5em;font:500 clamp(15px,1.7vw,34px)/1.2 var(--head);color:var(--b
   padding:.11em .3em;border-bottom:1px solid var(--bd-line);font:500 var(--bd-row)/1.2 var(--head);font-variant-numeric:tabular-nums}
 .r>span{position:relative;z-index:1;min-width:0}
 .r .p{color:var(--bd-muted)}
+/* ещё без результата: очередь — приглушены, видно кто дальше */
+.r.up{opacity:.62}.r.up .t{color:var(--bd-muted);font-size:.6em;font-weight:500}
 .r .b{color:var(--start);font-weight:600}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .r .t{text-align:right;font-weight:700;white-space:nowrap;font-size:1.22em;line-height:1}
@@ -1527,9 +1529,12 @@ function renderGroup(r,key,suffix){
   $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>AUTO_N?` · ${list.length} участников`:""}${suffix||""}`;
   $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
   $("hd").classList.toggle("hide",!list.length);
+  const wait=(r.not_seen||[]).filter(x=>!x.status&&(x.distance||"")===d&&(x.category||"")===c);
+  const upRows=wait.map(x=>`<div class="r up"><span class="p"></span><span class="b">${esc(x.bib||"–")}</span><span class="n">${esc(x.name||"")}</span>${tech?'<span class="att" style="--n:6">'+"<i class=\"e\">·</i>".repeat(6)+'</span>':`<span class="d">${esc(x.team||"")}</span>`}<span class="t">далее</span></div>`).join("");
   $("track").innerHTML=list.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
     return `<div class="r ${isNew?"new":""}${x.place_overall<=3?" top":""}"><span class="p">${x.place_overall}</span><span class="b">${esc(x.bib)}</span><span class="n">${esc(x.name||"")}</span>${tech?attCells(x):`<span class="d">${esc(x.team||"")}</span>`}<span class="t">${esc(x.result||x.time)}</span></div>`;}).join("")
-    ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» результатов пока нет</div>`;
++upRows
+    ||`<div class="none">В группе «${esc([d,c].filter(Boolean).join(" · "))}» никого нет</div>`;
 }
 async function load(){
   if(!eid){$("name").textContent="Не выбрано соревнование";return;}
