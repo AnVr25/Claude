@@ -497,6 +497,10 @@ a.btn.xls:hover{background:#E9F5EE}
 .wzp-allout{margin:8px 0;padding:12px 14px;border:1px solid var(--ok);border-radius:var(--r);background:#17905A12}.wzp-allout ul{margin:6px 0 0 18px;padding:0}
 .wzp-dash{padding:14px 16px;margin:0 0 12px}.wzp-dash-main{margin:0 0 6px;font-size:16px}.ftab.stat{cursor:default;pointer-events:none}
 .wzp-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+.wzp-sticky{position:sticky;top:148px;z-index:12;background:var(--ice);padding:6px 0 2px;margin:0 0 8px;box-shadow:0 6px 8px -8px #0b1d3755}
+.wzp-sticky .wzp-top{margin:0 0 6px;align-items:flex-end}.wzp-sticky .wzp-steps{margin:0 0 4px}
+.wzp-sticky .wzp-steps button{min-height:38px;padding:4px 12px}.wzp-topfilter{margin:0 0 2px}
+@media (max-width:900px){.wzp-sticky{position:static}}
 .ftab{font:600 14px/1.2 var(--body);min-height:40px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .ftab i{font-style:normal;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--ice);font-size:12px}
 .ftab.on{background:var(--night);border-color:var(--night);color:#fff}.ftab.on i{background:var(--track);color:#fff}
@@ -894,11 +898,14 @@ a.btn.xls:hover{background:#E9F5EE}
   <div class="wzp-head">
     <div class="wzp-title"><h1>Мастер протоколов</h1><span class="small muted" id="wzpEv"></span></div>
   </div>
-  <div class="wzp-top">
-    <label class="wzp-disc"><span class="small muted">Дисциплина</span><select id="wzpDisc" aria-label="Дисциплина"></select></label>
-    <span class="wzp-kind" id="wzpKind"></span>
+  <div class="wzp-sticky">
+    <div class="wzp-top">
+      <label class="wzp-disc"><span class="small muted">Дисциплина</span><select id="wzpDisc" aria-label="Дисциплина"></select></label>
+      <span class="wzp-kind" id="wzpKind"></span>
+      <div class="wzp-filter wzp-topfilter" id="wzpFilter" role="group" aria-label="Пол и возрастная группа"></div>
+    </div>
+    <div class="wzp-steps" id="wzpSteps" role="tablist"></div>
   </div>
-  <div class="wzp-steps" id="wzpSteps" role="tablist"></div>
   <div class="wzp-body" id="wzpBody"></div>
 </section>
 
@@ -1865,6 +1872,7 @@ const wzp = (() => {
     const k = kind(), t = STEP_T;
     if (W.step !== 3) W.allOut = "";                         // итог «Сформировать все» живёт только на шаге 3
     $("wzpKind").className = "wzp-kind " + k;
+    $("wzpFilter").innerHTML = W.disc && W.step >= 2 ? filterBar(true) : "";     // 8.5: фильтр «пол / возраст» — наверху на шагах 2–5, всегда под рукой
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
     const body = $("wzpBody");
@@ -1873,11 +1881,12 @@ const wzp = (() => {
   }
   const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
   // вкладки «Все / Мальчики / Девочки» и возрастные группы — просто быстрый просмотр состава: проходить шаг ими не нужно
-  function filterBar(){
+  function filterBar(top){
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
     const tab = (v, t) => `<button type="button" role="tab" class="ftab${W.sex === v ? " on" : ""}" aria-selected="${W.sex === v}" data-sexf="${v}">${t} <i>${cnt(v)}</i></button>`;
     const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
-    return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
+    const inner = `${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}`;
+    return top ? inner : `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${inner}</div>`;
   }
   // 7.5.1: шаг 1 — сводка по дисциплине (только чтение из базы, без кнопок-фильтров): состав, пол, возрастные группы, номера
   function ageGroupOf(r){
@@ -1919,7 +1928,6 @@ const wzp = (() => {
         Впишите номер каждому участнику (Enter — к следующему) и сохраните. <b>У заявленного на несколько видов номер один на все виды.</b>
         <details class="wzp-help" style="display:inline"><summary style="display:inline">Подробнее</summary> Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните: стартовый список, отметки и результаты переедут на новый номер.</details></p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
-      ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary" type="button" id="bibSave" disabled>💾 Сохранить номера</button>
         <button class="quiet danger" type="button" id="bibClear" disabled>❌ Очистить номера</button>
@@ -2051,7 +2059,10 @@ const wzp = (() => {
     try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves ?? 0}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
-  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
+  // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
+  const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
+    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
@@ -2269,7 +2280,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.ages = []; W.sex = ""; W.allOut = ""; save(); render(); load().then(render); };      // 8.5: остаёмся на том же шаге (раньше выбор дисциплины перекидывал на ввод номеров)
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;

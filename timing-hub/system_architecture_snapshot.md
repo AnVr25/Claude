@@ -1,11 +1,11 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.4.0`
+- **Версия сервера (`VERSION`):** `8.5.0`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `783f9d8`
-- **Сформирован:** 2026-10-16 23:48 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 363 из 363 проверок пройдено. · Всё работает.
-- **Объём:** `hub/hub.py` 7151 строк, `hub/ui.html` 2918, `hub/reg.html` 962, `hub/board.html` 200
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `4bceee4`
+- **Сформирован:** 2026-10-17 00:04 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 364 из 364 проверок пройдено. · Всё работает.
+- **Объём:** `hub/hub.py` 7151 строк, `hub/ui.html` 2929, `hub/reg.html` 962, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
 > В документе нет персональных данных и секретов: только код и структура.
@@ -1561,7 +1561,7 @@ sync();load();requestAnimationFrame(frame);setInterval(tick,100);setInterval(loa
 
 ### 5.3 `hub/ui.html` — Мастер протоколов (`wzp`, шаги 1–5), целиком
 
-`hub/ui.html` строки 1768–2279. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
+`hub/ui.html` строки 1775–2290. Шаги: 1 «Участники» (фильтры), 2 «Нагрудные номера» (ввод вручную, живая проверка, сохранение одним запросом), 3 «Стартовые протоколы» (сетка, Excel, «⚡ Сформировать ВСЕ»), 4 «Ввод результатов», 5 «Итоговый протокол».
 
 ```javascript
 const wzp = (() => {
@@ -1664,6 +1664,7 @@ const wzp = (() => {
     const k = kind(), t = STEP_T;
     if (W.step !== 3) W.allOut = "";                         // итог «Сформировать все» живёт только на шаге 3
     $("wzpKind").className = "wzp-kind " + k;
+    $("wzpFilter").innerHTML = W.disc && W.step >= 2 ? filterBar(true) : "";     // 8.5: фильтр «пол / возраст» — наверху на шагах 2–5, всегда под рукой
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
     const body = $("wzpBody");
@@ -1672,11 +1673,12 @@ const wzp = (() => {
   }
   const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
   // вкладки «Все / Мальчики / Девочки» и возрастные группы — просто быстрый просмотр состава: проходить шаг ими не нужно
-  function filterBar(){
+  function filterBar(top){
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
     const tab = (v, t) => `<button type="button" role="tab" class="ftab${W.sex === v ? " on" : ""}" aria-selected="${W.sex === v}" data-sexf="${v}">${t} <i>${cnt(v)}</i></button>`;
     const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
-    return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
+    const inner = `${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}`;
+    return top ? inner : `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${inner}</div>`;
   }
   // 7.5.1: шаг 1 — сводка по дисциплине (только чтение из базы, без кнопок-фильтров): состав, пол, возрастные группы, номера
   function ageGroupOf(r){
@@ -1718,7 +1720,6 @@ const wzp = (() => {
         Впишите номер каждому участнику (Enter — к следующему) и сохраните. <b>У заявленного на несколько видов номер один на все виды.</b>
         <details class="wzp-help" style="display:inline"><summary style="display:inline">Подробнее</summary> Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните: стартовый список, отметки и результаты переедут на новый номер.</details></p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
-      ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary" type="button" id="bibSave" disabled>💾 Сохранить номера</button>
         <button class="quiet danger" type="button" id="bibClear" disabled>❌ Очистить номера</button>
@@ -1850,7 +1851,10 @@ const wzp = (() => {
     try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves ?? 0}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
-  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
+  // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
+  const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
+    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
@@ -2068,7 +2072,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.ages = []; W.sex = ""; W.allOut = ""; save(); render(); load().then(render); };      // 8.5: остаёмся на том же шаге (раньше выбор дисциплины перекидывал на ввод номеров)
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;

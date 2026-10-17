@@ -227,6 +227,9 @@ const kind=new URLSearchParams(location.search).get("kind");
 if(kind==="cart") document.body.classList.add("cartmode");
 if(new URLSearchParams(location.search).get("embed")) document.body.classList.add("embed");
 let DIST=new URLSearchParams(location.search).get("dist")||"";      // дисциплина целиком (мастер протоколов)
+// 8.5: возрастной фильтр Мастера — диапазоны годов рождения «2015-2026;2013-2014»; пусто — все
+const YR=(new URLSearchParams(location.search).get("yr")||"").split(";").map(x=>x.split("-").map(Number)).filter(r=>r.length===2&&r.every(Number.isFinite));
+const yrOk=e=>!YR.length||YR.some(([a,b])=>{ const y=parseInt(e.birth_year); return y>=a&&y<=b; });
 const QGRP=new URLSearchParams(location.search).get("grp")||"", HASGRP=new URLSearchParams(location.search).has("grp");
 const QIDS=(new URLSearchParams(location.search).get("ids")||"").split(",").filter(Boolean);
 const QTEAM=new URLSearchParams(location.search).get("team")||"";
@@ -408,7 +411,7 @@ function partsOf(h){
 // бланк стартового протокола: o={gf (группа), sf (М/Ж), list, coach, landscape}; возвращает html, ориентацию и признак техники
 function startSheet(o){
   const ev=(R||SL).event, gf=o.gf||"", sf=o.sf||"", list=!!o.list, coach=!!o.coach;
-  const fe=a=>sf?a.filter(e=>sexOf(e)===sf):a;                        // фильтр «Мальчики / Девочки»
+  const fe=a=>a.filter(e=>(!sf||sexOf(e)===sf)&&yrOk(e));               // фильтр «Мальчики / Девочки» и возраст
   const heatsAll=SL.heats.map(h=>Object.assign({},h,{entries:fe(h.entries)}));
   const looseAll=fe(SL.no_heat||[]);
   const parts=[].concat(...heatsAll.map(partsOf));
@@ -581,7 +584,7 @@ function render(){
 // итоговый протокол по текущим настройкам панели → {html, land}; техника (попытки) — горизонтальный лист с 6 попытками
 function buildFinal(o={}){
   const ev=R.event, mode=o.mode||$("mode").value, gf=o.gf??"", tf=$("team").hidden?"":$("team").value, sf=o.sf||"";
-  const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&(!DIST||x.distance===DIST);
+  const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&yrOk(x)&&(!DIST||x.distance===DIST);
   const techX=x=>isTech(x.rt||x.rtype,0,!!(x.attempts&&x.attempts.length));
   const anyDone=R.finished.some(x=>x.done_rank);
   let anyTechShown=false, T0="";

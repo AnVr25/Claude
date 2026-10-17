@@ -1,11 +1,11 @@
 # system_final_snapshot — полный технический дамп SakhStart timing-hub, Мастер протоколов v3.7
 
-- **Версия сервера (`VERSION`):** `8.4.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
+- **Версия сервера (`VERSION`):** `8.5.0` (линейка v3.7: вкладки групп и отдельный лист на каждую категорию)
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `783f9d8`
-- **Дамп сформирован:** 2026-10-16 23:47 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
-- **Автопроверки:** Итого: 363 из 363 проверок пройдено. · Всё работает.
-- **Объём исходников:** `hub/hub.py` 7151 строк, `hub/ui.html` 2918, `hub/protocol.html` 691
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `4bceee4`
+- **Дамп сформирован:** 2026-10-17 00:04 скриптом `tools/make_snapshot.py` (код ниже вставлен дословно из исходников)
+- **Автопроверки:** Итого: 364 из 364 проверок пройдено. · Всё работает.
+- **Объём исходников:** `hub/hub.py` 7151 строк, `hub/ui.html` 2929, `hub/protocol.html` 694
 
 > Для аудитора. Что в дампе: (1) назначение и архитектура, (2) схема SQLite, (3) весь Python Мастера, (4) весь JavaScript, (5) CSS печати, (6) API, (7) тесты, (8) известные ограничения и места, где фактическая реализация отличается от формулировок ТЗ.
 
@@ -1529,13 +1529,13 @@ CREATE INDEX idx_manual_event ON manual(event_id);
 
 > ВАЖНО для аудитора: в ТЗ функция `table()` названа находящейся в `ui.html`. Фактически она живёт в `hub/protocol.html` (одна страница печати для админки и публичного сайта). `ui.html` печатных таблиц не строит.
 
-#### `isTech` — `hub/protocol.html` строки 393–393
+#### `isTech` — `hub/protocol.html` строки 396–396
 
 ```js
 const isTech=(rtype,slots,att)=>rtype==="distance"||rtype==="height"||(slots||0)>0||att===true;
 ```
 
-#### `partsOf` — `hub/protocol.html` строки 396–407
+#### `partsOf` — `hub/protocol.html` строки 399–410
 
 ```js
 function partsOf(h){
@@ -1552,12 +1552,12 @@ function partsOf(h){
 }
 ```
 
-#### `startSheet` — `hub/protocol.html` строки 409–462
+#### `startSheet` — `hub/protocol.html` строки 412–465
 
 ```js
 function startSheet(o){
   const ev=(R||SL).event, gf=o.gf||"", sf=o.sf||"", list=!!o.list, coach=!!o.coach;
-  const fe=a=>sf?a.filter(e=>sexOf(e)===sf):a;                        // фильтр «Мальчики / Девочки»
+  const fe=a=>a.filter(e=>(!sf||sexOf(e)===sf)&&yrOk(e));               // фильтр «Мальчики / Девочки» и возраст
   const heatsAll=SL.heats.map(h=>Object.assign({},h,{entries:fe(h.entries)}));
   const looseAll=fe(SL.no_heat||[]);
   const parts=[].concat(...heatsAll.map(partsOf));
@@ -1611,7 +1611,7 @@ function startSheet(o){
 }
 ```
 
-#### `renderStart` — `hub/protocol.html` строки 546–552
+#### `renderStart` — `hub/protocol.html` строки 549–555
 
 ```js
 function renderStart(){
@@ -1627,7 +1627,7 @@ function renderStart(){
 
 ### 4.2 Переключение печатных стилей landscape / portrait — `hub/protocol.html`
 
-#### `setPage` — `hub/protocol.html` строки 384–389
+#### `setPage` — `hub/protocol.html` строки 387–392
 
 ```js
 function setPage(land){
@@ -1638,7 +1638,7 @@ function setPage(land){
 }
 ```
 
-#### `groupList` — `hub/protocol.html` строки 466–475
+#### `groupList` — `hub/protocol.html` строки 469–478
 
 ```js
 function groupList(start){
@@ -1653,7 +1653,7 @@ function groupList(start){
 }
 ```
 
-#### `tabsFor` — `hub/protocol.html` строки 476–484
+#### `tabsFor` — `hub/protocol.html` строки 479–487
 
 ```js
 function tabsFor(start){
@@ -1667,7 +1667,7 @@ function tabsFor(start){
 }
 ```
 
-#### `currentItem` — `hub/protocol.html` строки 486–489
+#### `currentItem` — `hub/protocol.html` строки 489–492
 
 ```js
 function currentItem(start){
@@ -1676,7 +1676,7 @@ function currentItem(start){
 }
 ```
 
-#### `sheetsFor` — `hub/protocol.html` строки 491–499
+#### `sheetsFor` — `hub/protocol.html` строки 494–502
 
 ```js
 function sheetsFor(it){
@@ -1690,7 +1690,7 @@ function sheetsFor(it){
 }
 ```
 
-#### `showSheets` — `hub/protocol.html` строки 501–511
+#### `showSheets` — `hub/protocol.html` строки 504–514
 
 ```js
 function showSheets(secs){
@@ -1706,7 +1706,7 @@ function showSheets(secs){
 }
 ```
 
-#### `drawTabs` — `hub/protocol.html` строки 524–529
+#### `drawTabs` — `hub/protocol.html` строки 527–532
 
 ```js
 function drawTabs(tabs){
@@ -1717,7 +1717,7 @@ function drawTabs(tabs){
 }
 ```
 
-#### `addTabToCart` — `hub/protocol.html` строки 533–545
+#### `addTabToCart` — `hub/protocol.html` строки 536–548
 
 ```js
 async function addTabToCart(){
@@ -1735,12 +1735,12 @@ async function addTabToCart(){
 }
 ```
 
-#### `buildFinal` — `hub/protocol.html` строки 582–687
+#### `buildFinal` — `hub/protocol.html` строки 585–690
 
 ```js
 function buildFinal(o={}){
   const ev=R.event, mode=o.mode||$("mode").value, gf=o.gf??"", tf=$("team").hidden?"":$("team").value, sf=o.sf||"";
-  const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&(!DIST||x.distance===DIST);
+  const byTeam=x=>(!tf||x.team===tf)&&(!sf||sexOf(x)===sf)&&yrOk(x)&&(!DIST||x.distance===DIST);
   const techX=x=>isTech(x.rt||x.rtype,0,!!(x.attempts&&x.attempts.length));
   const anyDone=R.finished.some(x=>x.done_rank);
   let anyTechShown=false, T0="";
@@ -1846,7 +1846,7 @@ function buildFinal(o={}){
 }
 ```
 
-#### `render` — `hub/protocol.html` строки 571–580
+#### `render` — `hub/protocol.html` строки 574–583
 
 ```js
 function render(){
@@ -1861,7 +1861,7 @@ function render(){
 }
 ```
 
-#### `renderCart` — `hub/protocol.html` строки 554–565
+#### `renderCart` — `hub/protocol.html` строки 557–568
 
 ```js
 async function renderCart(){
@@ -1878,7 +1878,7 @@ async function renderCart(){
 }
 ```
 
-#### `syncStartCtl` — `hub/protocol.html` строки 566–569
+#### `syncStartCtl` — `hub/protocol.html` строки 569–572
 
 ```js
 function syncStartCtl(){
@@ -1889,7 +1889,7 @@ function syncStartCtl(){
 
 ### 4.3 Корзина печати — `hub/ui.html`
 
-Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1709–1766
+Сборка листов галочками в массив корзины (`cartAdd` → `localStorage["ss.cart.<id события>"]`), список, печать пакета, публикация — `hub/ui.html` строки 1716–1773
 
 ```js
 /* ---------- корзина печати: листы из мастера и из «Регистрации» → один документ, выгрузка в сеть ---------- */
@@ -1953,7 +1953,7 @@ document.addEventListener("change", (e) => {
 
 ### 4.4 Мастер протоколов: переключение шагов, ветки Бег/Техника, ввод результатов — `hub/ui.html`
 
-#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1768–2279
+#### `wzp` (IIFE: состояние `W`, `go(n)`, `render()`, `step1…step5`, `gen`, `reset`, `saveRows`, обработчики) — `hub/ui.html` строки 1775–2290
 
 ```js
 const wzp = (() => {
@@ -2056,6 +2056,7 @@ const wzp = (() => {
     const k = kind(), t = STEP_T;
     if (W.step !== 3) W.allOut = "";                         // итог «Сформировать все» живёт только на шаге 3
     $("wzpKind").className = "wzp-kind " + k;
+    $("wzpFilter").innerHTML = W.disc && W.step >= 2 ? filterBar(true) : "";     // 8.5: фильтр «пол / возраст» — наверху на шагах 2–5, всегда под рукой
     $("wzpKind").textContent = !W.disc ? "" : k === "tech" ? "Техника" : "Бег" + (isPoints(W.disc) ? " (очки)" : "");
     $("wzpSteps").innerHTML = t.map((x, i) => `<button type="button" data-s="${i + 1}" class="${W.step === i + 1 ? "on" : W.step > i + 1 ? "done" : ""}" role="tab"><b>${i + 1}</b>${esc(x)}</button>`).join("");
     const body = $("wzpBody");
@@ -2064,11 +2065,12 @@ const wzp = (() => {
   }
   const nav = (prev, nextTxt) => `<div class="wzp-nav">${prev ? '<button type="button" data-g="-1">← Назад</button>' : ""}${nextTxt ? `<button type="button" class="primary" data-g="1">${nextTxt} →</button>` : ""}</div>`;
   // вкладки «Все / Мальчики / Девочки» и возрастные группы — просто быстрый просмотр состава: проходить шаг ими не нужно
-  function filterBar(){
+  function filterBar(top){
     const cnt = (x) => W.regs.filter(r => r.distance === W.disc && r.status === "approved" && (!x || String(r.sex||"").toUpperCase() === x) && ageOk(r)).length;
     const tab = (v, t) => `<button type="button" role="tab" class="ftab${W.sex === v ? " on" : ""}" aria-selected="${W.sex === v}" data-sexf="${v}">${t} <i>${cnt(v)}</i></button>`;
     const ages = (DISC.ages || []).map(a => `<button type="button" class="ftab age${W.ages.includes(a.id) ? " on" : ""}" aria-pressed="${W.ages.includes(a.id)}" data-agef="${esc(a.id)}">${esc(a.name)}</button>`).join("");
-    return `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}</div>`;
+    const inner = `${tab("", "Все")}${tab("М", "Мальчики")}${tab("Ж", "Девочки")}<span class="fsep" aria-hidden="true"></span>${ages}`;
+    return top ? inner : `<div class="wzp-filter" role="tablist" aria-label="Состав дисциплины">${inner}</div>`;
   }
   // 7.5.1: шаг 1 — сводка по дисциплине (только чтение из базы, без кнопок-фильтров): состав, пол, возрастные группы, номера
   function ageGroupOf(r){
@@ -2110,7 +2112,6 @@ const wzp = (() => {
         Впишите номер каждому участнику (Enter — к следующему) и сохраните. <b>У заявленного на несколько видов номер один на все виды.</b>
         <details class="wzp-help" style="display:inline"><summary style="display:inline">Подробнее</summary> Номера можно менять в любой момент — вернитесь сюда, исправьте и сохраните: стартовый список, отметки и результаты переедут на новый номер.</details></p>
       ${pend ? `<div class="wzp-lock">⏳ Ещё ${pend} заявок ждут проверки во вкладке «Регистрация» — их здесь нет, пока их не подтвердить.</div>` : ""}
-      ${filterBar()}
       <div id="bibBox"><p class="muted">Загружаю участников…</p></div>
       <div class="row wzp-ctl bibctl"><button class="primary" type="button" id="bibSave" disabled>💾 Сохранить номера</button>
         <button class="quiet danger" type="button" id="bibClear" disabled>❌ Очистить номера</button>
@@ -2242,7 +2243,10 @@ const wzp = (() => {
     try{ const r = await api(`/api/events/${e0.id}/resetheats`, {distance: W.disc}); toast(`Сетка сброшена: забегов ${r.waves ?? 0}`); loadEvents._sig = null; await loadEvents(); regLoaded = null; await load(); render(); }
     catch(err){ toast("Ошибка: " + err.message); }
   }
-  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
+  // возрастные группы фильтра → диапазоны годов рождения (год соревнований − возраст) для бланка: «2015-2026;2013-2014»
+  const ageYears = () => { const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear();
+    return W.ages.map(id => ageBy(id)).filter(Boolean).map(a => `${y - a.max}-${y - a.min}`).join(";"); };
+  const protoUrl = (q, embed) => `/protocol?event=${ev().id}&dist=${encodeURIComponent(W.disc)}&sexf=${W.sex}${W.ages.length ? "&yr=" + encodeURIComponent(ageYears()) : ""}&grp=${embed ? "&embed=1" : ""}&t=${Date.now()}&${q}`;
   const label = (pre) => `${pre}: ${W.disc}${W.sex ? " — " + (W.sex === "М" ? "мальчики" : "девочки") : ""}`;
   function step5(body, k){
     const tech = k === "tech", q = `kind=results&mode=overall`;
@@ -2460,7 +2464,7 @@ const wzp = (() => {
   });
   $("wzpDisc").onchange = (e) => {
     if (W.step === 2 && W.bibDirty && !confirm("Нагрудные номера изменены, но не сохранены. Перейти к другой дисциплине без сохранения?")) { e.target.value = W.disc; return; }
-    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.step = 2; W.ages = []; W.sex = ""; save(); render(); load().then(render); };      // участники подтягиваются сами — сразу к номерам
+    W.bibDirty = false; W.find = ""; W.disc = e.target.value; W.ages = []; W.sex = ""; W.allOut = ""; save(); render(); load().then(render); };      // 8.5: остаёмся на том же шаге (раньше выбор дисциплины перекидывал на ввод номеров)
   window.addEventListener("beforeunload", (e) => { if (W.step === 2 && W.bibDirty) { e.preventDefault(); e.returnValue = ""; } });
   // этап «Ввод результатов» стадиона с ручным вводом = шаг 4 Мастера (один экран ввода вместо двух)
   function setStep(n){ const e0 = ev(); if (!e0) return;
@@ -2536,7 +2540,7 @@ const wzp = (() => {
 
 ### 4.6 Обязательное поле «Разряд / Звание» — `hub/ui.html`
 
-#### `rankOpts` — `hub/ui.html` строки 1541–1541
+#### `rankOpts` — `hub/ui.html` строки 1548–1548
 
 ```js
 const rankOpts = (cur, ph) => `<option value="">${ph || "—"}</option>` + [...new Set([...RANKS, ...(cur ? [cur] : [])])].map(r => `<option${r === cur ? " selected" : ""}>${esc(r)}</option>`).join("");
@@ -2646,7 +2650,7 @@ table.att,table.swt{table-layout:auto}
 
 ## 7. Тесты (`tools/selftest.py`)
 
-Результат прогона при формировании дампа: **Итого: 363 из 363 проверок пройдено. · Всё работает.** (код возврата 0).
+Результат прогона при формировании дампа: **Итого: 364 из 364 проверок пройдено. · Всё работает.** (код возврата 0).
 
 Проверки, относящиеся к Мастеру (имена из вывода):
 
@@ -2699,6 +2703,7 @@ table.att,table.swt{table-layout:auto}
 ### Журнал коммитов линейки
 
 ```text
+4bceee4 2026-10-16 feat: время начала в протоколах и Excel строго по программе из «Подготовки», поиск заявок по нагрудному номеру v8.4.0
 783f9d8 2026-10-15 fix: список соревнований не вылезает за экран, убраны загрузка из Excel и корзина печати v8.3.1
 28f50ba 2026-10-15 feat: компактный Мастер протоколов — один ряд действий, без дублей кнопок, невысокие поля результатов v8.3.0
 61249c3 2026-10-15 fix: командная заявка — команда и тренер только из Excel, убраны дублирующие поля формы v8.2.2
@@ -2712,6 +2717,5 @@ cd87480 2026-10-14 release: собран финальный стадионный
 fe6548b 2026-10-14 fix: исправлен дефолтный путь config.json для автономного запуска на Windows v7.7.3
 05aa516 2026-10-14 fix: исправлена верстка печатных бланков под строгий стандарт А4, добавлен разворот бега в горизонтальный формат v7.7.2
 baf6679 2026-10-14 test: исправлена проверка офлайн-автономности (синтаксис) v7.7.1
-06190b1 2026-10-14 ui: кнопки импорта/экспорта CSV перенесены наверх страницы для удобства секретаря v7.7.1
 ```
 

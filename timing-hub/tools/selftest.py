@@ -200,7 +200,7 @@ def main() -> int:
 
     # 0. версия и проверка настроек
     r = subprocess.run([sys.executable, hub_path, "--version"], capture_output=True, text=True)
-    check("версия сервера 8.4.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.4.0", r.stdout + r.stderr)
+    check("версия сервера 8.5.0 (--version)", r.returncode == 0 and r.stdout.strip() == "8.5.0", r.stdout + r.stderr)
     # 7.7.3: локальный запуск без --config: ./config.json создаётся сам; явный --config с опечаткой по-прежнему ошибка
     lc = tempfile.mkdtemp()
     r0 = subprocess.run([sys.executable, os.path.abspath(hub_path), "--check"], capture_output=True, text=True, cwd=lc)
@@ -222,7 +222,7 @@ def main() -> int:
     bt = bb.decode("utf-8", "replace")
     check("7.7.5: Запустить_СахСтарт.bat — chcp 65001, переход в папку скрипта, запуск hub\\hub.py без --config, открытие http://localhost:8080/, окна CRLF",
           b"\r\n" in bb and b"\n" not in bb.replace(b"\r\n", b"") and "chcp 65001" in bt and 'cd /d "%~dp0"' in bt and "hub\\hub.py" in bt
-          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.4.0" in bt, bt[:200])
+          and "--config" not in bt.split("rem")[-1] and "start http://localhost:8080/" in bt and "v8.5.0" in bt, bt[:200])
     # 7.7.6: Windows — os.getloadavg отсутствует; страница «Система» не должна падать, нагрузка = нули
     wd = tempfile.mkdtemp()
     code_w = ("import os,sys,json; sys.path.insert(0, os.path.dirname(sys.argv[1])); import hub; del os.getloadavg; "
@@ -318,7 +318,7 @@ print(json.dumps(out,ensure_ascii=False))
     check("8.3: Мастер — кнопки не дублируются: «Все дисциплины» только в одном ряду действий шага 3 (нет верхней кнопки «Сформировать ВСЕ…»); подсказки свёрнуты в «Как это работает / Как вводить»; поля ввода результатов компактные",
           uih8.count('id="wzpAll"') == 1 and "Сформировать ВСЕ стартовые протоколы" not in uih8 and 'class="wzp-actions"' in uih8
           and 'class="wzp-help"' in uih8 and ".wzp-grid input,.wzp-grid select{height:30px" in uih8 and 'id="wzpAllOut"' not in uih8, "")
-    check("8.4.0: лишнее убрано — нет «Загрузить из Excel» в Регистрации, нет корзины печати в Мастере и кнопки «в корзину» в протоколе; выпадающий список соревнований не вылезает за экран (перенос слов, прокрутка)",
+    check("8.5.0: лишнее убрано — нет «Загрузить из Excel» в Регистрации, нет корзины печати в Мастере и кнопки «в корзину» в протоколе; выпадающий список соревнований не вылезает за экран (перенос слов, прокрутка)",
           'id="gImport"' not in uih8 and 'class="cartbox cartmount"' not in uih8 and "Загрузить из Excel" not in uih8
           and 'id="tabCart"' not in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "protocol.html"), encoding="utf-8").read()
           and "max-height:calc(100vh - 130px);overflow-y:auto" in uih8 and "overflow-wrap:anywhere" in uih8, "")
@@ -344,6 +344,9 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
     check("8.4: протоколы (старт и итог) и Excel берут время из программы: ptimes в startlist/results, «начало ЧЧ:ММ» у блоков и «Начало» в шапке; поиск заявок — по нагрудному номеру",
           "ptimes" in pr_ and "· начало " in pr_ and "function headHtml(ev,title,sub,ptime)" in pr_ and 'self.program_time(ev, name, cat)' in open(hub_path, encoding="utf-8").read()
           and 'res["ptimes"]' in open(hub_path, encoding="utf-8").read() and "startsWith(q)" in uih8 and "или № участника" in uih8, "")
+    check("8.5: Мастер — выбор дисциплины остаётся на том же шаге (не прыгает на номера); наверху липкая полоса «дисциплина + пол/возраст + шаги» на шагах 2–5; возрастной фильтр доходит до бланка (yr)",
+          "W.disc = e.target.value; W.ages = []; W.sex = \"\"; W.allOut" in uih8 and 'id="wzpFilter"' in uih8 and ".wzp-sticky{position:sticky" in uih8
+          and "filterBar(true)" in uih8 and "&yr=" in uih8 and "const yrOk=" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "protocol.html"), encoding="utf-8").read(), "")
     check("8.0: шаг 4 Мастера — живой поиск «judge-finder» над таблицей: по номеру или фамилии строки скрываются на лету",
           'id="judge-finder"' in uih8 and "Быстрый поиск спортсмена (Введите Нагрудный № или Фамилию)" in uih8 and "function applyFinder" in uih8
           and uih8.index('id="judge-finder"') < uih8.index('<table class="wzp-grid">'), "")
@@ -539,7 +542,7 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
         st = json.loads(txt) if code == 200 else {}
         check("JSON-статус 7.0: только версия, дата сборки, время сервера и запуск — никаких считываний и источников",
               set(st) == {"version", "build_date", "server_epoch_ms", "server_time", "timezone", "started_at"}
-              and st["version"] == "8.4.0" and st["build_date"] == "2026-10-15", txt[:300])
+              and st["version"] == "8.5.0" and st["build_date"] == "2026-10-15", txt[:300])
         gone = {}
         for pth in ("/api/readers", "/api/wiclax-ports", "/api/live", "/api/devices", "/raw", "/export.csv",
                     "/api/readers/scan", "/api/events/1/clax", "/api/events/1/event.clax", "/api/events/1/wiclax.csv",
@@ -552,7 +555,7 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
         code, txt = http("GET", "/api/system")
         sy0 = json.loads(txt)
         check("«Система»: ни ридеров, ни Wiclax — только сервер, службы, клиенты",
-              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.4.0", txt[:200])
+              code == 200 and "readers" not in sy0 and "wiclax" not in sy0 and sy0["server"]["version"] == "8.5.0", txt[:200])
 
 
         # 9b. соревнование на стадионе: создание, номера, сетка, старт, отсечки судьи, результаты
@@ -1184,7 +1187,7 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
         tab = hubmod.xlsx_read(tpl)
         check("шаблон: заголовки и список дистанций", "Фамилия*" in tab[2] and "Дистанция*" in tab[2]
               and b"300" in zipfile.ZipFile(io.BytesIO(tpl)).read("xl/worksheets/sheet2.xml"), str(tab[:3]))
-        check("8.4.0: шаблон Excel команды — колонки «Команда*», «Тренер*» (обязательные, на прежних местах H, I), «Разряд / звание*» — K; в онлайн-форме инструкция про звёздочки и плашка модерации",
+        check("8.5.0: шаблон Excel команды — колонки «Команда*», «Тренер*» (обязательные, на прежних местах H, I), «Разряд / звание*» — K; в онлайн-форме инструкция про звёздочки и плашка модерации",
               tab[2][7] == "Команда*" and tab[2][8] == "Тренер*" and tab[2][10] == "Разряд / звание*"
               and "строго в соответствии со знаками звёздочек (*)" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
               and "появится в открытых списках участников соревнований сразу после проверки, модерации и утверждения Главным секретарём соревнований" in open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
@@ -1230,7 +1233,7 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
         c8b, o8b = pub_raw(f"/r/{slug}/team", json.dumps({"consent": True, "policy": True, "rows": rows[:2]}).encode(), {"Content-Type": "application/json"})
         rg = open(os.path.join(os.path.dirname(os.path.abspath(args.hub)), "reg.html"), encoding="utf-8").read()
         tf_ = rg[rg.index("function renderTeam"):rg.index("function teamSubmit")]
-        check("8.4.0: командная заявка — команда и тренер только из файла: без тренера в строке файла — ошибка строки; с командой и тренером в файле принимается без полей формы; в форме нет полей «Команда», «Тренер», «Телефон»",
+        check("8.5.0: командная заявка — команда и тренер только из файла: без тренера в строке файла — ошибка строки; с командой и тренером в файле принимается без полей формы; в форме нет полей «Команда», «Тренер», «Телефон»",
               c8a == 400 and "coach" in json.dumps(o8a, ensure_ascii=False) and c8b == 201 and o8b.get("team") == "Корсаков"
               and "t_team" not in tf_ and "t_coach" not in tf_ and "t_contact" not in tf_, f"{c8a} {str(o8a)[:200]} {c8b} {o8b}")
         check("повторная отправка той же команды — повторы пропущены", code == 201 and out["added"] == 0 and len(out["duplicates"]) == 2, str(out))
@@ -1447,7 +1450,7 @@ print(json.dumps([t('60 м','Девочки до 14 лет'),t('60 м','Маль
         # 3.0: версия, дата сборки, возрастные группы для мастера
         _, txt = http("GET", "/api/status")
         st3 = json.loads(txt)
-        check("7.2: версия 8.4.0 и дата сборки 15.10.2026", st3["version"] == "8.4.0" and st3["build_date"] == "2026-10-15", txt[:200])
+        check("7.2: версия 8.5.0 и дата сборки 15.10.2026", st3["version"] == "8.5.0" and st3["build_date"] == "2026-10-15", txt[:200])
         code, txt = http("GET", "/api/default-rules?year=2027")
         dr = json.loads(txt)
         check("3.0: возрастные группы для мастера — пары «мальчики / девочки» по году соревнований",
