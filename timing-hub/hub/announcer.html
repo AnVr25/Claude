@@ -64,6 +64,32 @@ button{font:inherit}
 button{background:var(--night-2);color:var(--a-ink);border:1px solid var(--night-line);border-radius:var(--r);padding:7px 14px;cursor:pointer}
 button:hover{border-color:var(--a-soft)}
 .empty{color:var(--a-soft);font:500 clamp(22px,2.8vw,44px)/1.2 var(--head);letter-spacing:.3px;text-align:center;padding:3vh}
+/* телефон и планшет: страница листается, ничего не выходит за экран */
+html,body{overflow-x:hidden}
+.wrap>*,.sec,.hero>*{min-width:0}
+.pick select{width:100%;text-overflow:ellipsis}
+@media (max-width:900px),(max-height:620px){
+  html,body{height:auto;min-height:100%}
+  .wrap{display:flex;flex-direction:column;height:auto;min-height:100vh;min-height:100dvh}
+  .sec.list{overflow:visible;flex:0 0 auto}
+  #list,#next{overflow:visible}
+  .foot{margin-top:auto}
+  .hero{min-height:0}
+}
+@media (max-width:700px){
+  .top{gap:10px;padding:1.2vh 4vw}
+  .top .brand{height:30px}
+  .name{font-size:18px}
+  .clock{font-size:clamp(20px,6vw,30px)}
+  .hero{grid-template-columns:auto auto minmax(0,1fr);grid-template-areas:"pl bib time" "who who who";gap:6px 14px;padding:14px;align-items:center}
+  .hero .place{grid-area:pl;font-size:34px}
+  .hero .bib{grid-area:bib;font-size:clamp(56px,20vw,96px)}
+  .hero .time{grid-area:time;font-size:clamp(34px,10vw,56px)}
+  .hero .who{grid-area:who}
+  .hero .nm{font-size:clamp(26px,8vw,44px)}
+  .hero .meta{font-size:15px}
+  .r{gap:3vw;font-size:clamp(18px,5vw,26px)}
+}
 @media (prefers-reduced-motion:reduce){
   .hero.new{animation-duration:1.2s}
   @keyframes pulse{from{border-color:var(--track);background:#3A1F35}to{}}
