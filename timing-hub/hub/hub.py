@@ -40,7 +40,7 @@ from collections import deque
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "8.5.1"
+VERSION = "8.5.2"
 BUILD_DATE = "2026-10-15"        # дата сборки: показывается в «Системе» и в /api/status
 log = logging.getLogger("timing-hub")
 
@@ -4286,7 +4286,7 @@ class Hub:
     def team_template(self, ev: dict) -> bytes:
         dists = self.solo_distances(ev) or ["60 м"]
         title = f"Заявка команды — {ev['name']}" + (f", {'.'.join(reversed(ev['date'].split('-')))}" if ev.get("date") else "")
-        # 8.5.1: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
+        # 8.5.2: прежний шаблон — с колонками «Команда» и «Тренер» (на них завязаны позиции колонок в файлах тренеров и проверка строк)
         rows = [[title], ["Одна строка — один участник на одну дистанцию. Несколько дистанций — несколько строк. "
                           "Обязательны поля со звёздочкой: в том числе разряд (если разряда нет — «Б/р»), команда и тренер — на сайте их отдельно вводить не нужно."],
                 [h for _, h, _ in self.TEAM_COLS]]
@@ -4381,7 +4381,7 @@ class Hub:
 
     def submit_team(self, ev: dict, data: dict, rows: list, status: str = "pending", actor: str = "форма") -> tuple:
         if actor == "форма":
-            data = {**data, "_strict": True}      # 8.5.1: команда и тренер — только из файла (колонки «Команда*», «Тренер*»), отдельных полей на сайте нет
+            data = {**data, "_strict": True}      # 8.5.2: команда и тренер — только из файла (колонки «Команда*», «Тренер*»), отдельных полей на сайте нет
             fe = {}
             if not data.get("consent"):
                 fe["consent"] = "нужно подтвердить наличие согласий"
@@ -4539,7 +4539,7 @@ class Hub:
     @classmethod
     def age_ok(cls, year: int, birth, ages: list) -> bool:
         """Участник попадает в выбранную группу, если она — самая узкая для его возраста (как в сводке шага 1);
-        пустой выбор — подходят все. 8.5.1: раньше «до 14 лет» включало и малышей «до 12 лет»."""
+        пустой выбор — подходят все. 8.5.2: раньше «до 14 лет» включало и малышей «до 12 лет»."""
         if not ages:
             return True
         try:

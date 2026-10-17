@@ -90,7 +90,7 @@ input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);bord
 input:focus,select:focus,textarea:focus{border-color:var(--night)}
 textarea{font-family:var(--mono);font-size:13.5px;min-height:170px}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:700}
-.form{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.form{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}
 .check{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-weight:400;font-size:14.5px;margin:10px 0 0}
 .check input{width:auto;margin-top:3px;accent-color:var(--track)}
 .switch{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:700;font-size:15px;margin:0;cursor:pointer}
@@ -136,7 +136,7 @@ td b{font-weight:700}
 .bar2{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
 .bar2 i{display:block;height:100%;background:var(--ok)}.bar2 i.warn{background:var(--start)}.bar2 i.bad{background:var(--track)}
 .svc{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.svc:last-child{border-bottom:0}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
 .stat b{display:block;font:600 30px/1.1 var(--head)}
 .stat span{color:var(--muted);font-size:13.5px}
 td input.cell,td select.cell{padding:4px 6px;font-size:13px;width:auto;min-width:70px}
@@ -441,7 +441,7 @@ html{scrollbar-gutter:stable}
 .kind small{color:var(--muted);font-size:13px}
 .kind:has(input:checked){border-color:var(--track);box-shadow:inset 0 0 0 1px var(--track);background:#E71E2508}
 .soon{font-size:11px;font-weight:700;color:var(--start);border:1px solid var(--start);border-radius:99px;padding:0 6px;margin-left:4px}
-.sitegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}
+.sitegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:0 14px}
 .switches{display:flex;flex-wrap:wrap;gap:12px 26px;margin:6px 0 4px}
 .pagelink{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--ice);border-radius:var(--r);padding:8px 10px;margin-top:10px;font-size:14px}
 .pagelink a{font-weight:700;color:var(--track);word-break:break-all}
@@ -485,6 +485,10 @@ a.btn.xls:hover{background:#E9F5EE}
 .utbl .saved{outline:2px solid var(--ok)}
 .secret{font-family:var(--mono);background:#C9A2272a;padding:2px 6px;border-radius:4px;user-select:all}
 .unote{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:var(--r);padding:10px 14px;margin:0 0 12px}
+/* адаптив форм: ячейки не распирают сетку, поля в строке выровнены по низу, дата без родной ширины iOS */
+.form>div,.sitegrid>div{min-width:0}
+input[type=date],input[type=datetime-local],input[type=time]{min-width:0;max-width:100%;min-height:40px;-webkit-appearance:none;appearance:none}
+input::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
 .form.uadd{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:760px){.form.uadd{grid-template-columns:1fr}
   .utbl thead{display:none}.utbl tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;padding:10px 12px;border-bottom:1px solid var(--line)}
@@ -659,11 +663,11 @@ a.btn.xls:hover{background:#E9F5EE}
       <div><label for="fName">Название *</label><input id="fName" placeholder="Кубок Сахалинской области"></div>
       <div><label for="fTiming">Хронометраж</label><select id="fTiming"></select></div>
       <div><label for="fDate">Дата начала</label><input id="fDate" type="date"></div>
-      <div><label for="fDateEnd">Дата окончания <span class="muted">(если несколько дней)</span></label><input id="fDateEnd" type="date"></div>
+      <div><label for="fDateEnd">Дата окончания</label><input id="fDateEnd" type="date" title="если соревнования идут несколько дней"></div>
       <div><label for="fPlace">Место (объект)</label><input id="fPlace" list="venueList" placeholder="пусто — по сезону: манеж / «Спартак» / «Триумф»"><datalist id="venueList"><option>Легкоатлетический манеж<option>Стадион «Спартак»<option>ЛБК «Триумф»</datalist></div>
       <div><label for="fCity">Город</label><input id="fCity" placeholder="Южно-Сахалинск"></div>
-      <div><label for="fStartClock">Начало соревнований (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
-      <div><label for="fOrg">Организатор (шапка протокола)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
+      <div><label for="fStartClock">Начало (для протокола)</label><input id="fStartClock" placeholder="11:00"></div>
+      <div><label for="fOrg">Организатор (в шапку)</label><input id="fOrg" placeholder="РСОО ФЛАСО"></div>
       <div><label for="fJudge">Главный судья</label><input id="fJudge" placeholder="Иванов И. И."></div>
       <div><label for="fSecr">Главный секретарь</label><input id="fSecr" placeholder="Петрова А. А."></div>
     </div>
