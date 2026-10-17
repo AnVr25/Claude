@@ -1,10 +1,10 @@
 # system_architecture_snapshot — полная спецификация архитектуры SakhStart timing-hub
 
-- **Версия сервера (`VERSION`):** `8.5.2`
+- **Версия сервера (`VERSION`):** `8.5.3`
 - **Дата сборки (`BUILD_DATE`):** `2026-10-15`
-- **Ветка / коммит:** `claude/greeting-d2g8ji` / `b502473`
-- **Сформирован:** 2026-10-17 00:24 скриптом `tools/make_architecture.py` (код — дословно из исходников)
-- **Автопроверки (`tools/selftest.py`):** Итого: 367 из 367 проверок пройдено. · Всё работает.
+- **Ветка / коммит:** `claude/greeting-d2g8ji` / `6ef45a2`
+- **Сформирован:** 2026-10-17 02:02 скриптом `tools/make_architecture.py` (код — дословно из исходников)
+- **Автопроверки (`tools/selftest.py`):** Итого: 368 из 368 проверок пройдено. · Всё работает.
 - **Объём:** `hub/hub.py` 7158 строк, `hub/ui.html` 2939, `hub/reg.html` 962, `hub/board.html` 200
 
 > Для ИИ-аудитора. Разделы: 1 — назначение; 2 — что исправлено в 7.4.5 и где; 3 — схема SQLite (снята с живой базы); 4 — Python (ключевые функции дословно); 5 — HTML/JS/CSS (дословно); 6 — маршруты и права; 7 — допущения и известные ограничения.
@@ -1370,7 +1370,7 @@ function aboutBlock(){
   --bd-bg:var(--night);--bd-ink:#fff;--bd-muted:var(--night-muted);--bd-line:var(--night-line);
   --bd-pad:clamp(16px,2.6vw,56px);
   /* строка результатов: влезают 10 строк по высоте и ширине экрана */
-  --bd-row:clamp(18px,min(3.5vw,4.55vh),80px)}
+  --bd-row:clamp(22px,min(4.4vw,6vh),110px)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bd-bg);color:var(--bd-ink);font-family:var(--body)}
 body{overflow:hidden;-webkit-font-smoothing:antialiased}
@@ -1380,27 +1380,27 @@ body{overflow:hidden;-webkit-font-smoothing:antialiased}
 .top{display:flex;align-items:center;gap:clamp(14px,2vw,40px);padding:clamp(10px,1.6vh,26px) var(--bd-pad);border-bottom:3px solid var(--track);flex-wrap:wrap}
 .top .lg-ss{display:block;height:clamp(30px,3.4vw,72px);width:auto;flex:none}
 .ttl{flex:1 1 30%;min-width:0}
-.name{font:600 clamp(20px,2.6vw,56px)/1.1 var(--head);letter-spacing:.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{margin-top:.25em;color:var(--bd-muted);font-size:clamp(13px,1.15vw,24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.name{font:600 clamp(22px,3vw,64px)/1.1 var(--head);letter-spacing:.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{margin-top:.25em;color:var(--bd-muted);font-size:clamp(14px,1.5vw,30px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta:empty{display:none}
 .clock{margin-left:auto;min-width:4.1em;text-align:right;font:600 clamp(40px,6.2vw,132px)/1 var(--head);font-variant-numeric:tabular-nums;letter-spacing:-.005em;white-space:nowrap}
 .clock.idle{min-width:0;color:var(--bd-muted);font-weight:500;font-size:clamp(20px,2.4vw,52px)}
 
 /* Список последних финишировавших */
 main{flex:1;min-height:0;display:flex;flex-direction:column;padding:clamp(8px,1.6vh,26px) var(--bd-pad) 0}
-h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em}
+h2{margin:0 0 .5em;font:500 clamp(15px,1.7vw,34px)/1.2 var(--head);color:var(--bd-muted);letter-spacing:.06em}
 .list{flex:1;min-height:0;overflow:hidden}
-.r,.hd{position:relative;display:grid;grid-template-columns:2.4em 2.9em minmax(0,1fr) minmax(0,.62fr) 4.6em;align-items:center;column-gap:.55em;
+.r,.hd{position:relative;display:grid;grid-template-columns:2.2em 2.7em minmax(0,1fr) minmax(0,.55fr) 4.9em;align-items:center;column-gap:.5em;
   padding:.11em .3em;border-bottom:1px solid var(--bd-line);font:500 var(--bd-row)/1.2 var(--head);font-variant-numeric:tabular-nums}
 .r>span{position:relative;z-index:1;min-width:0}
 .r .p{color:var(--bd-muted)}
 .r .b{color:var(--start);font-weight:600}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r .t{text-align:right;font-weight:600;white-space:nowrap}
+.r .t{text-align:right;font-weight:700;white-space:nowrap;font-size:1.22em;line-height:1}
 .r .d{color:var(--bd-muted);font-size:.62em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* подписи колонок */
 .hd{font:500 var(--bd-row)/1.2 var(--head);color:var(--bd-muted);padding:0 .3em .1em;border-bottom:2px solid var(--bd-line);align-items:end}
-.hd span{font-size:max(12px,.36em);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd span{font-size:max(14px,.42em);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hd span:last-child{text-align:right}
 .hd.hide{display:none}
 /* самый свежий финишёр — верхняя строка: красная растяжка в прозрачность */
@@ -1412,8 +1412,8 @@ h2{margin:0 0 .5em;font:500 clamp(13px,1.15vw,24px)/1.2 var(--head);color:var(--
 .none{padding:.6em 0;color:var(--bd-muted);font:500 clamp(18px,2.4vw,48px)/1.2 var(--head)}
 body[data-mode=fixed] .r:first-child,body[data-mode=rotate] .r:first-child{background:none;box-shadow:none}
 /* техника: столбец «Попытки» — шесть микро-ячеек через вертикальную черту; X — красный, «–» и r — серые, лучшая — белая */
-body[data-tech="1"] .r,body[data-tech="1"] .hd{grid-template-columns:2.4em 2.9em minmax(0,1fr) 11.4em 4.6em}
-.att{display:grid;grid-template-columns:repeat(var(--n,6),1fr);font-size:calc(.56em * 6 / max(6, var(--n,6)));line-height:1.5;font-variant-numeric:tabular-nums;
+body[data-tech="1"] .r,body[data-tech="1"] .hd{grid-template-columns:2.2em 2.7em minmax(0,1fr) 9.6em 4.9em}
+.att{display:grid;grid-template-columns:repeat(var(--n,6),1fr);font-size:calc(.62em * 6 / max(6, var(--n,6)));line-height:1.45;font-variant-numeric:tabular-nums;
   border:1px solid var(--bd-line);border-radius:4px;overflow:hidden}
 .att i{font-style:normal;text-align:center;padding:0 .2em;color:#C9D3E3;white-space:nowrap;border-left:1px solid var(--bd-line)}
 .att i:first-child{border-left:0}
@@ -1470,7 +1470,7 @@ async function sync(){try{const c=await get("/api/clock");offset=c.server_epoch_
 // Табло слушается пульта (/scoreboard): auto — последние результаты, fixed — таблица лидеров одной группы,
 // rotate — группы по кругу. Состояние спрашивается у сервера раз в 1,5 с, страница не перезагружается.
 let SB={mode:"auto"}, lastKey="";
-const PER_PAGE=10;
+const PER_PAGE=10, AUTO_N=6;   // PER_PAGE — подпись «N участников»; AUTO_N — сколько последних видно крупно в режиме «последние»
 // Автопрокрутка длинной таблицы лидеров: топ стоит HOLD_TOP, затем лента плавно и равномерно едет вниз
 // до последнего участника, стоит HOLD_END и мягко возвращается к лидерам — по кругу. Шрифт не уменьшается.
 // Если в системе включено «уменьшить движение» — вместо плавной ленты листаем экранами раз в 8 с.
@@ -1512,7 +1512,7 @@ function renderAuto(r,hasW){
   $("title").textContent="Последние результаты — новые сверху";
   $("hdPlace").textContent=hasW?"Место в забеге":"Место"; $("hdD").textContent="Дисциплина";
   // свежие сверху: финиш по судье или время ввода результата с сектора (метания, прыжки, секундомеры)
-  const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,PER_PAGE);
+  const last=r.finished.slice().sort((a,b)=>(b.finish_epoch_ms||b.entered_epoch_ms||0)-(a.finish_epoch_ms||a.entered_epoch_ms||0)).slice(0,AUTO_N);
   $("hd").classList.toggle("hide",!last.length);
   $("track").innerHTML=last.map(x=>{const k=x.bib+x.time+x.result,isNew=!first&&!seen.has(k);seen.add(k);
     const disc=[x.distance,x.category].filter(Boolean).join(" · ")||x.wave||"";
@@ -1524,7 +1524,7 @@ function renderGroup(r,key,suffix){
   const list=r.finished.filter(x=>(x.distance||"")===d&&(x.category||"")===c).sort((a,b)=>(a.place_overall||999)-(b.place_overall||999));
   if(key!==lastKey){SC.t0=performance.now();lastKey=key;}
   SC.on=true; document.body.dataset.tech=tech?"1":"";
-  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>PER_PAGE?` · ${list.length} участников`:""}${suffix||""}`;
+  $("title").textContent=`${[d,c].filter(Boolean).join(" · ")} — таблица лидеров${list.length>AUTO_N?` · ${list.length} участников`:""}${suffix||""}`;
   $("hdPlace").textContent="Место"; $("hdD").textContent=tech?"Попытки":"Команда";
   $("hd").classList.toggle("hide",!list.length);
   $("track").innerHTML=list.map(x=>{const k=key+x.bib+x.result,isNew=!first&&!seen.has(k);seen.add(k);
@@ -1580,7 +1580,7 @@ const wzp = (() => {
   const ev = () => curEvent();
   const kind = () => kindOf(W.disc);
   const sexWord = (x) => x === "М" ? "мальчики / юноши / мужчины" : x === "Ж" ? "девочки / девушки / женщины" : "все";
-  // 8.5.2: группа выбирается по САМОЙ УЗКОЙ границе (как в сводке шага 1): «до 14 лет» — это 13–14, а не все, кто моложе 14
+  // 8.5.1: группа выбирается по САМОЙ УЗКОЙ границе (как в сводке шага 1): «до 14 лет» — это 13–14, а не все, кто моложе 14
   const narrowAge = (age) => { const gs = (DISC.ages || []).filter(a => a.id !== "sen").sort((a, b) => a.max - b.max).concat((DISC.ages || []).filter(a => a.id === "sen"));
     return (gs.find(a => age >= a.min && age <= a.max) || {}).id || ""; };
   const ageOk = (r) => { if (!W.ages.length) return true; const e = ev(), y = e && e.date ? +e.date.slice(0, 4) : new Date().getFullYear(); const age = y - (+r.birth_year || 0);
